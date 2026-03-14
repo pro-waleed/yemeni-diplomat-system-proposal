@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>النظام الدبلوماسي المتكامل | نموذج تنفيذي تجريبي</title>
-  <meta name="description" content="نموذج تنفيذي تجريبي للنظام الدبلوماسي المتكامل في وزارة الخارجية اليمنية.">
+  <title>النظام الدبلوماسي المتكامل | وحدة التقارير</title>
+  <meta name="description" content="نموذج تشغيلي تجريبي لوحدة التقارير في النظام الدبلوماسي المتكامل.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
@@ -18,66 +18,68 @@
         <div class="brand-badge">YD</div>
         <div>
           <p>وزارة الخارجية اليمنية</p>
-          <h1>النظام الدبلوماسي المتكامل</h1>
-          <span>نسخة تنفيذية تجريبية للعرض</span>
+          <h1>وحدة التقارير</h1>
+          <span>سيناريو تشغيلي متعدد الحسابات</span>
         </div>
       </div>
 
       <div class="user-card">
-        <strong>وضع العرض القيادي</strong>
-        <p>حساب تجريبي: وكيل الوزارة للتخطيط والتحول الرقمي</p>
+        <strong id="current-user-name">حساب العرض</strong>
+        <p id="current-user-role">جاري تحميل بيانات الحساب</p>
       </div>
 
-      <nav class="nav-list" aria-label="الوحدات الرئيسية">
-        <button class="nav-item active" data-view="dashboard">لوحة القيادة</button>
+      <nav class="nav-list" aria-label="شاشات وحدة التقارير">
+        <button class="nav-item active" data-view="dashboard">لوحة المتابعة</button>
         <button class="nav-item" data-view="reports">التقارير</button>
-        <button class="nav-item" data-view="circulars">التعاميم</button>
-        <button class="nav-item" data-view="meetings">الاجتماعات</button>
-        <button class="nav-item" data-view="plans">الخطط</button>
-        <button class="nav-item" data-view="missions">البعثات والدوائر</button>
-        <button class="nav-item" data-view="training">التدريب</button>
-        <button class="nav-item" data-view="governance">الحوكمة</button>
+        <button class="nav-item" data-view="requests">طلبات التقارير</button>
       </nav>
 
       <div class="sidebar-footer">
-        <p>هذا النموذج مبني لعرض الرؤية التشغيلية للنظام بشكل تفاعلي قبل التطوير البرمجي الكامل.</p>
+        <p>
+          جرّب الدخول بحساب بعثة الرياض لرفع تقرير نشاط، ثم بدّل إلى حساب مدير النظام أو إدارة التخطيط
+          أو الدائرة الجغرافية لترى التقرير نفسه وسجل الإنجاز.
+        </p>
       </div>
     </aside>
 
     <main class="main-panel">
       <header class="top-header">
         <div>
-          <span class="mini-label">منصة تشغيل موحدة</span>
-          <h2 id="view-title">لوحة القيادة التنفيذية</h2>
-          <p id="view-subtitle">رؤية لحظية لأداء الوزارة والبعثات والتعاميم والمهام والخطط.</p>
+          <span class="mini-label">بيئة تجريبية موحدة</span>
+          <h2 id="view-title">لوحة المتابعة</h2>
+          <p id="view-subtitle">متابعة حركة التقارير وطلبات التقارير بين البعثات والإدارات المختصة.</p>
         </div>
-        <div class="header-actions">
-          <button class="ghost-btn" id="focus-toggle">إظهار المتأخرات فقط</button>
-          <button class="primary-btn" id="simulate-btn">تحديث المؤشرات</button>
+        <div class="header-actions wide">
+          <label class="field-block compact">
+            <span>الحساب الحالي</span>
+            <select id="account-switcher"></select>
+          </label>
+          <button class="ghost-btn" id="focus-toggle">إظهار غير المنجز فقط</button>
+          <button class="primary-btn" id="reset-demo">إعادة ضبط البيانات</button>
         </div>
       </header>
 
       <section class="hero-strip">
         <div class="hero-copy">
-          <span>الجاهزية المؤسسية</span>
-          <h3>تجربة عرض تبرز كيف يمكن للنظام أن يعمل فعليًا أمام القيادة</h3>
+          <span>الفكرة التشغيلية</span>
+          <h3>رفع التقرير من البعثة ثم ظهوره فورًا للجهات المختصة مع تتبع إنجاز الطلبات السنوية والنصف سنوية</h3>
           <p>
-            تم تصميم هذه النسخة لتكون قابلة للاستعراض والتجريب مباشرة، مع بيانات نموذجية تعكس التقارير
-            والتعاميم والخطط والاجتماعات والتدريب ضمن واجهة واحدة مترابطة.
+            هذا النموذج يوضح دورة متكاملة: إصدار طلب تقرير من إدارة التخطيط، متابعة البعثات المنجزة وغير المنجزة،
+            ورفع تقرير نشاط نموذجي من حساب بعثة بحيث يظهر مباشرة في حسابات المراجعة والقيادة.
           </p>
         </div>
         <div class="hero-kpis">
           <div>
-            <strong id="hero-response">86%</strong>
-            <span>نسبة الاستجابة العامة</span>
+            <strong id="hero-reports">0</strong>
+            <span>تقارير مرئية للحساب الحالي</span>
           </div>
           <div>
-            <strong id="hero-overdue">12</strong>
-            <span>عناصر تحتاج متابعة</span>
+            <strong id="hero-requests">0</strong>
+            <span>طلبات تقارير نشطة</span>
           </div>
           <div>
-            <strong id="hero-training">74%</strong>
-            <span>اكتمال التدريب</span>
+            <strong id="hero-completion">0%</strong>
+            <span>نسبة الإنجاز الإجمالية</span>
           </div>
         </div>
       </section>
@@ -88,8 +90,8 @@
         <div class="workspace-card">
           <div class="card-head">
             <div>
-              <span class="mini-label" id="panel-label">عرض الوحدة</span>
-              <h3 id="panel-title">البيانات التشغيلية</h3>
+              <span class="mini-label" id="panel-label">تفاصيل التشغيل</span>
+              <h3 id="panel-title">المشهد الرئيسي</h3>
             </div>
             <div class="inline-filters" id="view-filters"></div>
           </div>
@@ -100,8 +102,8 @@
           <div class="workspace-card">
             <div class="card-head">
               <div>
-                <span class="mini-label">تفاصيل تنفيذية</span>
-                <h3>سجل المتابعة</h3>
+                <span class="mini-label">تفاصيل</span>
+                <h3>بطاقة المتابعة</h3>
               </div>
             </div>
             <div id="detail-panel"></div>
@@ -110,8 +112,8 @@
           <div class="workspace-card">
             <div class="card-head">
               <div>
-                <span class="mini-label">الإشعارات</span>
-                <h3>التنبيهات الحالية</h3>
+                <span class="mini-label">تنبيهات</span>
+                <h3>الإشعارات الحالية</h3>
               </div>
             </div>
             <div id="alerts-panel"></div>

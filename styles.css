@@ -22,6 +22,7 @@ body {
 }
 
 button { font: inherit; }
+input, select, textarea { font: inherit; }
 
 .app-bg {
   position: fixed;
@@ -182,6 +183,10 @@ button { font: inherit; }
   gap: 10px;
 }
 
+.header-actions.wide {
+  align-items: end;
+}
+
 .ghost-btn,
 .primary-btn,
 .filter-chip {
@@ -266,6 +271,10 @@ button { font: inherit; }
   text-align: right;
 }
 
+.metric-card.static-card {
+  cursor: default;
+}
+
 .content-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 360px;
@@ -314,6 +323,10 @@ button { font: inherit; }
   border-color: rgba(15, 118, 110, 0.35);
 }
 
+.record-card.is-static:hover {
+  transform: none;
+}
+
 .record-top,
 .record-bottom,
 .detail-row {
@@ -345,6 +358,12 @@ button { font: inherit; }
 .tag.warning { background: rgba(192, 122, 24, 0.14); color: #8a560f; }
 .tag.danger { background: rgba(180, 35, 24, 0.1); color: var(--red); }
 .tag.info { background: rgba(30, 98, 160, 0.1); color: #1c5a92; }
+
+.filter-chip.is-active {
+  background: linear-gradient(135deg, var(--teal), var(--teal-strong));
+  color: #fff;
+  border-color: transparent;
+}
 
 .stats-row,
 .two-col,
@@ -388,6 +407,74 @@ thead { background: rgba(15, 118, 110, 0.07); }
   border-radius: 22px;
 }
 
+.form-grid,
+.checkbox-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.form-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.field-block {
+  display: grid;
+  gap: 8px;
+}
+
+.field-block span {
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+
+.field-block input,
+.field-block select,
+.field-block textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.8);
+  color: var(--text);
+  padding: 12px 14px;
+}
+
+.field-block textarea {
+  min-height: 112px;
+  resize: vertical;
+}
+
+.field-block.compact {
+  min-width: 260px;
+}
+
+.field-block.full,
+.form-actions.full {
+  grid-column: 1 / -1;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.checkbox-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.check-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.request-table {
+  margin-top: 12px;
+}
+
 @media (max-width: 1200px) {
   .app-shell,
   .content-grid,
@@ -414,7 +501,9 @@ thead { background: rgba(15, 118, 110, 0.07); }
 
   .header-actions,
   .hero-kpis,
-  .two-col { grid-template-columns: 1fr; }
+  .two-col,
+  .form-grid,
+  .checkbox-grid { grid-template-columns: 1fr; }
 
   .ghost-btn,
   .primary-btn,
