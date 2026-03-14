@@ -97,7 +97,11 @@ const seedState = () => ({
       period: "سنوية",
       status: "قيد التنفيذ",
       kpi: "نسبة الإنجاز مقابل المستهدف",
-      progress: 72
+      progress: 72,
+      workflowHistory: [
+        { actor: "بعثة الرياض", action: "إعداد الخطة", at: "2026-03-15 09:30" },
+        { actor: "إدارة التخطيط", action: "متابعة تقدم الخطة", at: "2026-03-15 10:10" }
+      ]
     }
   ],
   trainings: [
@@ -151,7 +155,10 @@ function loadState() {
       priority: task.priority || "متوسطة"
     })) : []
   }));
-  parsed.plans = Array.isArray(parsed.plans) ? parsed.plans : seedState().plans;
+  parsed.plans = (Array.isArray(parsed.plans) ? parsed.plans : seedState().plans).map((plan) => ({
+    ...plan,
+    workflowHistory: Array.isArray(plan.workflowHistory) ? plan.workflowHistory : []
+  }));
   parsed.trainings = Array.isArray(parsed.trainings) ? parsed.trainings : seedState().trainings;
   parsed.auditLog = Array.isArray(parsed.auditLog) ? parsed.auditLog : seedState().auditLog;
   parsed.reports = parsed.reports.map((report) => ({
@@ -274,6 +281,20 @@ function getVisibleTrainings(user = getSessionUser()) {
   if (user.role === "admin" || user.role === "planning" || user.role === "leadership") return state.trainings;
   if (user.role === "department") return state.trainings;
   return state.trainings.filter((training) => training.audience === "جميع المستخدمين" || training.audience.includes("البعثات"));
+}
+
+function getPlanActions(plan, user = getSessionUser()) {
+  if (!user) return [];
+  const actions = [];
+  const ownMissionPlan = user.role === "mission" && plan.ownerType === "mission" && plan.ownerId === user.missionId;
+  const ownDepartmentPlan = user.role === "department" && plan.ownerType === "department" && plan.ownerId === user.departmentId;
+  const central = user.role === "planning" || user.role === "admin";
+  if (ownMissionPlan || ownDepartmentPlan || central) {
+    actions.push({ key: "progress-10", label: "رفع الإنجاز +10%", delta: 10 });
+    actions.push({ key: "mark-complete", label: "اعتبار الخطة منجزة", status: "منجز", progress: 100 });
+    actions.push({ key: "mark-delayed", label: "اعتبار الخطة متأخرة", status: "متأخرة" });
+  }
+  return actions;
 }
 
 function getMeetingActions(meeting, task, user = getSessionUser()) {
@@ -902,6 +923,45 @@ function renderPlansPage(user) {
       </div>
     </section>
     <section class="two-col">
+      ${(user.role === "planning" || user.role === "admin" || user.role === "department" || user.role === "mission") ? `
+        <div class="panel">
+          <div class="section-title">إنشاء خطة جديدة</div>
+          <form id="plan-form" class="form-grid">
+            <label class="field">
+              <span>عنوان الخطة</span>
+              <input name="title" required>
+            </label>
+            <label class="field">
+              <span>الفترة</span>
+              <select name="period">
+                <option>سنوية</option>
+                <option>نصف سنوية</option>
+                <option>ربع سنوية</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>نوع المالك</span>
+              <select name="ownerType" id="plan-owner-type">
+                <option value="mission">بعثة</option>
+                <option value="department">دائرة</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>المالك</span>
+              <select name="ownerId">
+                ${[...state.missions.map((mission) => ({ id: mission.id, label: mission.name })), ...state.departments.map((department) => ({ id: department.id, label: department.name }))].map((item) => `<option value="${item.id}">${item.label}</option>`).join("")}
+              </select>
+            </label>
+            <label class="field full">
+              <span>مؤشر الأداء المرتبط</span>
+              <input name="kpi" required placeholder="مثال: نسبة الإنجاز مقابل المستهدف">
+            </label>
+            <div class="field full">
+              <button class="btn primary" type="submit">إنشاء الخطة</button>
+            </div>
+          </form>
+        </div>
+      ` : ""}
       ${plans.map((plan) => `
         <div class="panel">
           <div class="record-top">
@@ -913,6 +973,16 @@ function renderPlansPage(user) {
           </div>
           <div class="progress"><span style="width:${plan.progress}%"></span></div>
           <p class="muted">نسبة الإنجاز الحالية: ${plan.progress}%</p>
+          <div class="detail-row"><span>المالك</span><span>${plan.ownerType === "mission" ? getMissionName(plan.ownerId) : getDepartmentName(plan.ownerId)}</span></div>
+          ${getPlanActions(plan, user).length ? `<div class="inline-actions">${getPlanActions(plan, user).map((action) => `<button class="btn primary plan-action" data-plan-id="${plan.id}" data-action="${action.key}" data-delta="${action.delta || ""}" data-status="${action.status || ""}" data-progress="${action.progress || ""}">${action.label}</button>`).join("")}</div>` : ""}
+          ${(plan.workflowHistory || []).length ? `
+            <div class="detail-card">
+              <div class="section-title">سجل الخطة</div>
+              <div class="detail-list">
+                ${plan.workflowHistory.slice(0, 4).map((item) => `<div class="timeline-entry"><strong>${item.action}</strong><span>${item.actor}</span><span>${item.at}</span></div>`).join("")}
+              </div>
+            </div>
+          ` : ""}
         </div>
       `).join("") || `<div class="panel empty">لا توجد خطط في نطاق هذا الحساب.</div>`}
     </section>
@@ -1250,6 +1320,9 @@ function bindEvents() {
   const meetingForm = document.getElementById("meeting-form");
   if (meetingForm) meetingForm.addEventListener("submit", handleMeetingSubmit);
 
+  const planForm = document.getElementById("plan-form");
+  if (planForm) planForm.addEventListener("submit", handlePlanSubmit);
+
   const departmentForm = document.getElementById("department-form");
   if (departmentForm) departmentForm.addEventListener("submit", handleDepartmentSubmit);
 
@@ -1279,6 +1352,18 @@ function bindEvents() {
   document.querySelectorAll(".meeting-action").forEach((button) => {
     button.addEventListener("click", () => {
       handleMeetingTaskAction(button.dataset.meetingId, button.dataset.taskId, button.dataset.status);
+    });
+  });
+
+  document.querySelectorAll(".plan-action").forEach((button) => {
+    button.addEventListener("click", () => {
+      handlePlanAction(
+        button.dataset.planId,
+        button.dataset.action,
+        button.dataset.delta,
+        button.dataset.status,
+        button.dataset.progress
+      );
     });
   });
 }
@@ -1431,6 +1516,53 @@ function handleMeetingSubmit(event) {
   renderApp();
 }
 
+function handlePlanSubmit(event) {
+  event.preventDefault();
+  const user = getSessionUser();
+  if (!user) return;
+
+  const form = new FormData(event.currentTarget);
+  let ownerType = String(form.get("ownerType"));
+  let ownerId = String(form.get("ownerId"));
+
+  if (user.role === "mission") {
+    ownerType = "mission";
+    ownerId = user.missionId;
+  } else if (user.role === "department") {
+    ownerType = "department";
+    ownerId = user.departmentId;
+  }
+
+  const plan = {
+    id: `plan-${Date.now()}`,
+    title: String(form.get("title")),
+    ownerType,
+    ownerId,
+    period: String(form.get("period")),
+    kpi: String(form.get("kpi")),
+    progress: 0,
+    status: "قيد التنفيذ",
+    workflowHistory: [
+      {
+        actor: user.name,
+        action: "إنشاء الخطة",
+        at: new Date().toLocaleString("ar-YE")
+      }
+    ]
+  };
+
+  state.plans.unshift(plan);
+  addAlert("success", "تم إنشاء خطة جديدة", `أنشأ ${user.name} الخطة "${plan.title}" وربطها بمؤشر الأداء المحدد.`);
+  logAudit(
+    user.name,
+    "إنشاء خطة",
+    plan.title,
+    ownerType === "mission" ? getMissionName(ownerId) : getDepartmentName(ownerId)
+  );
+  saveState();
+  renderApp();
+}
+
 function handleDepartmentSubmit(event) {
   event.preventDefault();
   const form = new FormData(event.currentTarget);
@@ -1472,6 +1604,48 @@ function handleMissionSubmit(event) {
   });
   addAlert("success", "تمت إضافة بعثة", "أضيفت بعثة جديدة وربطت بالدائرة المختارة مع حساب دخول خاص.");
   logAudit("مدير النظام", "إضافة بعثة", String(form.get("name")), getDepartmentName(String(form.get("departmentId"))));
+  saveState();
+  renderApp();
+}
+
+function handlePlanAction(planId, actionKey, deltaValue, nextStatus, progressValue) {
+  const plan = state.plans.find((item) => item.id === planId);
+  const user = getSessionUser();
+  if (!plan || !user) return;
+
+  const ownMissionPlan = user.role === "mission" && plan.ownerType === "mission" && plan.ownerId === user.missionId;
+  const ownDepartmentPlan = user.role === "department" && plan.ownerType === "department" && plan.ownerId === user.departmentId;
+  const central = user.role === "planning" || user.role === "admin";
+  if (!ownMissionPlan && !ownDepartmentPlan && !central) return;
+
+  let actionLabel = "تحديث الخطة";
+  if (actionKey === "progress-10") {
+    const nextProgress = Math.min(100, plan.progress + Number(deltaValue || 0));
+    plan.progress = nextProgress;
+    plan.status = nextProgress >= 100 ? "منجز" : "قيد التنفيذ";
+    actionLabel = "رفع نسبة الإنجاز";
+  } else if (actionKey === "mark-complete") {
+    plan.progress = Number(progressValue || 100);
+    plan.status = nextStatus || "منجز";
+    actionLabel = "اعتبار الخطة منجزة";
+  } else if (actionKey === "mark-delayed") {
+    plan.status = nextStatus || "متأخرة";
+    actionLabel = "وضع الخطة كمتأخرة";
+  }
+
+  plan.workflowHistory.unshift({
+    actor: user.name,
+    action: actionLabel,
+    at: new Date().toLocaleString("ar-YE")
+  });
+
+  addAlert("info", "تحديث على الخطة", `تم تحديث الخطة "${plan.title}" وأصبحت حالتها "${plan.status}" بنسبة إنجاز ${plan.progress}%.`);
+  logAudit(
+    user.name,
+    actionLabel,
+    plan.title,
+    plan.ownerType === "mission" ? getMissionName(plan.ownerId) : getDepartmentName(plan.ownerId)
+  );
   saveState();
   renderApp();
 }
