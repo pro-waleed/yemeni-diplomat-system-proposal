@@ -1,18 +1,28 @@
 const STORAGE_KEY = "yemeni_diplomat_system_v3";
 
+const CANONICAL_DEPARTMENTS = [
+  { id: "dept-gulf", name: "دائرة الجزيرة والخليج", username: "gulf_dept", password: "Gulf@2026" },
+  { id: "dept-arab-world", name: "دائرة الوطن العربي", username: "arab_world_dept", password: "ArabWorld@2026" },
+  { id: "dept-asia-australia", name: "دائرة آسيا وأستراليا", username: "asia_dept", password: "Asia@2026" },
+  { id: "dept-africa", name: "دائرة أفريقيا", username: "africa_dept", password: "Africa@2026" },
+  { id: "dept-europe", name: "دائرة أوروبا", username: "europe_dept", password: "Europe@2026" },
+  { id: "dept-americas", name: "دائرة الأمريكتين", username: "americas_dept", password: "Americas@2026" }
+];
+
+const LEGACY_DEPARTMENT_ID_MAP = {
+  "dept-arabia": "dept-gulf"
+};
+
 const seedState = () => ({
   sessionUserId: null,
   activeView: "dashboard",
   selectedReportId: "report-1",
   loginError: "",
-  departments: [
-    { id: "dept-arabia", name: "الدائرة الجغرافية لشبه الجزيرة العربية", username: "arabia_dept", password: "Arabia@2026" },
-    { id: "dept-africa", name: "الدائرة الجغرافية لأفريقيا", username: "africa_dept", password: "Africa@2026" }
-  ],
+  departments: CANONICAL_DEPARTMENTS,
   missions: [
-    { id: "mission-riyadh", name: "بعثة الرياض", departmentId: "dept-arabia", username: "riyadh", password: "Riyadh@2026" },
-    { id: "mission-jeddah", name: "بعثة جدة", departmentId: "dept-arabia", username: "jeddah", password: "Jeddah@2026" },
-    { id: "mission-cairo", name: "بعثة القاهرة", departmentId: "dept-africa", username: "cairo", password: "Cairo@2026" }
+    { id: "mission-riyadh", name: "بعثة الرياض", departmentId: "dept-gulf", username: "riyadh", password: "Riyadh@2026" },
+    { id: "mission-jeddah", name: "بعثة جدة", departmentId: "dept-gulf", username: "jeddah", password: "Jeddah@2026" },
+    { id: "mission-cairo", name: "بعثة القاهرة", departmentId: "dept-arab-world", username: "cairo", password: "Cairo@2026" }
   ],
   coreUsers: [
     { id: "admin-user", role: "admin", name: "مدير النظام", username: "admin", password: "Admin@2026" },
@@ -35,7 +45,7 @@ const seedState = () => ({
     {
       id: "report-1",
       missionId: "mission-cairo",
-      departmentId: "dept-africa",
+      departmentId: "dept-arab-world",
       title: "تقرير نصف سنوي عن النشاط السياسي والإعلامي",
       type: "نصف سنوي",
       thematicTrack: "سياسي / إعلامي",
@@ -51,7 +61,7 @@ const seedState = () => ({
       createdAt: "2026-03-10 09:20",
       workflowHistory: [
         { actor: "بعثة القاهرة", action: "رفع التقرير", stage: "مرفوع من البعثة", at: "2026-03-10 09:20" },
-        { actor: "الدائرة الجغرافية لأفريقيا", action: "بدء مراجعة الدائرة", stage: "قيد مراجعة الدائرة", at: "2026-03-10 11:00" },
+        { actor: "دائرة الوطن العربي", action: "بدء مراجعة الدائرة", stage: "قيد مراجعة الدائرة", at: "2026-03-10 11:00" },
         { actor: "إدارة التخطيط", action: "اعتماد التقرير", stage: "معتمد من التخطيط", at: "2026-03-11 08:30" }
       ]
     }
@@ -77,11 +87,11 @@ const seedState = () => ({
       id: "meet-1",
       title: "اجتماع متابعة التحول الرقمي",
       ownerRole: "planning",
-      departmentId: "dept-arabia",
+      departmentId: "dept-gulf",
       summary: "مراجعة تقدم الوحدات الأساسية والجاهزية التشغيلية.",
       tasks: [
         { id: "task-1", title: "استكمال نماذج التقارير", assignee: "بعثة الرياض", status: "قيد التنفيذ", priority: "عالية" },
-        { id: "task-2", title: "مراجعة صلاحيات البعثات", assignee: "الدائرة الجغرافية لشبه الجزيرة العربية", status: "منجز", priority: "متوسطة" }
+        { id: "task-2", title: "مراجعة صلاحيات البعثات", assignee: "دائرة الجزيرة والخليج", status: "منجز", priority: "متوسطة" }
       ],
       workflowHistory: [
         { actor: "إدارة التخطيط", action: "تسجيل محضر الاجتماع", at: "2026-03-15 10:00" }
@@ -146,6 +156,21 @@ function loadState() {
     const existing = parsedCoreUsers.find((user) => user.id === seedUser.id || user.username === seedUser.username);
     return existing ? { ...seedUser, ...existing } : seedUser;
   });
+  const parsedDepartments = Array.isArray(parsed.departments) ? parsed.departments : [];
+  parsed.departments = CANONICAL_DEPARTMENTS.map((department) => {
+    const existing = parsedDepartments.find((item) => item.id === department.id || item.id === Object.keys(LEGACY_DEPARTMENT_ID_MAP).find((legacyId) => LEGACY_DEPARTMENT_ID_MAP[legacyId] === department.id));
+    return existing ? { ...department, ...existing, id: department.id, name: department.name } : department;
+  });
+  parsed.missions = (Array.isArray(parsed.missions) ? parsed.missions : seeded.missions).map((mission) => {
+    let nextDepartmentId = LEGACY_DEPARTMENT_ID_MAP[mission.departmentId] || mission.departmentId;
+    if (mission.id === "mission-cairo") {
+      nextDepartmentId = "dept-arab-world";
+    }
+    return {
+      ...mission,
+      departmentId: nextDepartmentId
+    };
+  });
   parsed.reportRequests = Array.isArray(parsed.reportRequests) ? parsed.reportRequests : seeded.reportRequests;
   parsed.reportRequests = parsed.reportRequests.map((request) => ({
     ...request,
@@ -161,11 +186,13 @@ function loadState() {
   }));
   parsed.meetings = (Array.isArray(parsed.meetings) ? parsed.meetings : seedState().meetings).map((meeting) => ({
     ...meeting,
+    departmentId: LEGACY_DEPARTMENT_ID_MAP[meeting.departmentId] || meeting.departmentId,
     workflowHistory: Array.isArray(meeting.workflowHistory) ? meeting.workflowHistory : [],
     tasks: Array.isArray(meeting.tasks) ? meeting.tasks.map((task) => ({
       ...task,
       id: task.id || `task-${Math.random().toString(16).slice(2, 8)}`,
-      priority: task.priority || "متوسطة"
+      priority: task.priority || "متوسطة",
+      assignee: task.assignee === "الدائرة الجغرافية لشبه الجزيرة العربية" ? "دائرة الجزيرة والخليج" : task.assignee
     })) : []
   }));
   parsed.plans = (Array.isArray(parsed.plans) ? parsed.plans : seedState().plans).map((plan) => ({
@@ -176,6 +203,7 @@ function loadState() {
   parsed.auditLog = Array.isArray(parsed.auditLog) ? parsed.auditLog : seedState().auditLog;
   parsed.reports = parsed.reports.map((report) => ({
     ...report,
+    departmentId: parsed.missions.find((mission) => mission.id === report.missionId)?.departmentId || LEGACY_DEPARTMENT_ID_MAP[report.departmentId] || report.departmentId,
     workflowStage: report.workflowStage || "مرفوع من البعثة",
     workflowHistory: Array.isArray(report.workflowHistory) ? report.workflowHistory : []
   }));
@@ -471,8 +499,8 @@ function renderLogin() {
             <span class="muted">اسم المستخدم: leadership | كلمة المرور: Leadership@2026</span>
           </div>
           <div class="cred-card">
-            <strong>دائرة جغرافية</strong>
-            <span class="muted">اسم المستخدم: arabia_dept | كلمة المرور: Arabia@2026</span>
+            <strong>دائرة الجزيرة والخليج</strong>
+            <span class="muted">اسم المستخدم: gulf_dept | كلمة المرور: Gulf@2026</span>
           </div>
           <div class="cred-card">
             <strong>بعثة الرياض</strong>
