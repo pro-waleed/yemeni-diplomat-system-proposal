@@ -74,6 +74,10 @@ const seedState = () => ({
   sessionUserId: null,
   activeView: "dashboard",
   selectedReportId: "report-1",
+  editingReportId: null,
+  editingCircularId: null,
+  editingMeetingId: null,
+  editingPlanId: null,
   loginError: "",
   departments: CANONICAL_DEPARTMENTS,
   missions: CANONICAL_MISSIONS,
@@ -227,6 +231,10 @@ function loadState() {
     }));
   parsed.missions = [...canonicalMissions, ...customMissions];
   parsed.reportRequests = Array.isArray(parsed.reportRequests) ? parsed.reportRequests : seeded.reportRequests;
+  parsed.editingReportId = parsed.editingReportId || null;
+  parsed.editingCircularId = parsed.editingCircularId || null;
+  parsed.editingMeetingId = parsed.editingMeetingId || null;
+  parsed.editingPlanId = parsed.editingPlanId || null;
   parsed.reportRequests = parsed.reportRequests.map((request) => ({
     ...request,
     targetMissionIds: Array.isArray(request.targetMissionIds) ? request.targetMissionIds : [],
@@ -527,6 +535,28 @@ function getAllowedReportActions(report, user = getSessionUser()) {
   return actions;
 }
 
+function canEditReport(report, user = getSessionUser()) {
+  if (!report || !user) return false;
+  return user.role === "mission" && user.missionId === report.missionId && report.workflowStage !== "مغلق ومؤرشف";
+}
+
+function canEditCircular(circular, user = getSessionUser()) {
+  return Boolean(circular && user && (user.role === "planning" || user.role === "admin") && circular.status !== "مغلق");
+}
+
+function canEditMeeting(meeting, user = getSessionUser()) {
+  if (!meeting || !user) return false;
+  if (user.role === "planning" || user.role === "admin") return true;
+  return user.role === "department" && user.departmentId === meeting.departmentId;
+}
+
+function canEditPlan(plan, user = getSessionUser()) {
+  if (!plan || !user) return false;
+  if (user.role === "planning" || user.role === "admin") return true;
+  if (user.role === "department") return plan.ownerType === "department" && plan.ownerId === user.departmentId;
+  return user.role === "mission" && plan.ownerType === "mission" && plan.ownerId === user.missionId;
+}
+
 function renderApp() {
   const user = getSessionUser();
   root.innerHTML = user ? renderSystem(user) : renderLogin();
@@ -754,9 +784,10 @@ function renderReportsPage(user) {
 
 function renderMissionReportForm(user) {
   const requests = getVisibleRequests(user).filter((item) => item.status === "نشط");
+  const editingReport = state.reports.find((item) => item.id === state.editingReportId && item.missionId === user.missionId) || null;
   return `
     <div class="detail-card">
-      <div class="section-title">رفع تقرير نشاط</div>
+      <div class="section-title">${editingReport ? "تعديل التقرير" : "رفع تقرير نشاط"}</div>
       ${requests.length ? `
         <div class="detail-card">
           <div class="section-title">طلبات التقارير النشطة</div>
@@ -775,64 +806,58 @@ function renderMissionReportForm(user) {
       <form id="report-form" class="form-grid">
         <label class="field">
           <span>عنوان التقرير</span>
-          <input name="title" required>
+          <input name="title" value="${editingReport ? editingReport.title : ""}" required>
         </label>
         <label class="field">
           <span>نوع التقرير</span>
           <select name="type">
-            <option>نشاط</option>
-            <option>نصف سنوي</option>
-            <option>سنوي</option>
-            <option>موضوعي</option>
+            ${["نشاط", "نصف سنوي", "سنوي", "موضوعي"].map((item) => `<option ${editingReport && editingReport.type === item ? "selected" : ""}>${item}</option>`).join("")}
           </select>
         </label>
         <label class="field">
           <span>المسار الموضوعي</span>
           <select name="thematicTrack">
-            <option>سياسي</option>
-            <option>اقتصادي</option>
-            <option>إعلامي</option>
-            <option>ثقافي</option>
-            <option>قنصلي</option>
+            ${["سياسي", "اقتصادي", "إعلامي", "ثقافي", "قنصلي"].map((item) => `<option ${editingReport && editingReport.thematicTrack === item ? "selected" : ""}>${item}</option>`).join("")}
           </select>
         </label>
         <label class="field">
           <span>الطلب المرتبط</span>
           <select name="requestId">
             <option value="">بدون ربط</option>
-            ${requests.map((request) => `<option value="${request.id}">${request.title}</option>`).join("")}
+            ${requests.map((request) => `<option value="${request.id}" ${editingReport && editingReport.requestId === request.id ? "selected" : ""}>${request.title}</option>`).join("")}
           </select>
         </label>
         <label class="field">
           <span>تاريخ النشاط</span>
-          <input type="date" name="activityDate" required>
+          <input type="date" name="activityDate" value="${editingReport ? editingReport.activityDate : ""}" required>
         </label>
         <label class="field">
           <span>اسم المرفق</span>
-          <input name="attachmentName" required>
+          <input name="attachmentName" value="${editingReport ? editingReport.attachmentName : ""}" required>
         </label>
         <label class="field full">
           <span>الأهداف قبل الفعالية</span>
-          <textarea name="beforeGoals" required></textarea>
+          <textarea name="beforeGoals" required>${editingReport ? editingReport.beforeGoals : ""}</textarea>
         </label>
         <label class="field full">
           <span>المتوقع قبل الفعالية</span>
-          <textarea name="beforeExpected" required></textarea>
+          <textarea name="beforeExpected" required>${editingReport ? editingReport.beforeExpected : ""}</textarea>
         </label>
         <label class="field full">
           <span>النتائج بعد الفعالية</span>
-          <textarea name="afterResults" required></textarea>
+          <textarea name="afterResults" required>${editingReport ? editingReport.afterResults : ""}</textarea>
         </label>
         <label class="field full">
           <span>التوصيات بعد الفعالية</span>
-          <textarea name="afterRecommendations" required></textarea>
+          <textarea name="afterRecommendations" required>${editingReport ? editingReport.afterRecommendations : ""}</textarea>
         </label>
         <label class="field full">
           <span>الملخص التنفيذي</span>
-          <textarea name="summary" required></textarea>
+          <textarea name="summary" required>${editingReport ? editingReport.summary : ""}</textarea>
         </label>
         <div class="field full">
-          <button class="btn primary" type="submit">رفع التقرير</button>
+          <button class="btn primary" type="submit">${editingReport ? "حفظ التعديلات" : "رفع التقرير"}</button>
+          ${editingReport ? `<button class="btn secondary cancel-edit" type="button" data-kind="report">إلغاء التعديل</button>` : ""}
         </div>
       </form>
     </div>
@@ -850,6 +875,7 @@ function renderReportDetails(report, user) {
         <div class="detail-row"><span>الدائرة</span><span>${getDepartmentName(report.departmentId)}</span></div>
         <div class="detail-row"><span>مرحلة الاعتماد</span><span class="tag ${stageTone(report.workflowStage)}">${report.workflowStage}</span></div>
         <div class="detail-row"><span>الطلب المرتبط</span><span>${request ? request.title : "لا يوجد"}</span></div>
+        ${canEditReport(report, user) ? `<div class="inline-actions"><button class="btn secondary report-edit" data-report-id="${report.id}">تعديل التقرير</button></div>` : ""}
       </div>
       <div class="detail-card">
         <div class="section-title">قبل الفعالية</div>
@@ -888,6 +914,7 @@ function renderReportDetails(report, user) {
 
 function renderCircularsPage(user) {
   const circulars = getVisibleCirculars(user);
+  const editingCircular = circulars.find((item) => item.id === state.editingCircularId) || null;
   return `
     <section class="panel">
       <div class="topbar">
@@ -902,29 +929,30 @@ function renderCircularsPage(user) {
       <div class="panel">
         ${(user.role === "planning" || user.role === "admin") ? `
           <div class="detail-card">
-            <div class="section-title">إصدار تعميم جديد</div>
+            <div class="section-title">${editingCircular ? "تعديل التعميم" : "إصدار تعميم جديد"}</div>
             <form id="circular-form" class="form-grid">
               <label class="field">
                 <span>عنوان التعميم</span>
-                <input name="title" required>
+                <input name="title" value="${editingCircular ? editingCircular.title : ""}" required>
               </label>
               <label class="field">
                 <span>الموعد النهائي</span>
-                <input type="date" name="dueDate" required>
+                <input type="date" name="dueDate" value="${editingCircular ? editingCircular.dueDate : ""}" required>
               </label>
               <label class="field full">
                 <span>البعثات المستهدفة</span>
                 <div class="checkbox-grid">
                   ${state.missions.map((mission) => `
                     <label class="check-item">
-                      <input type="checkbox" name="missionId" value="${mission.id}" checked>
+                      <input type="checkbox" name="missionId" value="${mission.id}" ${!editingCircular || editingCircular.targetMissionIds.includes(mission.id) ? "checked" : ""}>
                       <span>${mission.name}</span>
                     </label>
                   `).join("")}
                 </div>
               </label>
               <div class="field full">
-                <button class="btn primary" type="submit">إصدار التعميم</button>
+                <button class="btn primary" type="submit">${editingCircular ? "حفظ التعديلات" : "إصدار التعميم"}</button>
+                ${editingCircular ? `<button class="btn secondary cancel-edit" type="button" data-kind="circular">إلغاء التعديل</button>` : ""}
               </div>
             </form>
           </div>
@@ -947,6 +975,7 @@ function renderCircularsPage(user) {
               <div class="detail-row"><span>أنجز التعميم</span><span>${stats.completed}/${stats.total}</span></div>
               <div class="progress"><span style="width:${stats.completePercent}%"></span></div>
               <p class="record-desc">المتبقي ${stats.pending} بعثات | غير المقروء ${stats.unread}</p>
+              ${canEditCircular(circular, user) ? `<div class="inline-actions"><button class="btn secondary circular-edit" data-circular-id="${circular.id}">تعديل التعميم</button></div>` : ""}
               ${actions.length ? `<div class="inline-actions">${actions.map((action) => `<button class="btn primary circular-action" data-circular-id="${circular.id}" data-action="${action.key}">${action.label}</button>`).join("")}</div>` : ""}
             </div>
           `;
@@ -979,6 +1008,8 @@ function renderCircularsPage(user) {
 
 function renderMeetingsPage(user) {
   const meetings = getVisibleMeetings(user);
+  const editingMeeting = meetings.find((item) => item.id === state.editingMeetingId) || null;
+  const primaryTask = editingMeeting?.tasks?.[0] || null;
   return `
     <section class="panel">
       <div class="topbar">
@@ -992,42 +1023,41 @@ function renderMeetingsPage(user) {
     <section class="two-col">
       ${(user.role === "planning" || user.role === "admin" || user.role === "department") ? `
         <div class="panel">
-          <div class="section-title">تسجيل اجتماع جديد</div>
+          <div class="section-title">${editingMeeting ? "تعديل الاجتماع" : "تسجيل اجتماع جديد"}</div>
           <form id="meeting-form" class="form-grid">
             <label class="field">
               <span>عنوان الاجتماع</span>
-              <input name="title" required>
+              <input name="title" value="${editingMeeting ? editingMeeting.title : ""}" required>
             </label>
             <label class="field">
               <span>الدائرة المعنية</span>
               <select name="departmentId" required>
-                ${state.departments.map((department) => `<option value="${department.id}">${department.name}</option>`).join("")}
+                ${state.departments.map((department) => `<option value="${department.id}" ${editingMeeting && editingMeeting.departmentId === department.id ? "selected" : ""}>${department.name}</option>`).join("")}
               </select>
             </label>
             <label class="field full">
               <span>ملخص المحضر</span>
-              <textarea name="summary" required></textarea>
+              <textarea name="summary" required>${editingMeeting ? editingMeeting.summary : ""}</textarea>
             </label>
             <label class="field">
               <span>عنوان المهمة الأولى</span>
-              <input name="taskTitle" required>
+              <input name="taskTitle" value="${primaryTask ? primaryTask.title : ""}" required>
             </label>
             <label class="field">
               <span>الجهة المكلفة</span>
               <select name="assignee" required>
-                ${[...state.missions.map((mission) => mission.name), ...state.departments.map((department) => department.name)].map((name) => `<option value="${name}">${name}</option>`).join("")}
+                ${[...state.missions.map((mission) => mission.name), ...state.departments.map((department) => department.name)].map((name) => `<option value="${name}" ${primaryTask && primaryTask.assignee === name ? "selected" : ""}>${name}</option>`).join("")}
               </select>
             </label>
             <label class="field">
               <span>الأولوية</span>
               <select name="priority" required>
-                <option>عالية</option>
-                <option>متوسطة</option>
-                <option>منخفضة</option>
+                ${["عالية", "متوسطة", "منخفضة"].map((item) => `<option ${primaryTask && primaryTask.priority === item ? "selected" : ""}>${item}</option>`).join("")}
               </select>
             </label>
             <div class="field full">
-              <button class="btn primary" type="submit">تسجيل الاجتماع</button>
+              <button class="btn primary" type="submit">${editingMeeting ? "حفظ التعديلات" : "تسجيل الاجتماع"}</button>
+              ${editingMeeting ? `<button class="btn secondary cancel-edit" type="button" data-kind="meeting">إلغاء التعديل</button>` : ""}
             </div>
           </form>
         </div>
@@ -1036,6 +1066,7 @@ function renderMeetingsPage(user) {
         <div class="panel">
           <div class="section-title">${meeting.title}</div>
           <p class="muted">${meeting.summary}</p>
+          ${canEditMeeting(meeting, user) ? `<div class="inline-actions"><button class="btn secondary meeting-edit" data-meeting-id="${meeting.id}">تعديل الاجتماع</button></div>` : ""}
           <div class="detail-list">
             ${meeting.tasks.map((task) => `
               <div class="detail-card">
@@ -1066,6 +1097,7 @@ function renderMeetingsPage(user) {
 
 function renderPlansPage(user) {
   const plans = getVisiblePlans(user);
+  const editingPlan = plans.find((item) => item.id === state.editingPlanId) || null;
   return `
     <section class="panel">
       <div class="topbar">
@@ -1079,18 +1111,16 @@ function renderPlansPage(user) {
     <section class="two-col">
       ${(user.role === "planning" || user.role === "admin" || user.role === "department" || user.role === "mission") ? `
         <div class="panel">
-          <div class="section-title">إنشاء خطة جديدة</div>
+          <div class="section-title">${editingPlan ? "تعديل الخطة" : "إنشاء خطة جديدة"}</div>
           <form id="plan-form" class="form-grid">
             <label class="field">
               <span>عنوان الخطة</span>
-              <input name="title" required>
+              <input name="title" value="${editingPlan ? editingPlan.title : ""}" required>
             </label>
             <label class="field">
               <span>الفترة</span>
               <select name="period">
-                <option>سنوية</option>
-                <option>نصف سنوية</option>
-                <option>ربع سنوية</option>
+                ${["سنوية", "نصف سنوية", "ربع سنوية"].map((item) => `<option ${editingPlan && editingPlan.period === item ? "selected" : ""}>${item}</option>`).join("")}
               </select>
             </label>
             ${(user.role === "planning" || user.role === "admin") ? `
@@ -1098,10 +1128,10 @@ function renderPlansPage(user) {
                 <span>الجهة المالكة</span>
                 <select name="ownerId">
                   <optgroup label="البعثات">
-                    ${state.missions.map((mission) => `<option value="mission:${mission.id}">${mission.name}</option>`).join("")}
+                    ${state.missions.map((mission) => `<option value="mission:${mission.id}" ${editingPlan && editingPlan.ownerType === "mission" && editingPlan.ownerId === mission.id ? "selected" : ""}>${mission.name}</option>`).join("")}
                   </optgroup>
                   <optgroup label="الدوائر">
-                    ${state.departments.map((department) => `<option value="department:${department.id}">${department.name}</option>`).join("")}
+                    ${state.departments.map((department) => `<option value="department:${department.id}" ${editingPlan && editingPlan.ownerType === "department" && editingPlan.ownerId === department.id ? "selected" : ""}>${department.name}</option>`).join("")}
                   </optgroup>
                 </select>
               </label>
@@ -1115,10 +1145,11 @@ function renderPlansPage(user) {
             `}
             <label class="field full">
               <span>مؤشر الأداء المرتبط</span>
-              <input name="kpi" required placeholder="مثال: نسبة الإنجاز مقابل المستهدف">
+              <input name="kpi" value="${editingPlan ? editingPlan.kpi : ""}" required placeholder="مثال: نسبة الإنجاز مقابل المستهدف">
             </label>
             <div class="field full">
-              <button class="btn primary" type="submit">إنشاء الخطة</button>
+              <button class="btn primary" type="submit">${editingPlan ? "حفظ التعديلات" : "إنشاء الخطة"}</button>
+              ${editingPlan ? `<button class="btn secondary cancel-edit" type="button" data-kind="plan">إلغاء التعديل</button>` : ""}
             </div>
           </form>
         </div>
@@ -1135,6 +1166,7 @@ function renderPlansPage(user) {
           <div class="progress"><span style="width:${plan.progress}%"></span></div>
           <p class="muted">نسبة الإنجاز الحالية: ${plan.progress}%</p>
           <div class="detail-row"><span>المالك</span><span>${plan.ownerType === "mission" ? getMissionName(plan.ownerId) : getDepartmentName(plan.ownerId)}</span></div>
+          ${canEditPlan(plan, user) ? `<div class="inline-actions"><button class="btn secondary plan-edit" data-plan-id="${plan.id}">تعديل الخطة</button></div>` : ""}
           ${getPlanActions(plan, user).length ? `<div class="inline-actions">${getPlanActions(plan, user).map((action) => `<button class="btn primary plan-action" data-plan-id="${plan.id}" data-action="${action.key}" data-delta="${action.delta || ""}" data-status="${action.status || ""}" data-progress="${action.progress || ""}">${action.label}</button>`).join("")}</div>` : ""}
           ${(plan.workflowHistory || []).length ? `
             <div class="detail-card">
@@ -1504,15 +1536,39 @@ function bindEvents() {
     });
   });
 
+  document.querySelectorAll(".report-edit").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.editingReportId = button.dataset.reportId;
+      saveState();
+      renderApp();
+    });
+  });
+
   document.querySelectorAll(".circular-action").forEach((button) => {
     button.addEventListener("click", () => {
       handleCircularAction(button.dataset.circularId, button.dataset.action);
     });
   });
 
+  document.querySelectorAll(".circular-edit").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.editingCircularId = button.dataset.circularId;
+      saveState();
+      renderApp();
+    });
+  });
+
   document.querySelectorAll(".meeting-action").forEach((button) => {
     button.addEventListener("click", () => {
       handleMeetingTaskAction(button.dataset.meetingId, button.dataset.taskId, button.dataset.status);
+    });
+  });
+
+  document.querySelectorAll(".meeting-edit").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.editingMeetingId = button.dataset.meetingId;
+      saveState();
+      renderApp();
     });
   });
 
@@ -1525,6 +1581,25 @@ function bindEvents() {
         button.dataset.status,
         button.dataset.progress
       );
+    });
+  });
+
+  document.querySelectorAll(".plan-edit").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.editingPlanId = button.dataset.planId;
+      saveState();
+      renderApp();
+    });
+  });
+
+  document.querySelectorAll(".cancel-edit").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (button.dataset.kind === "report") state.editingReportId = null;
+      if (button.dataset.kind === "circular") state.editingCircularId = null;
+      if (button.dataset.kind === "meeting") state.editingMeetingId = null;
+      if (button.dataset.kind === "plan") state.editingPlanId = null;
+      saveState();
+      renderApp();
     });
   });
 }
@@ -1563,10 +1638,16 @@ function handleReportSubmit(event) {
   event.preventDefault();
   const user = getSessionUser();
   const form = new FormData(event.currentTarget);
-  const report = {
+  const editingReport = state.reports.find((item) => item.id === state.editingReportId && item.missionId === user.missionId);
+  const report = editingReport || {
     id: `report-${Date.now()}`,
     missionId: user.missionId,
     departmentId: user.departmentId,
+    workflowStage: "مرفوع من البعثة",
+    createdAt: new Date().toLocaleString("ar-YE"),
+    workflowHistory: []
+  };
+  Object.assign(report, {
     title: String(form.get("title")),
     type: String(form.get("type")),
     thematicTrack: String(form.get("thematicTrack")),
@@ -1577,19 +1658,17 @@ function handleReportSubmit(event) {
     beforeExpected: String(form.get("beforeExpected")),
     afterResults: String(form.get("afterResults")),
     afterRecommendations: String(form.get("afterRecommendations")),
-    attachmentName: String(form.get("attachmentName")),
-    workflowStage: "مرفوع من البعثة",
-    createdAt: new Date().toLocaleString("ar-YE"),
-    workflowHistory: []
-  };
-  addWorkflowEntry(report, user.name, "رفع التقرير", "مرفوع من البعثة");
-  state.reports.unshift(report);
-  state.selectedReportId = report.id;
-  if (report.requestId) {
-    syncRequestCompletion(report.requestId, report.missionId);
+    attachmentName: String(form.get("attachmentName"))
+  });
+  addWorkflowEntry(report, user.name, editingReport ? "تعديل التقرير" : "رفع التقرير", report.workflowStage);
+  if (!editingReport) {
+    state.reports.unshift(report);
   }
+  state.selectedReportId = report.id;
+  state.editingReportId = null;
+  if (report.requestId) syncRequestCompletion(report.requestId, report.missionId);
   addAlert("success", "تم رفع تقرير جديد", `رفعت ${user.name} التقرير "${report.title}" وأصبح مرئيًا للجهات المخولة.`);
-  logAudit(user.name, "رفع تقرير", report.title, getMissionName(report.missionId));
+  logAudit(user.name, editingReport ? "تعديل تقرير" : "رفع تقرير", report.title, getMissionName(report.missionId));
   saveState();
   renderApp();
 }
@@ -1623,28 +1702,31 @@ function handleCircularSubmit(event) {
   const targetMissionIds = form.getAll("missionId");
   if (!targetMissionIds.length) return;
 
-  const circular = {
+  const editingCircular = state.circulars.find((item) => item.id === state.editingCircularId);
+  const circular = editingCircular || {
     id: `circ-${Date.now()}`,
-    title: String(form.get("title")),
     issuedBy: user.name,
-    targetMissionIds,
-    dueDate: String(form.get("dueDate")),
     status: "نشط",
     readMissionIds: [],
     completedMissionIds: [],
     workflowHistory: [],
     processingLog: []
   };
+  circular.title = String(form.get("title"));
+  circular.targetMissionIds = targetMissionIds;
+  circular.dueDate = String(form.get("dueDate"));
   circular.workflowHistory.unshift({
     actor: user.name,
-    action: "إصدار التعميم",
-    stage: "نشط",
+    action: editingCircular ? "تعديل التعميم" : "إصدار التعميم",
+    stage: circular.status,
     at: new Date().toLocaleString("ar-YE")
   });
-
-  state.circulars.unshift(circular);
-  addAlert("info", "تم إصدار تعميم", `أصدر ${user.name} التعميم "${circular.title}" إلى ${targetMissionIds.length} بعثات.`);
-  logAudit(user.name, "إصدار تعميم", circular.title, "وزارة");
+  if (!editingCircular) {
+    state.circulars.unshift(circular);
+  }
+  state.editingCircularId = null;
+  addAlert("info", editingCircular ? "تم تعديل تعميم" : "تم إصدار تعميم", `${editingCircular ? "عدّل" : "أصدر"} ${user.name} التعميم "${circular.title}" إلى ${targetMissionIds.length} بعثات.`);
+  logAudit(user.name, editingCircular ? "تعديل تعميم" : "إصدار تعميم", circular.title, "وزارة");
   saveState();
   renderApp();
 }
@@ -1653,33 +1735,39 @@ function handleMeetingSubmit(event) {
   event.preventDefault();
   const user = getSessionUser();
   const form = new FormData(event.currentTarget);
-  const meeting = {
+  const editingMeeting = state.meetings.find((item) => item.id === state.editingMeetingId);
+  const meeting = editingMeeting || {
     id: `meet-${Date.now()}`,
-    title: String(form.get("title")),
     ownerRole: user.role,
+    tasks: [],
+    workflowHistory: []
+  };
+  const existingTask = meeting.tasks[0];
+  Object.assign(meeting, {
+    title: String(form.get("title")),
     departmentId: String(form.get("departmentId")),
     summary: String(form.get("summary")),
     tasks: [
       {
-        id: `task-${Date.now()}`,
+        id: existingTask?.id || `task-${Date.now()}`,
         title: String(form.get("taskTitle")),
         assignee: String(form.get("assignee")),
-        status: "قيد التنفيذ",
+        status: existingTask?.status || "قيد التنفيذ",
         priority: String(form.get("priority"))
       }
-    ],
-    workflowHistory: [
-      {
-        actor: user.name,
-        action: "تسجيل محضر الاجتماع",
-        at: new Date().toLocaleString("ar-YE")
-      }
     ]
-  };
-
-  state.meetings.unshift(meeting);
-  addAlert("info", "تم تسجيل اجتماع", `سجل ${user.name} الاجتماع "${meeting.title}" مع مهمة تنفيذية أولية.`);
-  logAudit(user.name, "تسجيل اجتماع", meeting.title, getDepartmentName(meeting.departmentId));
+  });
+  meeting.workflowHistory.unshift({
+    actor: user.name,
+    action: editingMeeting ? "تعديل الاجتماع" : "تسجيل محضر الاجتماع",
+    at: new Date().toLocaleString("ar-YE")
+  });
+  if (!editingMeeting) {
+    state.meetings.unshift(meeting);
+  }
+  state.editingMeetingId = null;
+  addAlert("info", editingMeeting ? "تم تعديل اجتماع" : "تم تسجيل اجتماع", `${editingMeeting ? "عدّل" : "سجل"} ${user.name} الاجتماع "${meeting.title}".`);
+  logAudit(user.name, editingMeeting ? "تعديل اجتماع" : "تسجيل اجتماع", meeting.title, getDepartmentName(meeting.departmentId));
   saveState();
   renderApp();
 }
@@ -1717,29 +1805,34 @@ function handlePlanSubmit(event) {
     return;
   }
 
-  const plan = {
+  const editingPlan = state.plans.find((item) => item.id === state.editingPlanId);
+  const plan = editingPlan || {
     id: `plan-${Date.now()}`,
+    progress: 0,
+    status: "قيد التنفيذ",
+    workflowHistory: []
+  };
+  Object.assign(plan, {
     title: String(form.get("title")),
     ownerType,
     ownerId,
     period: String(form.get("period")),
-    kpi: String(form.get("kpi")),
-    progress: 0,
-    status: "قيد التنفيذ",
-    workflowHistory: [
-      {
-        actor: user.name,
-        action: "إنشاء الخطة",
-        at: new Date().toLocaleString("ar-YE")
-      }
-    ]
-  };
+    kpi: String(form.get("kpi"))
+  });
+  plan.workflowHistory.unshift({
+    actor: user.name,
+    action: editingPlan ? "تعديل الخطة" : "إنشاء الخطة",
+    at: new Date().toLocaleString("ar-YE")
+  });
 
-  state.plans.unshift(plan);
-  addAlert("success", "تم إنشاء خطة جديدة", `أنشأ ${user.name} الخطة "${plan.title}" وربطها بمؤشر الأداء المحدد.`);
+  if (!editingPlan) {
+    state.plans.unshift(plan);
+  }
+  state.editingPlanId = null;
+  addAlert("success", editingPlan ? "تم تعديل الخطة" : "تم إنشاء خطة جديدة", `${editingPlan ? "عدّل" : "أنشأ"} ${user.name} الخطة "${plan.title}" وربطها بمؤشر الأداء المحدد.`);
   logAudit(
     user.name,
-    "إنشاء خطة",
+    editingPlan ? "تعديل خطة" : "إنشاء خطة",
     plan.title,
     ownerType === "mission" ? getMissionName(ownerId) : getDepartmentName(ownerId)
   );
