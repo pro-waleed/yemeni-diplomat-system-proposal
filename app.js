@@ -358,6 +358,13 @@ function stageTone(stage) {
   return "info";
 }
 
+function getPlanStatusTone(status) {
+  if (status === "منجز") return "success";
+  if (status === "متأخرة") return "danger";
+  if (status === "قيد التنفيذ") return "warning";
+  return "info";
+}
+
 function addAlert(level, title, text) {
   state.alerts.unshift({ id: `alert-${Date.now()}`, level, title, text });
   state.alerts = state.alerts.slice(0, 8);
@@ -382,6 +389,26 @@ function addWorkflowEntry(report, actor, action, stage) {
     stage,
     at: new Date().toLocaleString("ar-YE")
   });
+}
+
+function syncRequestCompletion(requestId, missionId) {
+  if (!requestId || !missionId) return;
+  const request = state.reportRequests.find((item) => item.id === requestId);
+  if (!request) return;
+
+  const hasValidReport = state.reports.some((report) => (
+    report.requestId === requestId &&
+    report.missionId === missionId &&
+    report.workflowStage !== "أعيد للبعثة للاستكمال"
+  ));
+
+  if (hasValidReport && !request.completedMissionIds.includes(missionId)) {
+    request.completedMissionIds.push(missionId);
+  }
+
+  if (!hasValidReport) {
+    request.completedMissionIds = request.completedMissionIds.filter((id) => id !== missionId);
+  }
 }
 
 function getAllowedReportActions(report, user = getSessionUser()) {
@@ -939,19 +966,26 @@ function renderPlansPage(user) {
                 <option>ربع سنوية</option>
               </select>
             </label>
-            <label class="field">
-              <span>نوع المالك</span>
-              <select name="ownerType" id="plan-owner-type">
-                <option value="mission">بعثة</option>
-                <option value="department">دائرة</option>
-              </select>
-            </label>
-            <label class="field">
-              <span>المالك</span>
-              <select name="ownerId">
-                ${[...state.missions.map((mission) => ({ id: mission.id, label: mission.name })), ...state.departments.map((department) => ({ id: department.id, label: department.name }))].map((item) => `<option value="${item.id}">${item.label}</option>`).join("")}
-              </select>
-            </label>
+            ${(user.role === "planning" || user.role === "admin") ? `
+              <label class="field">
+                <span>الجهة المالكة</span>
+                <select name="ownerId">
+                  <optgroup label="البعثات">
+                    ${state.missions.map((mission) => `<option value="mission:${mission.id}">${mission.name}</option>`).join("")}
+                  </optgroup>
+                  <optgroup label="الدوائر">
+                    ${state.departments.map((department) => `<option value="department:${department.id}">${department.name}</option>`).join("")}
+                  </optgroup>
+                </select>
+              </label>
+            ` : `
+              <div class="detail-card">
+                <div class="detail-row">
+                  <span>المالك</span>
+                  <span>${user.role === "mission" ? getMissionName(user.missionId) : getDepartmentName(user.departmentId)}</span>
+                </div>
+              </div>
+            `}
             <label class="field full">
               <span>مؤشر الأداء المرتبط</span>
               <input name="kpi" required placeholder="مثال: نسبة الإنجاز مقابل المستهدف">
@@ -969,7 +1003,7 @@ function renderPlansPage(user) {
               <strong>${plan.title}</strong>
               <div class="record-meta">${plan.period} | ${plan.kpi}</div>
             </div>
-            <span class="tag ${plan.status === "قيد التنفيذ" ? "warning" : "success"}">${plan.status}</span>
+            <span class="tag ${getPlanStatusTone(plan.status)}">${plan.status}</span>
           </div>
           <div class="progress"><span style="width:${plan.progress}%"></span></div>
           <p class="muted">نسبة الإنجاز الحالية: ${plan.progress}%</p>
@@ -1415,10 +1449,7 @@ function handleReportSubmit(event) {
   state.reports.unshift(report);
   state.selectedReportId = report.id;
   if (report.requestId) {
-    const request = state.reportRequests.find((item) => item.id === report.requestId);
-    if (request && !request.completedMissionIds.includes(report.missionId)) {
-      request.completedMissionIds.push(report.missionId);
-    }
+    syncRequestCompletion(report.requestId, report.missionId);
   }
   addAlert("success", "تم رفع تقرير جديد", `رفعت ${user.name} التقرير "${report.title}" وأصبح مرئيًا للجهات المخولة.`);
   logAudit(user.name, "رفع تقرير", report.title, getMissionName(report.missionId));
@@ -1522,8 +1553,14 @@ function handlePlanSubmit(event) {
   if (!user) return;
 
   const form = new FormData(event.currentTarget);
-  let ownerType = String(form.get("ownerType"));
-  let ownerId = String(form.get("ownerId"));
+  let ownerType = "";
+  let ownerId = String(form.get("ownerId") || "");
+
+  if ((user.role === "planning" || user.role === "admin") && ownerId.includes(":")) {
+    const [selectedType, selectedId] = ownerId.split(":");
+    ownerType = selectedType;
+    ownerId = selectedId;
+  }
 
   if (user.role === "mission") {
     ownerType = "mission";
@@ -1531,6 +1568,16 @@ function handlePlanSubmit(event) {
   } else if (user.role === "department") {
     ownerType = "department";
     ownerId = user.departmentId;
+  }
+
+  const ownerExists = ownerType === "mission"
+    ? Boolean(getMissionById(ownerId))
+    : Boolean(getDepartmentById(ownerId));
+  if (!ownerExists) {
+    addAlert("danger", "تعذر إنشاء الخطة", "الجهة المالكة المحددة غير صحيحة أو لا تتوافق مع نوع المالك.");
+    saveState();
+    renderApp();
+    return;
   }
 
   const plan = {
@@ -1662,6 +1709,9 @@ function handleReportAction(reportId, actionKey, nextStage) {
     resubmit: "إعادة رفع التقرير"
   };
   report.workflowStage = nextStage;
+  if (report.requestId) {
+    syncRequestCompletion(report.requestId, report.missionId);
+  }
   addWorkflowEntry(report, user.name, labels[actionKey] || "تحديث المسار", nextStage);
   addAlert(nextStage === "أعيد للبعثة للاستكمال" ? "warning" : "info", "تحديث مسار التقرير", `انتقل التقرير "${report.title}" إلى مرحلة "${nextStage}".`);
   logAudit(user.name, labels[actionKey] || "تحديث المسار", report.title, getMissionName(report.missionId));
