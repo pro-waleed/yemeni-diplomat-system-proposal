@@ -1435,7 +1435,17 @@ function handleLogin(event) {
   const form = new FormData(event.currentTarget);
   const username = String(form.get("username")).trim();
   const password = String(form.get("password")).trim();
-  const user = getAllUsers().find((item) => item.username === username && item.password === password);
+  let user = getAllUsers().find((item) => item.username === username && item.password === password);
+  if (!user) {
+    const fallbackCoreUser = seedState().coreUsers.find((item) => item.username === username && item.password === password);
+    if (fallbackCoreUser) {
+      const existingCoreUsers = Array.isArray(state.coreUsers) ? state.coreUsers : [];
+      if (!existingCoreUsers.some((item) => item.id === fallbackCoreUser.id || item.username === fallbackCoreUser.username)) {
+        state.coreUsers = [...existingCoreUsers, fallbackCoreUser];
+      }
+      user = fallbackCoreUser;
+    }
+  }
   if (!user) {
     state.loginError = "بيانات الدخول غير صحيحة.";
     saveState();
