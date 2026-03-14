@@ -287,9 +287,20 @@ button { font: inherit; }
 .alert-list,
 .mission-list,
 .governance-list,
-.training-list {
+.training-list,
+.spec-list {
   display: grid;
   gap: 12px;
+}
+
+.spec-list {
+  margin: 0;
+  padding-right: 18px;
+  line-height: 1.9;
+}
+
+.spec-list.ordered {
+  padding-right: 22px;
 }
 
 .record-card {

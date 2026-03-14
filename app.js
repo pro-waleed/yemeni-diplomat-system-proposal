@@ -72,6 +72,58 @@ const datasets = {
       overdue: true
     }
   ],
+  reportsFramework: {
+    categories: [
+      "تقارير الأنشطة",
+      "التقارير الموضوعية",
+      "التقارير الدورية",
+      "التقارير النصف سنوية والسنوية",
+      "تقارير الأداء",
+      "التقارير الخاصة"
+    ],
+    mandatoryFields: [
+      "رقم التقرير والتصنيف والسرية",
+      "الجهة الراسلة والمسار الموضوعي",
+      "الدولة أو المدينة أو جهة الفعالية",
+      "تاريخ الفعالية أو الفترة المشمولة",
+      "الجهة المعدة والجهة المعتمدة",
+      "المرفقات وملخص تنفيذي للوحة القيادة"
+    ],
+    eventTemplate: {
+      before: [
+        "الأهداف: الغرض السياسي أو الاقتصادي أو الثقافي أو القنصلي من المشاركة",
+        "المتوقع: النتائج المرجوة والشركاء المستهدفون والمخرجات المتوقعة",
+        "الرسائل الأساسية: النقاط التي يجب إيصالها رسميًا أثناء الفعالية",
+        "مؤشرات النجاح: ما الذي سيعد نجاحًا قابلًا للقياس بعد انتهاء الفعالية"
+      ],
+      after: [
+        "النتائج: ما تحقق فعليًا من حضور أو تفاهمات أو تفاعلات أو تغطية إعلامية",
+        "الفجوات: ما الذي لم يتحقق ولماذا",
+        "التوصيات: خطوات المتابعة والمسؤوليات المقترحة",
+        "الأثر المتوقع: الانعكاس السياسي أو الإعلامي أو الاقتصادي على مصالح اليمن"
+      ]
+    },
+    workflow: [
+      "إعداد مسودة التقرير من الجهة المختصة",
+      "مراجعة رئيس البعثة أو مدير الدائرة",
+      "اعتماد أو إعادة التقرير لاستكمال النواقص",
+      "ربط التقرير بالمؤشرات والخطط والتعميمات ذات الصلة",
+      "أرشفة النسخة النهائية وإظهار الملخص في لوحة القيادة"
+    ],
+    quality: [
+      { label: "الالتزام بالموعد", weight: "30%", note: "يقيس احترام مهلة الرفع المعتمدة لكل نوع تقرير" },
+      { label: "شمولية المحتوى", weight: "30%", note: "يقيس اكتمال الحقول والوقائع والمرفقات والمعلومات الأساسية" },
+      { label: "جودة التحليل", weight: "40%", note: "يقيس عمق القراءة وربط النتائج بالسياق والمصالح والتوصيات" }
+    ],
+    enhancements: [
+      "سلم سرية للتقرير: عام داخلي، محدود، سري",
+      "وسوم موضوعية لتسهيل البحث والتجميع والتحليل",
+      "ربط التقرير بخطة سنوية أو مؤشر أداء أو محضر اجتماع",
+      "توليد تنبيهات تلقائية للتقارير المتأخرة أو الناقصة",
+      "مراجعة جودة معيارية بدرجات وتعليقات تحريرية",
+      "سجل نسخ يوضح من عدل ومتى وما الذي تغير"
+    ]
+  },
   circulars: [
     {
       id: "c1",
@@ -383,6 +435,132 @@ function renderDashboard() {
   `;
 }
 
+function renderReports() {
+  const framework = datasets.reportsFramework;
+  const filtered = getFilteredRecords(datasets.reports);
+
+  if (!state.selectedId && datasets.reports.length) {
+    state.selectedId = filtered[0]?.id || datasets.reports[0].id;
+  }
+
+  const selected = datasets.reports.find((item) => item.id === state.selectedId) || filtered[0];
+
+  const categoryTags = framework.categories.map((item) => `<span class="tag">${item}</span>`).join("");
+  const mandatoryRows = framework.mandatoryFields.map((item) => `<li>${item}</li>`).join("");
+  const beforeRows = framework.eventTemplate.before.map((item) => `<li>${item}</li>`).join("");
+  const afterRows = framework.eventTemplate.after.map((item) => `<li>${item}</li>`).join("");
+  const workflowRows = framework.workflow.map((item) => `<li>${item}</li>`).join("");
+  const qualityRows = framework.quality.map((item) => `
+    <tr>
+      <td>${item.label}</td>
+      <td>${item.weight}</td>
+      <td>${item.note}</td>
+    </tr>
+  `).join("");
+  const enhancementRows = framework.enhancements.map((item) => `<li>${item}</li>`).join("");
+
+  mainContent.innerHTML = `
+    <div class="detail-card">
+      <div class="section-title">إطار احترافي لوحدة التقارير</div>
+      <p class="record-desc">
+        تم تطوير الوحدة لتغطي ليس فقط رفع التقارير، بل أيضًا تصنيفها واعتمادها وتقييم جودتها
+        وربطها بخطط الوزارة ومؤشرات الأداء وسجل المعرفة المؤسسية.
+      </p>
+      <div class="three-col">${categoryTags}</div>
+    </div>
+
+    <div class="two-col">
+      <div class="detail-card">
+        <div class="section-title">الحقول الإلزامية في كل تقرير</div>
+        <ul class="spec-list">${mandatoryRows}</ul>
+      </div>
+      <div class="detail-card">
+        <div class="section-title">دورة العمل المقترحة</div>
+        <ol class="spec-list ordered">${workflowRows}</ol>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div class="detail-card">
+        <div class="section-title">قالب تقارير الأنشطة: قبل الفعالية</div>
+        <ul class="spec-list">${beforeRows}</ul>
+      </div>
+      <div class="detail-card">
+        <div class="section-title">قالب تقارير الأنشطة: بعد الفعالية</div>
+        <ul class="spec-list">${afterRows}</ul>
+      </div>
+    </div>
+
+    <div class="detail-card">
+      <div class="section-title">تقييم الجودة ثلاثي الأبعاد</div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>المعيار</th>
+              <th>الوزن</th>
+              <th>وصف التقييم</th>
+            </tr>
+          </thead>
+          <tbody>${qualityRows}</tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div class="detail-card">
+        <div class="section-title">مكونات احترافية إضافية</div>
+        <ul class="spec-list">${enhancementRows}</ul>
+      </div>
+      <div class="detail-card">
+        <div class="section-title">السجل التجريبي للتقارير</div>
+        ${createRecordList(datasets.reports, "المسؤول")}
+      </div>
+    </div>
+  `;
+
+  detailPanel.innerHTML = selected ? `
+    <div class="detail-list">
+      <div class="detail-card">
+        <div class="detail-title">${selected.title}</div>
+        <div class="detail-row">
+          <span>الجهة</span>
+          <span>${selected.entity}</span>
+        </div>
+        <div class="detail-row">
+          <span>الحالة</span>
+          <span class="tag ${selected.statusTone}">${selected.status}</span>
+        </div>
+        <div class="detail-row">
+          <span>المسؤول</span>
+          <span>${selected.owner}</span>
+        </div>
+        <div class="detail-row">
+          <span>التقييم</span>
+          <span>${selected.score}</span>
+        </div>
+        <div class="detail-row">
+          <span>الموعد</span>
+          <span>${selected.due}</span>
+        </div>
+      </div>
+      <div class="detail-card">
+        <div class="detail-title">ملخص تحليلي</div>
+        <p class="record-desc">${selected.summary}</p>
+      </div>
+      <div class="detail-card">
+        <div class="detail-title">ما الذي يجعل هذه الوحدة احترافية؟</div>
+        <p class="record-desc">
+          الجمع بين القالب الموحد، التقييم المنهجي، الربط بالمؤشرات، وسجل النسخ والمرفقات
+          يجعل التقرير أداة قرار لا مجرد وثيقة محفوظة.
+        </p>
+      </div>
+    </div>
+  ` : `<div class="empty-state">لا توجد تفاصيل متاحة.</div>`;
+
+  attachRecordEvents("reports");
+}
+
 function renderRecordView(viewName, records, ownerLabel) {
   if (!state.selectedId && records.length) {
     state.selectedId = getFilteredRecords(records)[0]?.id || null;
@@ -578,7 +756,7 @@ function renderViewOnly(viewName) {
       renderDashboard();
       break;
     case "reports":
-      renderRecordView(viewName, datasets.reports, "المسؤول");
+      renderReports();
       break;
     case "circulars":
       renderRecordView(viewName, datasets.circulars, "جهة الإصدار");
