@@ -9,6 +9,63 @@ const CANONICAL_DEPARTMENTS = [
   { id: "dept-americas", name: "دائرة الأمريكتين", username: "americas_dept", password: "Americas@2026" }
 ];
 
+const CANONICAL_MISSIONS = [
+  { id: "mission-riyadh", name: "بعثة الرياض", departmentId: "dept-gulf", username: "riyadh", password: "Riyadh@2026" },
+  { id: "mission-abu-dhabi", name: "بعثة أبوظبي", departmentId: "dept-gulf", username: "abudhabi", password: "AbuDhabi@2026" },
+  { id: "mission-doha", name: "بعثة الدوحة", departmentId: "dept-gulf", username: "doha", password: "Doha@2026" },
+  { id: "mission-manama", name: "بعثة المنامة", departmentId: "dept-gulf", username: "manama", password: "Manama@2026" },
+  { id: "mission-muscat", name: "بعثة مسقط", departmentId: "dept-gulf", username: "muscat", password: "Muscat@2026" },
+  { id: "mission-kuwait", name: "بعثة الكويت", departmentId: "dept-gulf", username: "kuwait", password: "Kuwait@2026" },
+  { id: "mission-baghdad", name: "بعثة بغداد", departmentId: "dept-gulf", username: "baghdad", password: "Baghdad@2026" },
+
+  { id: "mission-cairo", name: "بعثة القاهرة", departmentId: "dept-arab-world", username: "cairo", password: "Cairo@2026" },
+  { id: "mission-algiers", name: "بعثة الجزائر", departmentId: "dept-arab-world", username: "algiers", password: "Algiers@2026" },
+  { id: "mission-beirut", name: "بعثة بيروت", departmentId: "dept-arab-world", username: "beirut", password: "Beirut@2026" },
+  { id: "mission-tunis", name: "بعثة تونس", departmentId: "dept-arab-world", username: "tunis", password: "Tunis@2026" },
+  { id: "mission-rabat", name: "بعثة الرباط", departmentId: "dept-arab-world", username: "rabat", password: "Rabat@2026" },
+  { id: "mission-amman", name: "بعثة عمّان", departmentId: "dept-arab-world", username: "amman", password: "Amman@2026" },
+  { id: "mission-nouakchott", name: "بعثة نواكشوط", departmentId: "dept-arab-world", username: "nouakchott", password: "Nouakchott@2026" },
+  { id: "mission-libya", name: "بعثة ليبيا", departmentId: "dept-arab-world", username: "libya", password: "Libya@2026" },
+  { id: "mission-damascus", name: "بعثة دمشق", departmentId: "dept-arab-world", username: "damascus", password: "Damascus@2026" },
+
+  { id: "mission-ankara", name: "بعثة أنقرة", departmentId: "dept-asia-australia", username: "ankara", password: "Ankara@2026" },
+  { id: "mission-beijing", name: "بعثة بكين", departmentId: "dept-asia-australia", username: "beijing", password: "Beijing@2026" },
+  { id: "mission-islamabad", name: "بعثة اسلام اباد", departmentId: "dept-asia-australia", username: "islamabad", password: "Islamabad@2026" },
+  { id: "mission-kuala-lumpur", name: "بعثة كوالالمبور", departmentId: "dept-asia-australia", username: "kualalumpur", password: "KualaLumpur@2026" },
+  { id: "mission-jakarta", name: "بعثة جاكرتا", departmentId: "dept-asia-australia", username: "jakarta", password: "Jakarta@2026" },
+  { id: "mission-tokyo", name: "بعثة طوكيو", departmentId: "dept-asia-australia", username: "tokyo", password: "Tokyo@2026" },
+  { id: "mission-new-delhi", name: "بعثة نيودلهي", departmentId: "dept-asia-australia", username: "newdelhi", password: "NewDelhi@2026" },
+  { id: "mission-tehran", name: "بعثة طهران", departmentId: "dept-asia-australia", username: "tehran", password: "Tehran@2026" },
+
+  { id: "mission-djibouti", name: "بعثة جيبوتي", departmentId: "dept-africa", username: "djibouti", password: "Djibouti@2026" },
+  { id: "mission-khartoum", name: "بعثة الخرطوم", departmentId: "dept-africa", username: "khartoum", password: "Khartoum@2026" },
+  { id: "mission-mogadishu", name: "بعثة مقديشو", departmentId: "dept-africa", username: "mogadishu", password: "Mogadishu@2026" },
+  { id: "mission-addis-ababa", name: "بعثة أديس أبابا", departmentId: "dept-africa", username: "addisababa", password: "AddisAbaba@2026" },
+  { id: "mission-dar-es-salaam", name: "بعثة دار السلام", departmentId: "dept-africa", username: "daressalaam", password: "DarEsSalaam@2026" },
+  { id: "mission-nairobi", name: "بعثة نيروبي", departmentId: "dept-africa", username: "nairobi", password: "Nairobi@2026" },
+  { id: "mission-asmara", name: "بعثة أسمرا", departmentId: "dept-africa", username: "asmara", password: "Asmara@2026" },
+  { id: "mission-pretoria", name: "بعثة بريتوريا", departmentId: "dept-africa", username: "pretoria", password: "Pretoria@2026" },
+
+  { id: "mission-vienna", name: "بعثة فيينا", departmentId: "dept-europe", username: "vienna", password: "Vienna@2026" },
+  { id: "mission-moscow", name: "بعثة موسكو", departmentId: "dept-europe", username: "moscow", password: "Moscow@2026" },
+  { id: "mission-rome", name: "بعثة روما", departmentId: "dept-europe", username: "rome", password: "Rome@2026" },
+  { id: "mission-madrid", name: "بعثة مدريد", departmentId: "dept-europe", username: "madrid", password: "Madrid@2026" },
+  { id: "mission-paris", name: "بعثة باريس", departmentId: "dept-europe", username: "paris", password: "Paris@2026" },
+  { id: "mission-budapest", name: "بعثة بودابست", departmentId: "dept-europe", username: "budapest", password: "Budapest@2026" },
+  { id: "mission-prague", name: "بعثة براغ", departmentId: "dept-europe", username: "prague", password: "Prague@2026" },
+  { id: "mission-brussels", name: "بعثة بروكسل", departmentId: "dept-europe", username: "brussels", password: "Brussels@2026" },
+  { id: "mission-sofia", name: "بعثة صوفيا", departmentId: "dept-europe", username: "sofia", password: "Sofia@2026" },
+  { id: "mission-berlin", name: "بعثة برلين", departmentId: "dept-europe", username: "berlin", password: "Berlin@2026" },
+  { id: "mission-warsaw", name: "بعثة وارسو", departmentId: "dept-europe", username: "warsaw", password: "Warsaw@2026" },
+  { id: "mission-london", name: "بعثة لندن", departmentId: "dept-europe", username: "london", password: "London@2026" },
+  { id: "mission-geneva", name: "بعثة جنيف", departmentId: "dept-europe", username: "geneva", password: "Geneva@2026" },
+  { id: "mission-hague", name: "بعثة لاهاي", departmentId: "dept-europe", username: "hague", password: "Hague@2026" },
+
+  { id: "mission-ottawa", name: "بعثة أوتاوا", departmentId: "dept-americas", username: "ottawa", password: "Ottawa@2026" },
+  { id: "mission-havana", name: "بعثة هافانا", departmentId: "dept-americas", username: "havana", password: "Havana@2026" },
+  { id: "mission-washington", name: "بعثة واشنطن", departmentId: "dept-americas", username: "washington", password: "Washington@2026" }
+];
+
 const LEGACY_DEPARTMENT_ID_MAP = {
   "dept-arabia": "dept-gulf"
 };
@@ -19,11 +76,7 @@ const seedState = () => ({
   selectedReportId: "report-1",
   loginError: "",
   departments: CANONICAL_DEPARTMENTS,
-  missions: [
-    { id: "mission-riyadh", name: "بعثة الرياض", departmentId: "dept-gulf", username: "riyadh", password: "Riyadh@2026" },
-    { id: "mission-jeddah", name: "بعثة جدة", departmentId: "dept-gulf", username: "jeddah", password: "Jeddah@2026" },
-    { id: "mission-cairo", name: "بعثة القاهرة", departmentId: "dept-arab-world", username: "cairo", password: "Cairo@2026" }
-  ],
+  missions: CANONICAL_MISSIONS,
   coreUsers: [
     { id: "admin-user", role: "admin", name: "مدير النظام", username: "admin", password: "Admin@2026" },
     { id: "planning-user", role: "planning", name: "إدارة التخطيط", username: "planning", password: "Planning@2026" },
@@ -36,8 +89,8 @@ const seedState = () => ({
       type: "نصف سنوي",
       createdBy: "إدارة التخطيط",
       dueDate: "2026-06-30",
-      targetMissionIds: ["mission-riyadh", "mission-jeddah", "mission-cairo"],
-      completedMissionIds: ["mission-cairo"],
+      targetMissionIds: CANONICAL_MISSIONS.map((mission) => mission.id),
+      completedMissionIds: ["mission-cairo", "mission-riyadh", "mission-paris"],
       status: "نشط"
     }
   ],
@@ -71,10 +124,10 @@ const seedState = () => ({
       id: "circ-1",
       title: "تحديث قاعدة بيانات التواصل الرسمي",
       issuedBy: "إدارة التخطيط",
-      targetMissionIds: ["mission-riyadh", "mission-jeddah", "mission-cairo"],
+      targetMissionIds: CANONICAL_MISSIONS.map((mission) => mission.id),
       dueDate: "2026-03-28",
       status: "نشط",
-      readMissionIds: ["mission-cairo"],
+      readMissionIds: ["mission-cairo", "mission-riyadh", "mission-washington"],
       completedMissionIds: [],
       workflowHistory: [
         { actor: "إدارة التخطيط", action: "إصدار التعميم", stage: "نشط", at: "2026-03-15 09:10" }
@@ -161,16 +214,18 @@ function loadState() {
     const existing = parsedDepartments.find((item) => item.id === department.id || item.id === Object.keys(LEGACY_DEPARTMENT_ID_MAP).find((legacyId) => LEGACY_DEPARTMENT_ID_MAP[legacyId] === department.id));
     return existing ? { ...department, ...existing, id: department.id, name: department.name } : department;
   });
-  parsed.missions = (Array.isArray(parsed.missions) ? parsed.missions : seeded.missions).map((mission) => {
-    let nextDepartmentId = LEGACY_DEPARTMENT_ID_MAP[mission.departmentId] || mission.departmentId;
-    if (mission.id === "mission-cairo") {
-      nextDepartmentId = "dept-arab-world";
-    }
-    return {
-      ...mission,
-      departmentId: nextDepartmentId
-    };
+  const parsedMissions = Array.isArray(parsed.missions) ? parsed.missions : [];
+  const canonicalMissions = CANONICAL_MISSIONS.map((mission) => {
+    const existing = parsedMissions.find((item) => item.id === mission.id || item.username === mission.username);
+    return existing ? { ...mission, ...existing, id: mission.id, name: mission.name, departmentId: mission.departmentId } : mission;
   });
+  const customMissions = parsedMissions
+    .filter((mission) => !CANONICAL_MISSIONS.some((item) => item.id === mission.id))
+    .map((mission) => ({
+      ...mission,
+      departmentId: LEGACY_DEPARTMENT_ID_MAP[mission.departmentId] || mission.departmentId
+    }));
+  parsed.missions = [...canonicalMissions, ...customMissions];
   parsed.reportRequests = Array.isArray(parsed.reportRequests) ? parsed.reportRequests : seeded.reportRequests;
   parsed.reportRequests = parsed.reportRequests.map((request) => ({
     ...request,
