@@ -92,8 +92,17 @@ const initialData = () => ({
       requestId: "req-2026-h1",
       author: "بعثة القاهرة",
       department: "الدائرة الجغرافية لشبه الجزيرة العربية",
-      status: "مرفوع ومعروض للمراجعة",
+      status: "مرفوع من البعثة",
+      workflowStage: "مرفوع من البعثة",
       visibility: ["planning", "admin", "department"],
+      workflowHistory: [
+        {
+          actor: "بعثة القاهرة",
+          action: "رفع التقرير",
+          stage: "مرفوع من البعثة",
+          at: "2026-03-10 09:20"
+        }
+      ],
       summary: "ملخص تنفيذي عن أبرز الاتصالات والفعاليات والتغطيات الإعلامية خلال النصف الأول.",
       beforeGoals: "تعزيز الحضور السياسي اليمني وتوسيع التنسيق الإعلامي مع الجهات المصرية.",
       beforeExpected: "لقاءات تنسيقية وتغطية إعلامية إيجابية ومتابعة ملفات التعاون.",
@@ -121,6 +130,22 @@ function loadState() {
   if (!parsed.currentUserId || !Array.isArray(parsed.reportRequests) || !Array.isArray(parsed.reports)) {
     return initialData();
   }
+  parsed.reports = parsed.reports.map((report) => {
+    if (!report.workflowStage) {
+      report.workflowStage = report.status || "مرفوع من البعثة";
+    }
+    if (!Array.isArray(report.workflowHistory)) {
+      report.workflowHistory = [
+        {
+          actor: report.author || report.mission || "النظام",
+          action: "ترحيل سجل التقرير",
+          stage: report.workflowStage,
+          at: report.createdAt || new Date().toLocaleString("ar-YE")
+        }
+      ];
+    }
+    return report;
+  });
   return parsed;
 }
 
@@ -138,6 +163,53 @@ function getVisibleReports(user = getCurrentUser()) {
     if (user.type === "mission") return report.mission === user.mission;
     if (user.type === "department") return user.missions.includes(report.mission);
     return false;
+  });
+}
+
+function getStageTone(stage) {
+  if (stage === "معتمد من التخطيط" || stage === "مغلق ومؤرشف") return "success";
+  if (stage === "قيد مراجعة الدائرة") return "warning";
+  if (stage === "مرفوع من البعثة") return "info";
+  if (stage === "أعيد للبعثة للاستكمال") return "danger";
+  return "info";
+}
+
+function getAllowedActions(report, user = getCurrentUser()) {
+  const actions = [];
+
+  if (user.type === "mission" && report.mission === user.mission && report.workflowStage === "أعيد للبعثة للاستكمال") {
+    actions.push({ key: "resubmit", label: "إعادة رفع التقرير", nextStage: "مرفوع من البعثة" });
+  }
+
+  if (user.type === "department" && user.missions.includes(report.mission)) {
+    if (report.workflowStage === "مرفوع من البعثة") {
+      actions.push({ key: "review", label: "بدء مراجعة الدائرة", nextStage: "قيد مراجعة الدائرة" });
+      actions.push({ key: "return", label: "إعادة للبعثة", nextStage: "أعيد للبعثة للاستكمال" });
+    }
+  }
+
+  if (user.type === "planning" || user.type === "admin") {
+    if (report.workflowStage === "قيد مراجعة الدائرة" || report.workflowStage === "مرفوع من البعثة") {
+      actions.push({ key: "approve", label: "اعتماد من التخطيط", nextStage: "معتمد من التخطيط" });
+      actions.push({ key: "return", label: "إعادة للبعثة", nextStage: "أعيد للبعثة للاستكمال" });
+    }
+    if (report.workflowStage === "معتمد من التخطيط") {
+      actions.push({ key: "archive", label: "إغلاق وأرشفة", nextStage: "مغلق ومؤرشف" });
+    }
+  }
+
+  return actions;
+}
+
+function addWorkflowEntry(report, actor, action, stage) {
+  if (!Array.isArray(report.workflowHistory)) {
+    report.workflowHistory = [];
+  }
+  report.workflowHistory.unshift({
+    actor,
+    action,
+    stage,
+    at: new Date().toLocaleString("ar-YE")
   });
 }
 
@@ -558,7 +630,7 @@ function renderRequests() {
 
 function renderReportList(reports, user) {
   const filteredReports = appState.showPendingOnly
-    ? reports.filter((report) => !report.requestId || isMissionPendingOnRequest(report.mission, report.requestId) === false)
+    ? reports.filter((report) => report.workflowStage !== "مغلق ومؤرشف")
     : reports;
 
   if (!filteredReports.length) {
@@ -574,7 +646,7 @@ function renderReportList(reports, user) {
               <div class="record-title">${report.title}</div>
               <div class="record-meta">${report.mission} | ${report.thematicTrack}</div>
             </div>
-            <span class="tag success">${report.reportType}</span>
+            <span class="tag ${getStageTone(report.workflowStage)}">${report.workflowStage}</span>
           </div>
           <p class="record-desc">${report.summary}</p>
           <div class="record-bottom">
@@ -589,6 +661,15 @@ function renderReportList(reports, user) {
 
 function renderReportDetails(report) {
   const relatedRequest = appState.reportRequests.find((request) => request.id === report.requestId);
+  const actions = getAllowedActions(report);
+  const history = (report.workflowHistory || []).map((entry) => `
+    <div class="timeline-entry">
+      <strong>${entry.action}</strong>
+      <span>${entry.actor}</span>
+      <span>${entry.stage}</span>
+      <span>${entry.at}</span>
+    </div>
+  `).join("");
   return `
     <div class="detail-list">
       <div class="detail-card">
@@ -597,6 +678,7 @@ function renderReportDetails(report) {
         <div class="detail-row"><span>نوع التقرير</span><span>${report.reportType}</span></div>
         <div class="detail-row"><span>المسار</span><span>${report.thematicTrack}</span></div>
         <div class="detail-row"><span>المرفق</span><span>${report.attachmentName}</span></div>
+        <div class="detail-row"><span>مرحلة الاعتماد</span><span class="tag ${getStageTone(report.workflowStage)}">${report.workflowStage}</span></div>
       </div>
       <div class="detail-card">
         <div class="detail-title">قبل الفعالية</div>
@@ -613,6 +695,18 @@ function renderReportDetails(report) {
         <p class="record-desc">الجهة الراسلة: ${report.author}</p>
         <p class="record-desc">يرتبط بطلب: ${relatedRequest ? relatedRequest.title : "لا يوجد"}</p>
       </div>
+      <div class="detail-card">
+        <div class="detail-title">مسار الاعتماد</div>
+        <div class="timeline-list">${history || '<div class="empty-state">لا يوجد سجل إجراءات بعد.</div>'}</div>
+      </div>
+      ${actions.length ? `
+        <div class="detail-card">
+          <div class="detail-title">إجراءات متاحة للحساب الحالي</div>
+          <div class="action-row">
+            ${actions.map((action) => `<button class="primary-btn workflow-action" data-report-id="${report.id}" data-action="${action.key}" data-stage="${action.nextStage}">${action.label}</button>`).join("")}
+          </div>
+        </div>
+      ` : ""}
     </div>
   `;
 }
@@ -633,8 +727,10 @@ function handleReportSubmit(event) {
     requestId,
     author: user.name,
     department: user.department,
-    status: "مرفوع ومعروض للمراجعة",
+    status: "مرفوع من البعثة",
+    workflowStage: "مرفوع من البعثة",
     visibility: ["planning", "admin", "department"],
+    workflowHistory: [],
     summary: formData.get("summary"),
     beforeGoals: formData.get("beforeGoals"),
     beforeExpected: formData.get("beforeExpected"),
@@ -643,6 +739,8 @@ function handleReportSubmit(event) {
     attachmentName: formData.get("attachmentName"),
     createdAt: new Date().toLocaleString("ar-YE")
   };
+
+  addWorkflowEntry(report, user.name, "رفع التقرير", "مرفوع من البعثة");
 
   appState.reports.unshift(report);
   appState.selectedReportId = report.id;
@@ -764,6 +862,45 @@ function bindReportCards() {
       render();
     });
   });
+
+  document.querySelectorAll(".workflow-action").forEach((button) => {
+    button.addEventListener("click", () => {
+      updateReportWorkflow(
+        button.getAttribute("data-report-id"),
+        button.getAttribute("data-action"),
+        button.getAttribute("data-stage")
+      );
+    });
+  });
+}
+
+function updateReportWorkflow(reportId, actionKey, nextStage) {
+  const report = appState.reports.find((item) => item.id === reportId);
+  const user = getCurrentUser();
+  if (!report) return;
+
+  report.workflowStage = nextStage;
+  report.status = nextStage;
+
+  const actionLabels = {
+    review: "بدء مراجعة الدائرة",
+    return: "إعادة التقرير للبعثة",
+    approve: "اعتماد التقرير",
+    archive: "أرشفة التقرير",
+    resubmit: "إعادة رفع التقرير"
+  };
+
+  addWorkflowEntry(report, user.name, actionLabels[actionKey] || "تحديث المسار", nextStage);
+
+  appState.alerts.unshift({
+    id: `alert-${Date.now()}`,
+    level: nextStage === "مغلق ومؤرشف" ? "success" : nextStage === "أعيد للبعثة للاستكمال" ? "warning" : "info",
+    title: `تحديث مسار التقرير`,
+    text: `قام ${user.name} بتحديث التقرير "${report.title}" إلى المرحلة: ${nextStage}.`
+  });
+
+  saveState();
+  render();
 }
 
 function formatDate(value) {
