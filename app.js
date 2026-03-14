@@ -205,7 +205,7 @@ function visibleViews(user) {
 
 function getVisibleReports(user = getSessionUser()) {
   if (!user) return [];
-  if (user.role === "admin" || user.role === "planning") return state.reports;
+  if (user.role === "admin" || user.role === "planning" || user.role === "leadership") return state.reports;
   if (user.role === "department") return state.reports.filter((report) => report.departmentId === user.departmentId);
   if (user.role === "mission") return state.reports.filter((report) => report.missionId === user.missionId);
   return [];
@@ -213,7 +213,7 @@ function getVisibleReports(user = getSessionUser()) {
 
 function getVisibleRequests(user = getSessionUser()) {
   if (!user) return [];
-  if (user.role === "admin" || user.role === "planning") return state.reportRequests;
+  if (user.role === "admin" || user.role === "planning" || user.role === "leadership") return state.reportRequests;
   if (user.role === "department") {
     const missionIds = state.missions.filter((mission) => mission.departmentId === user.departmentId).map((mission) => mission.id);
     return state.reportRequests.filter((request) => request.targetMissionIds.some((id) => missionIds.includes(id)));
@@ -224,7 +224,7 @@ function getVisibleRequests(user = getSessionUser()) {
 
 function getVisibleCirculars(user = getSessionUser()) {
   if (!user) return [];
-  if (user.role === "admin" || user.role === "planning") return state.circulars;
+  if (user.role === "admin" || user.role === "planning" || user.role === "leadership") return state.circulars;
   if (user.role === "department") {
     const missionIds = state.missions.filter((mission) => mission.departmentId === user.departmentId).map((mission) => mission.id);
     return state.circulars.filter((circular) => circular.targetMissionIds.some((id) => missionIds.includes(id)));
@@ -234,14 +234,14 @@ function getVisibleCirculars(user = getSessionUser()) {
 
 function getVisibleMeetings(user = getSessionUser()) {
   if (!user) return [];
-  if (user.role === "admin" || user.role === "planning") return state.meetings;
+  if (user.role === "admin" || user.role === "planning" || user.role === "leadership") return state.meetings;
   if (user.role === "department") return state.meetings.filter((meeting) => meeting.departmentId === user.departmentId);
   return state.meetings.filter((meeting) => meeting.tasks.some((task) => task.assignee === getMissionName(user.missionId)));
 }
 
 function getVisiblePlans(user = getSessionUser()) {
   if (!user) return [];
-  if (user.role === "admin" || user.role === "planning") return state.plans;
+  if (user.role === "admin" || user.role === "planning" || user.role === "leadership") return state.plans;
   if (user.role === "department") {
     const missionIds = state.missions.filter((mission) => mission.departmentId === user.departmentId).map((mission) => mission.id);
     return state.plans.filter((plan) => plan.ownerType === "department" ? plan.ownerId === user.departmentId : missionIds.includes(plan.ownerId));
@@ -251,7 +251,7 @@ function getVisiblePlans(user = getSessionUser()) {
 
 function getVisibleTrainings(user = getSessionUser()) {
   if (!user) return [];
-  if (user.role === "admin" || user.role === "planning") return state.trainings;
+  if (user.role === "admin" || user.role === "planning" || user.role === "leadership") return state.trainings;
   if (user.role === "department") return state.trainings;
   return state.trainings.filter((training) => training.audience === "جميع المستخدمين" || training.audience.includes("البعثات"));
 }
