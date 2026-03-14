@@ -140,6 +140,19 @@ function loadState() {
   if (!parsed || !Array.isArray(parsed.departments) || !Array.isArray(parsed.missions) || !Array.isArray(parsed.reports)) {
     return seedState();
   }
+  const seeded = seedState();
+  const parsedCoreUsers = Array.isArray(parsed.coreUsers) ? parsed.coreUsers : [];
+  parsed.coreUsers = seeded.coreUsers.map((seedUser) => {
+    const existing = parsedCoreUsers.find((user) => user.id === seedUser.id || user.username === seedUser.username);
+    return existing ? { ...seedUser, ...existing } : seedUser;
+  });
+  parsed.reportRequests = Array.isArray(parsed.reportRequests) ? parsed.reportRequests : seeded.reportRequests;
+  parsed.reportRequests = parsed.reportRequests.map((request) => ({
+    ...request,
+    targetMissionIds: Array.isArray(request.targetMissionIds) ? request.targetMissionIds : [],
+    completedMissionIds: Array.isArray(request.completedMissionIds) ? request.completedMissionIds : [],
+    status: request.status || "نشط"
+  }));
   parsed.circulars = Array.isArray(parsed.circulars) ? parsed.circulars : seedState().circulars;
   parsed.circulars = parsed.circulars.map((circular) => ({
     ...circular,
@@ -645,6 +658,21 @@ function renderMissionReportForm(user) {
   return `
     <div class="detail-card">
       <div class="section-title">رفع تقرير نشاط</div>
+      ${requests.length ? `
+        <div class="detail-card">
+          <div class="section-title">طلبات التقارير النشطة</div>
+          <div class="detail-list">
+            ${requests.map((request) => `
+              <div class="detail-row">
+                <span>${request.title}</span>
+                <span>الموعد ${formatDate(request.dueDate)}</span>
+              </div>
+            `).join("")}
+          </div>
+        </div>
+      ` : `
+        <div class="detail-note">لا توجد حاليًا طلبات تقارير نشطة موجّهة إلى هذه البعثة.</div>
+      `}
       <form id="report-form" class="form-grid">
         <label class="field">
           <span>عنوان التقرير</span>
