@@ -533,9 +533,20 @@ function renderApp() {
   bindEvents();
 }
 
+function renderIntellectualFooter() {
+  return `
+    <footer class="ip-footer">
+      <span>النظام الدبلوماسي المتكامل - الادارة العامة للتخطيط والبحوث</span>
+      <span>تطوير م. وليد العماري</span>
+      <span>اشراف السفير طارق عبداللطيف ضيف الله</span>
+    </footer>
+  `;
+}
+
 function renderLogin() {
   return `
-    <div class="login-shell">
+    <div class="page-shell">
+      <div class="login-shell">
       <section class="login-brand">
         <div class="badge">YD</div>
         <h1 class="title">النظام الدبلوماسي المتكامل</h1>
@@ -583,6 +594,8 @@ function renderLogin() {
           ${state.loginError ? `<div class="error-box">${state.loginError}</div>` : ""}
         </div>
       </section>
+      </div>
+      ${renderIntellectualFooter()}
     </div>
   `;
 }
@@ -601,7 +614,8 @@ function renderSystem(user) {
     management: "إدارة الكيانات"
   };
   return `
-    <div class="app-shell">
+    <div class="page-shell">
+      <div class="app-shell">
       <aside class="sidebar">
         <div class="sidebar-top">
           <div class="badge">YD</div>
@@ -618,9 +632,11 @@ function renderSystem(user) {
           <button class="btn secondary" id="reset-btn">إعادة ضبط التجربة</button>
         </div>
       </aside>
-      <main class="main">
-        ${renderPage(user)}
-      </main>
+        <main class="main">
+          ${renderPage(user)}
+        </main>
+      </div>
+      ${renderIntellectualFooter()}
     </div>
   `;
 }
