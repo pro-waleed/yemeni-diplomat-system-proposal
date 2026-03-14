@@ -55,6 +55,61 @@ const seedState = () => ({
       ]
     }
   ],
+  circulars: [
+    {
+      id: "circ-1",
+      title: "تحديث قاعدة بيانات التواصل الرسمي",
+      issuedBy: "إدارة التخطيط",
+      targetMissionIds: ["mission-riyadh", "mission-jeddah", "mission-cairo"],
+      dueDate: "2026-03-28",
+      status: "نشط",
+      readMissionIds: ["mission-cairo"],
+      completedMissionIds: []
+    }
+  ],
+  meetings: [
+    {
+      id: "meet-1",
+      title: "اجتماع متابعة التحول الرقمي",
+      ownerRole: "planning",
+      departmentId: "dept-arabia",
+      summary: "مراجعة تقدم الوحدات الأساسية والجاهزية التشغيلية.",
+      tasks: [
+        { title: "استكمال نماذج التقارير", assignee: "بعثة الرياض", status: "قيد التنفيذ" },
+        { title: "مراجعة صلاحيات البعثات", assignee: "الدائرة الجغرافية لشبه الجزيرة العربية", status: "منجز" }
+      ]
+    }
+  ],
+  plans: [
+    {
+      id: "plan-1",
+      ownerType: "mission",
+      ownerId: "mission-riyadh",
+      title: "الخطة التشغيلية لبعثة الرياض 2026",
+      period: "سنوية",
+      status: "قيد التنفيذ",
+      kpi: "نسبة الإنجاز مقابل المستهدف",
+      progress: 72
+    }
+  ],
+  trainings: [
+    {
+      id: "train-1",
+      title: "برنامج استخدام النظام",
+      audience: "جميع المستخدمين",
+      completionTarget: 70,
+      completedUsers: 18,
+      totalUsers: 26
+    },
+    {
+      id: "train-2",
+      title: "إعداد التقارير التحليلية",
+      audience: "البعثات والدوائر المعنية",
+      completionTarget: 75,
+      completedUsers: 11,
+      totalUsers: 18
+    }
+  ],
   alerts: [
     { id: "alert-1", level: "info", title: "بيئة دخول وصلاحيات", text: "سجّل الدخول بأحد الحسابات الافتراضية لتجربة الصلاحيات المختلفة." }
   ]
@@ -70,6 +125,10 @@ function loadState() {
   if (!parsed || !Array.isArray(parsed.departments) || !Array.isArray(parsed.missions) || !Array.isArray(parsed.reports)) {
     return seedState();
   }
+  parsed.circulars = Array.isArray(parsed.circulars) ? parsed.circulars : seedState().circulars;
+  parsed.meetings = Array.isArray(parsed.meetings) ? parsed.meetings : seedState().meetings;
+  parsed.plans = Array.isArray(parsed.plans) ? parsed.plans : seedState().plans;
+  parsed.trainings = Array.isArray(parsed.trainings) ? parsed.trainings : seedState().trainings;
   parsed.reports = parsed.reports.map((report) => ({
     ...report,
     workflowStage: report.workflowStage || "مرفوع من البعثة",
@@ -132,10 +191,10 @@ function getDepartmentName(id) {
 
 function visibleViews(user) {
   if (!user) return [];
-  if (user.role === "admin") return ["dashboard", "reports", "requests", "management"];
-  if (user.role === "planning") return ["dashboard", "reports", "requests"];
-  if (user.role === "department") return ["dashboard", "reports", "requests"];
-  return ["dashboard", "reports", "requests"];
+  if (user.role === "admin") return ["dashboard", "reports", "circulars", "meetings", "plans", "training", "entities", "requests", "management"];
+  if (user.role === "planning") return ["dashboard", "reports", "circulars", "meetings", "plans", "training", "entities", "requests"];
+  if (user.role === "department") return ["dashboard", "reports", "circulars", "meetings", "plans", "entities", "requests"];
+  return ["dashboard", "reports", "circulars", "plans", "training", "requests"];
 }
 
 function getVisibleReports(user = getSessionUser()) {
@@ -155,6 +214,40 @@ function getVisibleRequests(user = getSessionUser()) {
   }
   if (user.role === "mission") return state.reportRequests.filter((request) => request.targetMissionIds.includes(user.missionId));
   return [];
+}
+
+function getVisibleCirculars(user = getSessionUser()) {
+  if (!user) return [];
+  if (user.role === "admin" || user.role === "planning") return state.circulars;
+  if (user.role === "department") {
+    const missionIds = state.missions.filter((mission) => mission.departmentId === user.departmentId).map((mission) => mission.id);
+    return state.circulars.filter((circular) => circular.targetMissionIds.some((id) => missionIds.includes(id)));
+  }
+  return state.circulars.filter((circular) => circular.targetMissionIds.includes(user.missionId));
+}
+
+function getVisibleMeetings(user = getSessionUser()) {
+  if (!user) return [];
+  if (user.role === "admin" || user.role === "planning") return state.meetings;
+  if (user.role === "department") return state.meetings.filter((meeting) => meeting.departmentId === user.departmentId);
+  return state.meetings.filter((meeting) => meeting.tasks.some((task) => task.assignee === getMissionName(user.missionId)));
+}
+
+function getVisiblePlans(user = getSessionUser()) {
+  if (!user) return [];
+  if (user.role === "admin" || user.role === "planning") return state.plans;
+  if (user.role === "department") {
+    const missionIds = state.missions.filter((mission) => mission.departmentId === user.departmentId).map((mission) => mission.id);
+    return state.plans.filter((plan) => plan.ownerType === "department" ? plan.ownerId === user.departmentId : missionIds.includes(plan.ownerId));
+  }
+  return state.plans.filter((plan) => plan.ownerType === "mission" && plan.ownerId === user.missionId);
+}
+
+function getVisibleTrainings(user = getSessionUser()) {
+  if (!user) return [];
+  if (user.role === "admin" || user.role === "planning") return state.trainings;
+  if (user.role === "department") return state.trainings;
+  return state.trainings.filter((training) => training.audience === "جميع المستخدمين" || training.audience.includes("البعثات"));
 }
 
 function getCompletion(request) {
@@ -264,6 +357,11 @@ function renderSystem(user) {
   const labels = {
     dashboard: "لوحة القيادة",
     reports: "التقارير",
+    circulars: "التعاميم",
+    meetings: "الاجتماعات",
+    plans: "الخطط",
+    training: "التدريب",
+    entities: "ملفات الجهات",
     requests: "طلبات التقارير",
     management: "إدارة الكيانات"
   };
@@ -295,6 +393,11 @@ function renderSystem(user) {
 function renderPage(user) {
   if (state.activeView === "dashboard") return renderDashboard(user);
   if (state.activeView === "reports") return renderReportsPage(user);
+  if (state.activeView === "circulars") return renderCircularsPage(user);
+  if (state.activeView === "meetings") return renderMeetingsPage(user);
+  if (state.activeView === "plans") return renderPlansPage(user);
+  if (state.activeView === "training") return renderTrainingPage(user);
+  if (state.activeView === "entities") return renderEntitiesPage(user);
   if (state.activeView === "requests") return renderRequestsPage(user);
   if (state.activeView === "management") return renderManagementPage(user);
   return renderDashboard(user);
@@ -305,6 +408,9 @@ function renderDashboard(user) {
   const requests = getVisibleRequests(user);
   const activeRequests = requests.filter((item) => item.status === "نشط");
   const pending = activeRequests.reduce((sum, request) => sum + getCompletion(request).pending, 0);
+  const visibleCirculars = getVisibleCirculars(user);
+  const visiblePlans = getVisiblePlans(user);
+  const visibleMeetings = getVisibleMeetings(user);
   return `
     <section class="panel">
       <div class="topbar">
@@ -323,11 +429,22 @@ function renderDashboard(user) {
       </div>
       <div class="stats-grid">
         <div class="metric-card"><span>التقارير الظاهرة</span><strong>${reports.length}</strong></div>
-        <div class="metric-card"><span>الطلبات النشطة</span><strong>${activeRequests.length}</strong></div>
-        <div class="metric-card"><span>البعثات غير المنجزة</span><strong>${pending}</strong></div>
+        <div class="metric-card"><span>التعاميم النشطة</span><strong>${visibleCirculars.length}</strong></div>
+        <div class="metric-card"><span>الخطط في النطاق</span><strong>${visiblePlans.length}</strong></div>
       </div>
     </section>
     <section class="metrics-grid">
+      ${[
+        { title: "طلبات التقارير النشطة", value: activeRequests.length, note: `${pending} بعثة غير منجزة` },
+        { title: "الاجتماعات المرئية", value: visibleMeetings.length, note: "محاضر ومهام متابعة" },
+        { title: "نسبة إنجاز الخطط", value: visiblePlans.length ? `${Math.round(visiblePlans.reduce((s, p) => s + p.progress, 0) / visiblePlans.length)}%` : "0%", note: "معدل تقريبي" }
+      ].map((item) => `
+        <article class="metric-card">
+          <span>${item.title}</span>
+          <strong>${item.value}</strong>
+          <div class="tag info">${item.note}</div>
+        </article>
+      `).join("")}
       ${activeRequests.map((request) => {
         const c = getCompletion(request);
         return `
@@ -499,6 +616,161 @@ function renderReportDetails(report, user) {
         </div>
       ` : ""}
     </div>
+  `;
+}
+
+function renderCircularsPage(user) {
+  const circulars = getVisibleCirculars(user);
+  return `
+    <section class="panel">
+      <div class="topbar">
+        <div>
+          <span class="tag info">التعاميم</span>
+          <h1 class="page-title">إدارة التعاميم</h1>
+          <p class="muted">إصدار وتتبع التعاميم وقراءة الجهات المستهدفة ونسب الإنجاز والتأخر.</p>
+        </div>
+      </div>
+    </section>
+    <section class="two-col">
+      <div class="panel">
+        <div class="section-title">سجل التعاميم</div>
+        <div class="detail-list">
+          ${circulars.map((circular) => `
+            <div class="detail-card">
+              <div class="record-top">
+                <div>
+                  <strong>${circular.title}</strong>
+                  <div class="record-meta">الموعد النهائي ${formatDate(circular.dueDate)}</div>
+                </div>
+                <span class="tag ${circular.status === "نشط" ? "warning" : "success"}">${circular.status}</span>
+              </div>
+              <div class="detail-row"><span>قرأ التعميم</span><span>${circular.readMissionIds.length}/${circular.targetMissionIds.length}</span></div>
+              <div class="detail-row"><span>أنجز التعميم</span><span>${circular.completedMissionIds.length}/${circular.targetMissionIds.length}</span></div>
+            </div>
+          `).join("") || `<div class="empty">لا توجد تعاميم في نطاق هذا الحساب.</div>`}
+        </div>
+      </div>
+      <div class="panel">
+        <div class="section-title">تحسينات احترافية</div>
+        <div class="detail-list">
+          <div class="detail-card">تسجيل استلام وقراءة التعميم آليًا لكل بعثة.</div>
+          <div class="detail-card">تصعيد تلقائي بعد 3 أيام ثم بعد 7 أيام للقيادة.</div>
+          <div class="detail-card">مسار معالجة يوثق هل كان الرد مذكرة أو اجتماعًا أو إجراءً داخليًا.</div>
+        </div>
+      </div>
+    </section>
+  `;
+}
+
+function renderMeetingsPage(user) {
+  const meetings = getVisibleMeetings(user);
+  return `
+    <section class="panel">
+      <div class="topbar">
+        <div>
+          <span class="tag info">الاجتماعات</span>
+          <h1 class="page-title">محاضر الاجتماعات والمهام</h1>
+          <p class="muted">تحويل المحاضر إلى مهام ومتابعة حالات الإنجاز والتأخر وفق ما ورد في الوثيقة.</p>
+        </div>
+      </div>
+    </section>
+    <section class="two-col">
+      ${meetings.map((meeting) => `
+        <div class="panel">
+          <div class="section-title">${meeting.title}</div>
+          <p class="muted">${meeting.summary}</p>
+          <div class="detail-list">
+            ${meeting.tasks.map((task) => `<div class="detail-row"><span>${task.title}</span><span class="tag ${task.status === "منجز" ? "success" : "warning"}">${task.assignee} - ${task.status}</span></div>`).join("")}
+          </div>
+        </div>
+      `).join("") || `<div class="panel empty">لا توجد اجتماعات في نطاق هذا الحساب.</div>`}
+    </section>
+  `;
+}
+
+function renderPlansPage(user) {
+  const plans = getVisiblePlans(user);
+  return `
+    <section class="panel">
+      <div class="topbar">
+        <div>
+          <span class="tag info">الخطط</span>
+          <h1 class="page-title">الخطط التشغيلية ومؤشرات الأداء</h1>
+          <p class="muted">ربط الخطط بالمستهدفات والمؤشرات ونسب الإنجاز الفصلية والسنوية.</p>
+        </div>
+      </div>
+    </section>
+    <section class="two-col">
+      ${plans.map((plan) => `
+        <div class="panel">
+          <div class="record-top">
+            <div>
+              <strong>${plan.title}</strong>
+              <div class="record-meta">${plan.period} | ${plan.kpi}</div>
+            </div>
+            <span class="tag ${plan.status === "قيد التنفيذ" ? "warning" : "success"}">${plan.status}</span>
+          </div>
+          <div class="progress"><span style="width:${plan.progress}%"></span></div>
+          <p class="muted">نسبة الإنجاز الحالية: ${plan.progress}%</p>
+        </div>
+      `).join("") || `<div class="panel empty">لا توجد خطط في نطاق هذا الحساب.</div>`}
+    </section>
+  `;
+}
+
+function renderTrainingPage(user) {
+  const trainings = getVisibleTrainings(user);
+  return `
+    <section class="panel">
+      <div class="topbar">
+        <div>
+          <span class="tag info">التدريب</span>
+          <h1 class="page-title">منصة التدريب</h1>
+          <p class="muted">سجل تدريبي للمستخدمين وبرامج إلزامية وتخصصية كما نصت الوثيقة.</p>
+        </div>
+      </div>
+    </section>
+    <section class="two-col">
+      ${trainings.map((training) => {
+        const percent = training.totalUsers ? Math.round((training.completedUsers / training.totalUsers) * 100) : 0;
+        return `
+          <div class="panel">
+            <div class="section-title">${training.title}</div>
+            <div class="record-meta">${training.audience}</div>
+            <div class="progress"><span style="width:${percent}%"></span></div>
+            <p class="muted">المكتملون ${training.completedUsers} من أصل ${training.totalUsers} | الهدف ${training.completionTarget}%</p>
+          </div>
+        `;
+      }).join("")}
+    </section>
+  `;
+}
+
+function renderEntitiesPage(user) {
+  const missions = user.role === "department"
+    ? state.missions.filter((mission) => mission.departmentId === user.departmentId)
+    : state.missions;
+  return `
+    <section class="panel">
+      <div class="topbar">
+        <div>
+          <span class="tag info">ملفات الجهات</span>
+          <h1 class="page-title">ملفات البعثات والدوائر</h1>
+          <p class="muted">ملف موحد لكل بعثة أو دائرة يشمل الخطط والتقارير والتعاميم والاجتماعات والتدريب.</p>
+        </div>
+      </div>
+    </section>
+    <section class="two-col">
+      ${missions.map((mission) => `
+        <div class="panel">
+          <div class="section-title">${mission.name}</div>
+          <div class="detail-row"><span>الدائرة التابعة</span><span>${getDepartmentName(mission.departmentId)}</span></div>
+          <div class="detail-row"><span>عدد التقارير</span><span>${state.reports.filter((report) => report.missionId === mission.id).length}</span></div>
+          <div class="detail-row"><span>عدد التعاميم</span><span>${state.circulars.filter((circular) => circular.targetMissionIds.includes(mission.id)).length}</span></div>
+          <div class="detail-row"><span>حالة الخطة</span><span>${state.plans.find((plan) => plan.ownerId === mission.id)?.status || "لا توجد خطة"}</span></div>
+        </div>
+      `).join("")}
+    </section>
   `;
 }
 
