@@ -16,7 +16,8 @@ const seedState = () => ({
   ],
   coreUsers: [
     { id: "admin-user", role: "admin", name: "مدير النظام", username: "admin", password: "Admin@2026" },
-    { id: "planning-user", role: "planning", name: "إدارة التخطيط", username: "planning", password: "Planning@2026" }
+    { id: "planning-user", role: "planning", name: "إدارة التخطيط", username: "planning", password: "Planning@2026" },
+    { id: "leadership-user", role: "leadership", name: "القيادة العليا", username: "leadership", password: "Leadership@2026" }
   ],
   reportRequests: [
     {
@@ -110,6 +111,9 @@ const seedState = () => ({
       totalUsers: 18
     }
   ],
+  auditLog: [
+    { id: "audit-1", at: "2026-03-15 09:00", actor: "النظام", action: "تهيئة النسخة التجريبية", target: "منظومة النظام", scope: "وزارة" }
+  ],
   alerts: [
     { id: "alert-1", level: "info", title: "بيئة دخول وصلاحيات", text: "سجّل الدخول بأحد الحسابات الافتراضية لتجربة الصلاحيات المختلفة." }
   ]
@@ -129,6 +133,7 @@ function loadState() {
   parsed.meetings = Array.isArray(parsed.meetings) ? parsed.meetings : seedState().meetings;
   parsed.plans = Array.isArray(parsed.plans) ? parsed.plans : seedState().plans;
   parsed.trainings = Array.isArray(parsed.trainings) ? parsed.trainings : seedState().trainings;
+  parsed.auditLog = Array.isArray(parsed.auditLog) ? parsed.auditLog : seedState().auditLog;
   parsed.reports = parsed.reports.map((report) => ({
     ...report,
     workflowStage: report.workflowStage || "مرفوع من البعثة",
@@ -191,8 +196,9 @@ function getDepartmentName(id) {
 
 function visibleViews(user) {
   if (!user) return [];
-  if (user.role === "admin") return ["dashboard", "reports", "circulars", "meetings", "plans", "training", "entities", "requests", "management"];
-  if (user.role === "planning") return ["dashboard", "reports", "circulars", "meetings", "plans", "training", "entities", "requests"];
+  if (user.role === "admin") return ["dashboard", "reports", "circulars", "meetings", "plans", "training", "entities", "requests", "governance", "management"];
+  if (user.role === "planning") return ["dashboard", "reports", "circulars", "meetings", "plans", "training", "entities", "requests", "governance"];
+  if (user.role === "leadership") return ["dashboard", "reports", "circulars", "meetings", "plans", "entities", "requests", "governance"];
   if (user.role === "department") return ["dashboard", "reports", "circulars", "meetings", "plans", "entities", "requests"];
   return ["dashboard", "reports", "circulars", "plans", "training", "requests"];
 }
@@ -268,6 +274,18 @@ function addAlert(level, title, text) {
   state.alerts = state.alerts.slice(0, 8);
 }
 
+function logAudit(actor, action, target, scope) {
+  state.auditLog.unshift({
+    id: `audit-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`,
+    at: new Date().toLocaleString("ar-YE"),
+    actor,
+    action,
+    target,
+    scope
+  });
+  state.auditLog = state.auditLog.slice(0, 50);
+}
+
 function addWorkflowEntry(report, actor, action, stage) {
   report.workflowHistory.unshift({
     actor,
@@ -320,6 +338,10 @@ function renderLogin() {
             <span class="muted">اسم المستخدم: planning | كلمة المرور: Planning@2026</span>
           </div>
           <div class="cred-card">
+            <strong>القيادة العليا</strong>
+            <span class="muted">اسم المستخدم: leadership | كلمة المرور: Leadership@2026</span>
+          </div>
+          <div class="cred-card">
             <strong>دائرة جغرافية</strong>
             <span class="muted">اسم المستخدم: arabia_dept | كلمة المرور: Arabia@2026</span>
           </div>
@@ -363,6 +385,7 @@ function renderSystem(user) {
     training: "التدريب",
     entities: "ملفات الجهات",
     requests: "طلبات التقارير",
+    governance: "الحوكمة",
     management: "إدارة الكيانات"
   };
   return `
@@ -399,6 +422,7 @@ function renderPage(user) {
   if (state.activeView === "training") return renderTrainingPage(user);
   if (state.activeView === "entities") return renderEntitiesPage(user);
   if (state.activeView === "requests") return renderRequestsPage(user);
+  if (state.activeView === "governance") return renderGovernancePage(user);
   if (state.activeView === "management") return renderManagementPage(user);
   return renderDashboard(user);
 }
@@ -774,6 +798,57 @@ function renderEntitiesPage(user) {
   `;
 }
 
+function renderGovernancePage(user) {
+  const roleRows = [
+    ["مدير النظام", "وزارة", "إدارة المستخدمين والكيانات والسياسات وسجل التدقيق"],
+    ["إدارة التخطيط", "وزارة", "إصدار طلبات التقارير واعتمادها ومتابعة الخطط والتعاميم"],
+    ["القيادة العليا", "وزارة", "لوحات قيادة وقراءة موسعة للملخصات والمؤشرات"],
+    ["مدير دائرة", "دائرة", "متابعة البعثات التابعة ومراجعة التقارير والاجتماعات والخطط"],
+    ["بعثة", "بعثة", "رفع التقارير واستلام التعاميم وتنفيذ الخطط والمتطلبات التشغيلية"]
+  ];
+
+  const auditRows = state.auditLog.slice(0, 12).map((entry) => `
+    <div class="detail-row">
+      <span>${entry.at}</span>
+      <span>${entry.actor}</span>
+      <span>${entry.action}</span>
+      <span>${entry.target}</span>
+    </div>
+  `).join("");
+
+  return `
+    <section class="panel">
+      <div class="topbar">
+        <div>
+          <span class="tag info">الحوكمة والصلاحيات</span>
+          <h1 class="page-title">الحوكمة وسجل التدقيق</h1>
+          <p class="muted">تمت إضافة مصفوفة أدوار عملية وسجل تدقيق يعكس متطلبات الوثيقة بشأن الحوكمة والتتبع.</p>
+        </div>
+      </div>
+    </section>
+    <section class="two-col">
+      <div class="panel">
+        <div class="section-title">مصفوفة الأدوار والصلاحيات</div>
+        <div class="detail-list">
+          ${roleRows.map((row) => `
+            <div class="detail-card">
+              <strong>${row[0]}</strong>
+              <div class="detail-row"><span>النطاق</span><span>${row[1]}</span></div>
+              <div class="detail-row"><span>أبرز الصلاحيات</span><span>${row[2]}</span></div>
+            </div>
+          `).join("")}
+        </div>
+      </div>
+      <div class="panel">
+        <div class="section-title">سجل التدقيق الأخير</div>
+        <div class="detail-list">
+          ${auditRows || '<div class="empty">لا توجد أحداث تدقيق بعد.</div>'}
+        </div>
+      </div>
+    </section>
+  `;
+}
+
 function renderRequestsPage(user) {
   const requests = getVisibleRequests(user);
   return `
@@ -954,6 +1029,7 @@ function renderManagementPage(user) {
 function roleLabel(user) {
   if (user.role === "admin") return "مدير النظام";
   if (user.role === "planning") return "إدارة التخطيط";
+  if (user.role === "leadership") return "القيادة العليا";
   if (user.role === "department") return `مدير دائرة - ${getDepartmentName(user.departmentId)}`;
   return `بعثة - ${getMissionName(user.missionId)}`;
 }
@@ -972,6 +1048,10 @@ function bindEvents() {
 
   const logoutBtn = document.getElementById("logout-btn");
   if (logoutBtn) logoutBtn.addEventListener("click", () => {
+    const currentUser = getSessionUser();
+    if (currentUser) {
+      logAudit(currentUser.name, "تسجيل الخروج", "جلسة النظام", currentUser.role === "mission" ? getMissionName(currentUser.missionId) : currentUser.role === "department" ? getDepartmentName(currentUser.departmentId) : "وزارة");
+    }
     state.sessionUserId = null;
     state.activeView = "dashboard";
     saveState();
@@ -1023,6 +1103,7 @@ function handleLogin(event) {
   state.loginError = "";
   state.sessionUserId = user.id;
   state.activeView = "dashboard";
+  logAudit(user.name, "تسجيل الدخول", "جلسة النظام", user.role === "mission" ? getMissionName(user.missionId) : user.role === "department" ? getDepartmentName(user.departmentId) : "وزارة");
   saveState();
   renderApp();
 }
@@ -1060,6 +1141,7 @@ function handleReportSubmit(event) {
     }
   }
   addAlert("success", "تم رفع تقرير جديد", `رفعت ${user.name} التقرير "${report.title}" وأصبح مرئيًا للجهات المخولة.`);
+  logAudit(user.name, "رفع تقرير", report.title, getMissionName(report.missionId));
   saveState();
   renderApp();
 }
@@ -1081,6 +1163,7 @@ function handleRequestSubmit(event) {
     status: "نشط"
   });
   addAlert("info", "تم إصدار طلب تقرير", `أصدرت ${user.name} طلب تقرير جديد إلى ${targetMissionIds.length} بعثات.`);
+  logAudit(user.name, "إصدار طلب تقرير", String(form.get("title")), "وزارة");
   saveState();
   renderApp();
 }
@@ -1102,6 +1185,7 @@ function handleDepartmentSubmit(event) {
     password: String(form.get("password"))
   });
   addAlert("success", "تمت إضافة دائرة", `أضيفت دائرة جديدة مع حساب دخول خاص بها: ${username}`);
+  logAudit("مدير النظام", "إضافة دائرة", String(form.get("name")), "وزارة");
   saveState();
   renderApp();
 }
@@ -1124,6 +1208,7 @@ function handleMissionSubmit(event) {
     password: String(form.get("password"))
   });
   addAlert("success", "تمت إضافة بعثة", "أضيفت بعثة جديدة وربطت بالدائرة المختارة مع حساب دخول خاص.");
+  logAudit("مدير النظام", "إضافة بعثة", String(form.get("name")), getDepartmentName(String(form.get("departmentId"))));
   saveState();
   renderApp();
 }
@@ -1142,6 +1227,7 @@ function handleReportAction(reportId, actionKey, nextStage) {
   report.workflowStage = nextStage;
   addWorkflowEntry(report, user.name, labels[actionKey] || "تحديث المسار", nextStage);
   addAlert(nextStage === "أعيد للبعثة للاستكمال" ? "warning" : "info", "تحديث مسار التقرير", `انتقل التقرير "${report.title}" إلى مرحلة "${nextStage}".`);
+  logAudit(user.name, labels[actionKey] || "تحديث المسار", report.title, getMissionName(report.missionId));
   saveState();
   renderApp();
 }
