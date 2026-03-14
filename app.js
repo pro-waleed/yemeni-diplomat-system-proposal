@@ -1,210 +1,181 @@
-const STORAGE_KEY = "yemeni_diplomat_reports_demo_v2";
+const STORAGE_KEY = "yemeni_diplomat_system_v3";
 
-const users = [
-  {
-    id: "mission_riyadh",
-    name: "بعثة الرياض",
-    role: "مسؤول البعثة",
-    type: "mission",
-    mission: "بعثة الرياض",
-    department: "الدائرة الجغرافية لشبه الجزيرة العربية"
-  },
-  {
-    id: "planning_admin",
-    name: "إدارة التخطيط",
-    role: "إدارة التخطيط والمتابعة",
-    type: "planning",
-    mission: null,
-    department: "الإدارة العامة للتخطيط"
-  },
-  {
-    id: "system_admin",
-    name: "مدير النظام",
-    role: "إدارة النظام والرقابة",
-    type: "admin",
-    mission: null,
-    department: "إدارة النظم"
-  },
-  {
-    id: "geo_dept",
-    name: "الدائرة المعنية",
-    role: "الدائرة الجغرافية المختصة",
-    type: "department",
-    mission: null,
-    department: "الدائرة الجغرافية لشبه الجزيرة العربية",
-    missions: ["بعثة الرياض", "بعثة جدة", "بعثة أبوظبي"]
-  }
-];
-
-const missions = ["بعثة الرياض", "بعثة القاهرة", "بعثة كوالالمبور", "بعثة أبوظبي", "بعثة جدة"];
-
-const initialData = () => ({
-  currentUserId: "mission_riyadh",
-  showPendingOnly: false,
+const seedState = () => ({
+  sessionUserId: null,
   activeView: "dashboard",
-  selectedReportId: "seed-report-1",
-  alerts: [
-    {
-      id: "alert-1",
-      level: "warning",
-      title: "طلب تقرير نصف سنوي نشط",
-      text: "ما زالت بعض البعثات لم ترفع تقاريرها النصف سنوية ضمن المهلة المحددة."
-    },
-    {
-      id: "alert-2",
-      level: "info",
-      title: "بيئة العرض متعددة الحسابات",
-      text: "يمكنك تبديل الحساب من أعلى الصفحة لمشاهدة نفس البيانات من زوايا مختلفة."
-    }
+  selectedReportId: "report-1",
+  loginError: "",
+  departments: [
+    { id: "dept-arabia", name: "الدائرة الجغرافية لشبه الجزيرة العربية", username: "arabia_dept", password: "Arabia@2026" },
+    { id: "dept-africa", name: "الدائرة الجغرافية لأفريقيا", username: "africa_dept", password: "Africa@2026" }
+  ],
+  missions: [
+    { id: "mission-riyadh", name: "بعثة الرياض", departmentId: "dept-arabia", username: "riyadh", password: "Riyadh@2026" },
+    { id: "mission-jeddah", name: "بعثة جدة", departmentId: "dept-arabia", username: "jeddah", password: "Jeddah@2026" },
+    { id: "mission-cairo", name: "بعثة القاهرة", departmentId: "dept-africa", username: "cairo", password: "Cairo@2026" }
+  ],
+  coreUsers: [
+    { id: "admin-user", role: "admin", name: "مدير النظام", username: "admin", password: "Admin@2026" },
+    { id: "planning-user", role: "planning", name: "إدارة التخطيط", username: "planning", password: "Planning@2026" }
   ],
   reportRequests: [
     {
-      id: "req-2026-h1",
+      id: "request-h1-2026",
       title: "طلب التقارير النصف سنوية 2026",
-      kind: "نصف سنوي",
-      year: "2026",
+      type: "نصف سنوي",
       createdBy: "إدارة التخطيط",
       dueDate: "2026-06-30",
-      targetMissions: ["بعثة الرياض", "بعثة القاهرة", "بعثة كوالالمبور", "بعثة أبوظبي"],
-      completedMissions: ["بعثة القاهرة"],
+      targetMissionIds: ["mission-riyadh", "mission-jeddah", "mission-cairo"],
+      completedMissionIds: ["mission-cairo"],
       status: "نشط"
-    },
-    {
-      id: "req-2025-annual",
-      title: "طلب التقارير السنوية 2025",
-      kind: "سنوي",
-      year: "2025",
-      createdBy: "إدارة التخطيط",
-      dueDate: "2026-01-31",
-      targetMissions: ["بعثة الرياض", "بعثة القاهرة", "بعثة كوالالمبور", "بعثة أبوظبي", "بعثة جدة"],
-      completedMissions: ["بعثة الرياض", "بعثة القاهرة", "بعثة أبوظبي"],
-      status: "مغلق"
     }
   ],
   reports: [
     {
-      id: "seed-report-1",
-      mission: "بعثة القاهرة",
-      title: "تقرير نصف سنوي عن الحراك السياسي والإعلامي",
-      reportType: "نصف سنوي",
+      id: "report-1",
+      missionId: "mission-cairo",
+      departmentId: "dept-africa",
+      title: "تقرير نصف سنوي عن النشاط السياسي والإعلامي",
+      type: "نصف سنوي",
       thematicTrack: "سياسي / إعلامي",
+      requestId: "request-h1-2026",
       activityDate: "2026-03-05",
-      requestId: "req-2026-h1",
-      author: "بعثة القاهرة",
-      department: "الدائرة الجغرافية لشبه الجزيرة العربية",
-      status: "مرفوع من البعثة",
-      workflowStage: "مرفوع من البعثة",
-      visibility: ["planning", "admin", "department"],
-      workflowHistory: [
-        {
-          actor: "بعثة القاهرة",
-          action: "رفع التقرير",
-          stage: "مرفوع من البعثة",
-          at: "2026-03-10 09:20"
-        }
-      ],
-      summary: "ملخص تنفيذي عن أبرز الاتصالات والفعاليات والتغطيات الإعلامية خلال النصف الأول.",
-      beforeGoals: "تعزيز الحضور السياسي اليمني وتوسيع التنسيق الإعلامي مع الجهات المصرية.",
-      beforeExpected: "لقاءات تنسيقية وتغطية إعلامية إيجابية ومتابعة ملفات التعاون.",
-      afterResults: "تم تنفيذ 6 لقاءات رسمية وتغطية 3 فعاليات رئيسية وإعداد مذكرة متابعة مشتركة.",
-      afterRecommendations: "استمرار التنسيق الإعلامي وجدولة زيارة فنية في الربع القادم.",
+      summary: "ملخص تنفيذي عن الاتصالات الرسمية والفعاليات والتغطية الإعلامية خلال النصف الأول.",
+      beforeGoals: "تعزيز الحضور السياسي اليمني وتوسيع التنسيق الإعلامي.",
+      beforeExpected: "لقاءات تنسيقية وتغطية إعلامية إيجابية ومذكرات متابعة.",
+      afterResults: "تم تنفيذ 6 لقاءات رسمية و3 فعاليات رئيسية وإعداد مذكرة متابعة.",
+      afterRecommendations: "جدولة متابعة فنية واستمرار التنسيق الإعلامي خلال الربع القادم.",
       attachmentName: "cairo-half-year-2026.pdf",
-      createdAt: "2026-03-10 09:20"
+      workflowStage: "معتمد من التخطيط",
+      createdAt: "2026-03-10 09:20",
+      workflowHistory: [
+        { actor: "بعثة القاهرة", action: "رفع التقرير", stage: "مرفوع من البعثة", at: "2026-03-10 09:20" },
+        { actor: "الدائرة الجغرافية لأفريقيا", action: "بدء مراجعة الدائرة", stage: "قيد مراجعة الدائرة", at: "2026-03-10 11:00" },
+        { actor: "إدارة التخطيط", action: "اعتماد التقرير", stage: "معتمد من التخطيط", at: "2026-03-11 08:30" }
+      ]
     }
+  ],
+  alerts: [
+    { id: "alert-1", level: "info", title: "بيئة دخول وصلاحيات", text: "سجّل الدخول بأحد الحسابات الافتراضية لتجربة الصلاحيات المختلفة." }
   ]
 });
 
-let appState = loadState();
-
-const metricCards = document.getElementById("metric-cards");
-const mainContent = document.getElementById("main-content");
-const detailPanel = document.getElementById("detail-panel");
-const alertsPanel = document.getElementById("alerts-panel");
-const filtersBar = document.getElementById("view-filters");
-const accountSwitcher = document.getElementById("account-switcher");
+let state = loadState();
+const root = document.getElementById("app-root");
 
 function loadState() {
-  const saved = window.localStorage.getItem(STORAGE_KEY);
-  if (!saved) return initialData();
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if (!saved) return seedState();
   const parsed = JSON.parse(saved);
-  if (!parsed.currentUserId || !Array.isArray(parsed.reportRequests) || !Array.isArray(parsed.reports)) {
-    return initialData();
+  if (!parsed || !Array.isArray(parsed.departments) || !Array.isArray(parsed.missions) || !Array.isArray(parsed.reports)) {
+    return seedState();
   }
-  parsed.reports = parsed.reports.map((report) => {
-    if (!report.workflowStage) {
-      report.workflowStage = report.status || "مرفوع من البعثة";
-    }
-    if (!Array.isArray(report.workflowHistory)) {
-      report.workflowHistory = [
-        {
-          actor: report.author || report.mission || "النظام",
-          action: "ترحيل سجل التقرير",
-          stage: report.workflowStage,
-          at: report.createdAt || new Date().toLocaleString("ar-YE")
-        }
-      ];
-    }
-    return report;
-  });
+  parsed.reports = parsed.reports.map((report) => ({
+    ...report,
+    workflowStage: report.workflowStage || "مرفوع من البعثة",
+    workflowHistory: Array.isArray(report.workflowHistory) ? report.workflowHistory : []
+  }));
   return parsed;
 }
 
 function saveState() {
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
-function getCurrentUser() {
-  return users.find((user) => user.id === appState.currentUserId) || users[0];
+function resetState() {
+  state = seedState();
+  saveState();
+  renderApp();
 }
 
-function getVisibleReports(user = getCurrentUser()) {
-  return appState.reports.filter((report) => {
-    if (user.type === "admin" || user.type === "planning") return true;
-    if (user.type === "mission") return report.mission === user.mission;
-    if (user.type === "department") return user.missions.includes(report.mission);
-    return false;
-  });
+function getAllUsers() {
+  const core = state.coreUsers.map((user) => ({ ...user }));
+  const departments = state.departments.map((dept) => ({
+    id: `user-${dept.id}`,
+    role: "department",
+    name: dept.name,
+    username: dept.username,
+    password: dept.password,
+    departmentId: dept.id
+  }));
+  const missions = state.missions.map((mission) => ({
+    id: `user-${mission.id}`,
+    role: "mission",
+    name: mission.name,
+    username: mission.username,
+    password: mission.password,
+    missionId: mission.id,
+    departmentId: mission.departmentId
+  }));
+  return [...core, ...departments, ...missions];
 }
 
-function getStageTone(stage) {
-  if (stage === "معتمد من التخطيط" || stage === "مغلق ومؤرشف") return "success";
+function getSessionUser() {
+  return getAllUsers().find((user) => user.id === state.sessionUserId) || null;
+}
+
+function getDepartmentById(id) {
+  return state.departments.find((item) => item.id === id) || null;
+}
+
+function getMissionById(id) {
+  return state.missions.find((item) => item.id === id) || null;
+}
+
+function getMissionName(id) {
+  return getMissionById(id)?.name || "-";
+}
+
+function getDepartmentName(id) {
+  return getDepartmentById(id)?.name || "-";
+}
+
+function visibleViews(user) {
+  if (!user) return [];
+  if (user.role === "admin") return ["dashboard", "reports", "requests", "management"];
+  if (user.role === "planning") return ["dashboard", "reports", "requests"];
+  if (user.role === "department") return ["dashboard", "reports", "requests"];
+  return ["dashboard", "reports", "requests"];
+}
+
+function getVisibleReports(user = getSessionUser()) {
+  if (!user) return [];
+  if (user.role === "admin" || user.role === "planning") return state.reports;
+  if (user.role === "department") return state.reports.filter((report) => report.departmentId === user.departmentId);
+  if (user.role === "mission") return state.reports.filter((report) => report.missionId === user.missionId);
+  return [];
+}
+
+function getVisibleRequests(user = getSessionUser()) {
+  if (!user) return [];
+  if (user.role === "admin" || user.role === "planning") return state.reportRequests;
+  if (user.role === "department") {
+    const missionIds = state.missions.filter((mission) => mission.departmentId === user.departmentId).map((mission) => mission.id);
+    return state.reportRequests.filter((request) => request.targetMissionIds.some((id) => missionIds.includes(id)));
+  }
+  if (user.role === "mission") return state.reportRequests.filter((request) => request.targetMissionIds.includes(user.missionId));
+  return [];
+}
+
+function getCompletion(request) {
+  const done = request.completedMissionIds.length;
+  const total = request.targetMissionIds.length;
+  return { done, total, pending: total - done, percent: total ? Math.round((done / total) * 100) : 0 };
+}
+
+function stageTone(stage) {
+  if (stage === "مغلق ومؤرشف" || stage === "معتمد من التخطيط") return "success";
   if (stage === "قيد مراجعة الدائرة") return "warning";
-  if (stage === "مرفوع من البعثة") return "info";
   if (stage === "أعيد للبعثة للاستكمال") return "danger";
   return "info";
 }
 
-function getAllowedActions(report, user = getCurrentUser()) {
-  const actions = [];
-
-  if (user.type === "mission" && report.mission === user.mission && report.workflowStage === "أعيد للبعثة للاستكمال") {
-    actions.push({ key: "resubmit", label: "إعادة رفع التقرير", nextStage: "مرفوع من البعثة" });
-  }
-
-  if (user.type === "department" && user.missions.includes(report.mission)) {
-    if (report.workflowStage === "مرفوع من البعثة") {
-      actions.push({ key: "review", label: "بدء مراجعة الدائرة", nextStage: "قيد مراجعة الدائرة" });
-      actions.push({ key: "return", label: "إعادة للبعثة", nextStage: "أعيد للبعثة للاستكمال" });
-    }
-  }
-
-  if (user.type === "planning" || user.type === "admin") {
-    if (report.workflowStage === "قيد مراجعة الدائرة" || report.workflowStage === "مرفوع من البعثة") {
-      actions.push({ key: "approve", label: "اعتماد من التخطيط", nextStage: "معتمد من التخطيط" });
-      actions.push({ key: "return", label: "إعادة للبعثة", nextStage: "أعيد للبعثة للاستكمال" });
-    }
-    if (report.workflowStage === "معتمد من التخطيط") {
-      actions.push({ key: "archive", label: "إغلاق وأرشفة", nextStage: "مغلق ومؤرشف" });
-    }
-  }
-
-  return actions;
+function addAlert(level, title, text) {
+  state.alerts.unshift({ id: `alert-${Date.now()}`, level, title, text });
+  state.alerts = state.alerts.slice(0, 8);
 }
 
 function addWorkflowEntry(report, actor, action, stage) {
-  if (!Array.isArray(report.workflowHistory)) {
-    report.workflowHistory = [];
-  }
   report.workflowHistory.unshift({
     actor,
     action,
@@ -213,497 +184,317 @@ function addWorkflowEntry(report, actor, action, stage) {
   });
 }
 
-function getVisibleRequests(user = getCurrentUser()) {
-  return appState.reportRequests.filter((request) => {
-    if (user.type === "admin" || user.type === "planning") return true;
-    if (user.type === "mission") return request.targetMissions.includes(user.mission);
-    if (user.type === "department") {
-      return request.targetMissions.some((mission) => user.missions.includes(mission));
-    }
-    return false;
-  });
+function getAllowedReportActions(report, user = getSessionUser()) {
+  if (!user) return [];
+  const actions = [];
+  if (user.role === "mission" && user.missionId === report.missionId && report.workflowStage === "أعيد للبعثة للاستكمال") {
+    actions.push({ key: "resubmit", label: "إعادة رفع التقرير", nextStage: "مرفوع من البعثة" });
+  }
+  if (user.role === "department" && user.departmentId === report.departmentId && report.workflowStage === "مرفوع من البعثة") {
+    actions.push({ key: "review", label: "بدء مراجعة الدائرة", nextStage: "قيد مراجعة الدائرة" });
+    actions.push({ key: "return", label: "إعادة للبعثة", nextStage: "أعيد للبعثة للاستكمال" });
+  }
+  if ((user.role === "planning" || user.role === "admin") && (report.workflowStage === "قيد مراجعة الدائرة" || report.workflowStage === "مرفوع من البعثة")) {
+    actions.push({ key: "approve", label: "اعتماد من التخطيط", nextStage: "معتمد من التخطيط" });
+    actions.push({ key: "return", label: "إعادة للبعثة", nextStage: "أعيد للبعثة للاستكمال" });
+  }
+  if ((user.role === "planning" || user.role === "admin") && report.workflowStage === "معتمد من التخطيط") {
+    actions.push({ key: "archive", label: "إغلاق وأرشفة", nextStage: "مغلق ومؤرشف" });
+  }
+  return actions;
 }
 
-function getCompletionSummary(request) {
-  const done = request.completedMissions.length;
-  const total = request.targetMissions.length;
-  return {
-    done,
-    total,
-    pending: total - done,
-    percent: total ? Math.round((done / total) * 100) : 0
-  };
+function renderApp() {
+  const user = getSessionUser();
+  root.innerHTML = user ? renderSystem(user) : renderLogin();
+  bindEvents();
 }
 
-function populateAccountSwitcher() {
-  accountSwitcher.innerHTML = users.map((user) => `
-    <option value="${user.id}" ${user.id === appState.currentUserId ? "selected" : ""}>${user.name} - ${user.role}</option>
-  `).join("");
-}
-
-function updateUserCard() {
-  const user = getCurrentUser();
-  document.getElementById("current-user-name").textContent = user.name;
-  document.getElementById("current-user-role").textContent = `${user.role} | ${user.department}`;
-}
-
-function updateHero() {
-  const visibleReports = getVisibleReports();
-  const visibleRequests = getVisibleRequests().filter((request) => request.status === "نشط");
-  const completionValues = visibleRequests.map((request) => getCompletionSummary(request).percent);
-  const avgCompletion = completionValues.length
-    ? Math.round(completionValues.reduce((sum, value) => sum + value, 0) / completionValues.length)
-    : 0;
-
-  document.getElementById("hero-reports").textContent = String(visibleReports.length);
-  document.getElementById("hero-requests").textContent = String(visibleRequests.length);
-  document.getElementById("hero-completion").textContent = `${avgCompletion}%`;
-}
-
-function renderMetrics() {
-  const user = getCurrentUser();
-  const visibleReports = getVisibleReports(user);
-  const visibleRequests = getVisibleRequests(user);
-  const activeRequests = visibleRequests.filter((request) => request.status === "نشط");
-  const pendingMissions = activeRequests.reduce((count, request) => count + getCompletionSummary(request).pending, 0);
-
-  const cards = [
-    {
-      label: user.type === "mission" ? "تقاريري المرفوعة" : "التقارير الواردة",
-      value: visibleReports.length,
-      hint: user.type === "mission" ? "من حساب البعثة الحالي" : "المتاحة للحساب الحالي"
-    },
-    {
-      label: "طلبات التقارير النشطة",
-      value: activeRequests.length,
-      hint: "سنوية ونصف سنوية"
-    },
-    {
-      label: "جهات لم تنجز بعد",
-      value: pendingMissions,
-      hint: "ضمن الطلبات النشطة"
-    },
-    {
-      label: user.type === "mission" ? "الطلبات المطلوبة من البعثة" : "البعثات المنجزة",
-      value: user.type === "mission"
-        ? activeRequests.filter((request) => request.targetMissions.includes(user.mission)).length
-        : activeRequests.reduce((count, request) => count + getCompletionSummary(request).done, 0),
-      hint: user.type === "mission" ? "تظهر في شاشة الطلبات" : "إجمالي الإنجاز المرحلي"
-    }
-  ];
-
-  metricCards.innerHTML = cards.map((card) => `
-    <article class="metric-card static-card">
-      <span>${card.label}</span>
-      <strong>${card.value}</strong>
-      <div class="tag info">${card.hint}</div>
-    </article>
-  `).join("");
-}
-
-function renderHeader() {
-  const titles = {
-    dashboard: {
-      title: "لوحة المتابعة",
-      subtitle: "عرض مركزي لحركة التقارير وطلبات التقارير حسب الحساب الحالي.",
-      panelTitle: "مؤشرات التشغيل",
-      panelLabel: "عرض تنفيذي"
-    },
-    reports: {
-      title: "شاشة التقارير",
-      subtitle: "رفع تقرير نشاط نموذجي أو استعراض التقارير المرفوعة والمراجعة.",
-      panelTitle: "وحدة التقارير",
-      panelLabel: "رفع ومراجعة"
-    },
-    requests: {
-      title: "طلبات التقارير السنوية والنصف سنوية",
-      subtitle: "إصدار الطلبات من التخطيط ومراقبة البعثات المنجزة وغير المنجزة.",
-      panelTitle: "إدارة الطلبات",
-      panelLabel: "متابعة الإنجاز"
-    }
-  };
-
-  const active = titles[appState.activeView];
-  document.getElementById("view-title").textContent = active.title;
-  document.getElementById("view-subtitle").textContent = active.subtitle;
-  document.getElementById("panel-title").textContent = active.panelTitle;
-  document.getElementById("panel-label").textContent = active.panelLabel;
-}
-
-function renderFilters() {
-  filtersBar.innerHTML = `
-    <button class="filter-chip ${appState.showPendingOnly ? "is-active" : ""}" id="pending-chip">غير المنجز فقط</button>
-  `;
-  document.getElementById("pending-chip").addEventListener("click", () => {
-    appState.showPendingOnly = !appState.showPendingOnly;
-    saveState();
-    render();
-  });
-}
-
-function renderDashboard() {
-  const user = getCurrentUser();
-  const reports = getVisibleReports(user);
-  const requests = getVisibleRequests(user);
-  const activeRequests = requests.filter((request) => request.status === "نشط");
-  const filteredRequests = appState.showPendingOnly
-    ? activeRequests.filter((request) => getCompletionSummary(request).pending > 0)
-    : activeRequests;
-
-  const requestCards = filteredRequests.length
-    ? filteredRequests.map((request) => {
-        const summary = getCompletionSummary(request);
-        return `
-          <div class="detail-card">
-            <div class="record-top">
-              <div>
-                <div class="detail-title">${request.title}</div>
-                <div class="table-subtext">الموعد النهائي: ${formatDate(request.dueDate)}</div>
-              </div>
-              <span class="tag ${summary.pending ? "warning" : "success"}">${summary.done}/${summary.total}</span>
-            </div>
-            <div class="progress"><span style="width:${summary.percent}%"></span></div>
-            <div class="record-desc">أنجزت ${summary.done} بعثة ولم تنجز ${summary.pending} بعثة.</div>
+function renderLogin() {
+  return `
+    <div class="login-shell">
+      <section class="login-brand">
+        <div class="badge">YD</div>
+        <h1 class="title">النظام الدبلوماسي المتكامل</h1>
+        <p class="muted">ابدأ من شاشة الدخول كما في الأنظمة المؤسسية الحقيقية، ثم ستظهر لكل مستخدم الشاشات والصلاحيات المناسبة لدوره فقط.</p>
+        <div class="credentials-list">
+          <div class="cred-card">
+            <strong>مدير النظام</strong>
+            <span class="muted">اسم المستخدم: admin | كلمة المرور: Admin@2026</span>
           </div>
-        `;
-      }).join("")
-    : `<div class="empty-state">لا توجد طلبات مطابقة للفلتر الحالي.</div>`;
-
-  const latestReports = reports
-    .slice()
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    .slice(0, 3)
-    .map((report) => `
-      <article class="record-card is-static">
-        <div class="record-top">
-          <div>
-            <div class="record-title">${report.title}</div>
-            <div class="record-meta">${report.mission}</div>
+          <div class="cred-card">
+            <strong>إدارة التخطيط</strong>
+            <span class="muted">اسم المستخدم: planning | كلمة المرور: Planning@2026</span>
           </div>
-          <span class="tag success">${report.reportType}</span>
+          <div class="cred-card">
+            <strong>دائرة جغرافية</strong>
+            <span class="muted">اسم المستخدم: arabia_dept | كلمة المرور: Arabia@2026</span>
+          </div>
+          <div class="cred-card">
+            <strong>بعثة الرياض</strong>
+            <span class="muted">اسم المستخدم: riyadh | كلمة المرور: Riyadh@2026</span>
+          </div>
         </div>
-        <p class="record-desc">${report.summary}</p>
-      </article>
-    `).join("");
-
-  mainContent.innerHTML = `
-    <div class="two-col">
-      <div class="detail-card">
-        <div class="section-title">ما الذي يمكن فعله من هذا الحساب؟</div>
-        <ul class="spec-list">
-          ${roleCapabilities(user).map((item) => `<li>${item}</li>`).join("")}
-        </ul>
-      </div>
-      <div class="detail-card">
-        <div class="section-title">آخر التقارير الظاهرة للحساب</div>
-        <div class="record-list">${latestReports || '<div class="empty-state">لا توجد تقارير بعد.</div>'}</div>
-      </div>
-    </div>
-    <div class="detail-card">
-      <div class="section-title">حالة طلبات التقارير النشطة</div>
-      <div class="detail-list">${requestCards}</div>
-    </div>
-  `;
-
-  detailPanel.innerHTML = `
-    <div class="detail-list">
-      <div class="detail-card">
-        <div class="detail-title">الحساب الحالي</div>
-        <p class="record-desc">${user.name} يعمل بصفة ${user.role}.</p>
-      </div>
-      <div class="detail-card">
-        <div class="detail-title">أقرب تجربة مقترحة</div>
-        <p class="record-desc">بدّل إلى حساب بعثة الرياض ثم ارفع تقرير نشاط، وبعدها بدّل إلى مدير النظام لمشاهدة التقرير في سجل المراجعة.</p>
-      </div>
-    </div>
-  `;
-}
-
-function renderReports() {
-  const user = getCurrentUser();
-  const visibleReports = getVisibleReports(user);
-  const reportOptions = getVisibleRequests(user).filter((request) => request.status === "نشط");
-  const selected = visibleReports.find((report) => report.id === appState.selectedReportId) || visibleReports[0];
-
-  if (user.type === "mission") {
-    mainContent.innerHTML = `
-      <div class="two-col">
-        <div class="detail-card">
-          <div class="section-title">رفع تقرير نشاط نموذجي</div>
-          <form id="report-form" class="form-grid">
-            <label class="field-block">
-              <span>عنوان التقرير</span>
-              <input name="title" required placeholder="مثال: تقرير نشاط عن مشاركة البعثة في ملتقى استثماري">
+      </section>
+      <section class="login-form-wrap">
+        <div class="form-card">
+          <h2 class="section-title">تسجيل الدخول</h2>
+          <p class="muted">سجّل الدخول بأحد الحسابات الافتراضية أو بالحسابات التي ينشئها مدير النظام.</p>
+          <form id="login-form" class="form-grid">
+            <label class="field full">
+              <span>اسم المستخدم</span>
+              <input name="username" required>
             </label>
-            <label class="field-block">
-              <span>نوع التقرير</span>
-              <select name="reportType" required>
-                <option value="نشاط">نشاط</option>
-                <option value="نصف سنوي">نصف سنوي</option>
-                <option value="سنوي">سنوي</option>
-                <option value="موضوعي">موضوعي</option>
-              </select>
+            <label class="field full">
+              <span>كلمة المرور</span>
+              <input type="password" name="password" required>
             </label>
-            <label class="field-block">
-              <span>المسار الموضوعي</span>
-              <select name="thematicTrack" required>
-                <option value="سياسي">سياسي</option>
-                <option value="اقتصادي">اقتصادي</option>
-                <option value="إعلامي">إعلامي</option>
-                <option value="ثقافي">ثقافي</option>
-                <option value="قنصلي">قنصلي</option>
-              </select>
-            </label>
-            <label class="field-block">
-              <span>يرتبط بطلب تقرير</span>
-              <select name="requestId">
-                <option value="">بدون ربط مباشر</option>
-                ${reportOptions.map((request) => `<option value="${request.id}">${request.title}</option>`).join("")}
-              </select>
-            </label>
-            <label class="field-block">
-              <span>تاريخ النشاط</span>
-              <input type="date" name="activityDate" required>
-            </label>
-            <label class="field-block">
-              <span>اسم المرفق</span>
-              <input name="attachmentName" placeholder="example-report.pdf" required>
-            </label>
-            <label class="field-block full">
-              <span>الأهداف قبل الفعالية</span>
-              <textarea name="beforeGoals" required></textarea>
-            </label>
-            <label class="field-block full">
-              <span>المتوقع قبل الفعالية</span>
-              <textarea name="beforeExpected" required></textarea>
-            </label>
-            <label class="field-block full">
-              <span>النتائج بعد الفعالية</span>
-              <textarea name="afterResults" required></textarea>
-            </label>
-            <label class="field-block full">
-              <span>التوصيات بعد الفعالية</span>
-              <textarea name="afterRecommendations" required></textarea>
-            </label>
-            <label class="field-block full">
-              <span>ملخص يظهر في لوحة التحكم</span>
-              <textarea name="summary" required></textarea>
-            </label>
-            <div class="form-actions full">
-              <button class="primary-btn" type="submit">رفع التقرير</button>
+            <div class="field full">
+              <button class="btn primary" type="submit">دخول إلى النظام</button>
             </div>
           </form>
+          ${state.loginError ? `<div class="error-box">${state.loginError}</div>` : ""}
         </div>
-        <div class="detail-card">
-          <div class="section-title">تقارير البعثة الحالية</div>
-          ${renderReportList(visibleReports, user)}
-        </div>
-      </div>
-    `;
-
-    detailPanel.innerHTML = selected ? renderReportDetails(selected) : `
-      <div class="detail-card">
-        <div class="detail-title">كيف تعمل التجربة؟</div>
-        <p class="record-desc">بعد رفع التقرير من هذا الحساب سيتم حفظه في بيئة العرض، ثم سيظهر مباشرة في حساب مدير النظام وإدارة التخطيط والدائرة المعنية.</p>
-      </div>
-    `;
-
-    document.getElementById("report-form").addEventListener("submit", handleReportSubmit);
-    bindReportCards();
-    return;
-  }
-
-  mainContent.innerHTML = `
-    <div class="detail-card">
-      <div class="section-title">سجل التقارير الظاهر للحساب الحالي</div>
-      ${renderReportList(visibleReports, user)}
+      </section>
     </div>
   `;
-
-  detailPanel.innerHTML = selected ? renderReportDetails(selected) : `<div class="empty-state">لا توجد تقارير ظاهرة لهذا الحساب.</div>`;
-  bindReportCards();
 }
 
-function renderRequests() {
-  const user = getCurrentUser();
-  const requests = getVisibleRequests(user);
-  const filteredRequests = appState.showPendingOnly
-    ? requests.filter((request) => getCompletionSummary(request).pending > 0)
-    : requests;
-
-  const requestCards = filteredRequests.map((request) => {
-    const summary = getCompletionSummary(request);
-    return `
-      <div class="detail-card">
-        <div class="record-top">
-          <div>
-            <div class="detail-title">${request.title}</div>
-            <div class="table-subtext">${request.kind} | ${request.year} | الموعد ${formatDate(request.dueDate)}</div>
+function renderSystem(user) {
+  const labels = {
+    dashboard: "لوحة القيادة",
+    reports: "التقارير",
+    requests: "طلبات التقارير",
+    management: "إدارة الكيانات"
+  };
+  return `
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="sidebar-top">
+          <div class="badge">YD</div>
+          <div class="user-box">
+            <strong>${user.name}</strong>
+            <p>${roleLabel(user)}</p>
           </div>
-          <span class="tag ${request.status === "نشط" ? "warning" : "success"}">${request.status}</span>
+          <div class="menu-list">
+            ${visibleViews(user).map((view) => `<button class="nav-item ${state.activeView === view ? "active" : ""}" data-view="${view}">${labels[view]}</button>`).join("")}
+          </div>
         </div>
-        <div class="progress"><span style="width:${summary.percent}%"></span></div>
-        <div class="record-desc">أنجزت ${summary.done} بعثة ولم تنجز ${summary.pending} بعثة من إجمالي ${summary.total}.</div>
-        <div class="table-wrap request-table">
-          <table>
-            <thead>
-              <tr>
-                <th>البعثة</th>
-                <th>الحالة</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${request.targetMissions.map((mission) => `
-                <tr>
-                  <td>${mission}</td>
-                  <td><span class="tag ${request.completedMissions.includes(mission) ? "success" : "warning"}">${request.completedMissions.includes(mission) ? "منجز" : "لم ينجز"}</span></td>
-                </tr>
-              `).join("")}
-            </tbody>
-          </table>
+        <div class="sidebar-footer">
+          <button class="btn secondary" id="logout-btn">تسجيل الخروج</button>
+          <button class="btn secondary" id="reset-btn">إعادة ضبط التجربة</button>
+        </div>
+      </aside>
+      <main class="main">
+        ${renderPage(user)}
+      </main>
+    </div>
+  `;
+}
+
+function renderPage(user) {
+  if (state.activeView === "dashboard") return renderDashboard(user);
+  if (state.activeView === "reports") return renderReportsPage(user);
+  if (state.activeView === "requests") return renderRequestsPage(user);
+  if (state.activeView === "management") return renderManagementPage(user);
+  return renderDashboard(user);
+}
+
+function renderDashboard(user) {
+  const reports = getVisibleReports(user);
+  const requests = getVisibleRequests(user);
+  const activeRequests = requests.filter((item) => item.status === "نشط");
+  const pending = activeRequests.reduce((sum, request) => sum + getCompletion(request).pending, 0);
+  return `
+    <section class="panel">
+      <div class="topbar">
+        <div>
+          <span class="tag info">لوحة حسب الدور</span>
+          <h1 class="page-title">لوحة القيادة</h1>
+          <p class="muted">تظهر هنا المؤشرات الأساسية المناسبة لحساب ${user.name}.</p>
         </div>
       </div>
-    `;
-  }).join("");
+    </section>
+    <section class="hero-strip">
+      <div class="panel">
+        <span class="tag info">موجز</span>
+        <h2 class="section-title">بيئة دخول وصلاحيات متدرجة</h2>
+        <p class="muted">مدير النظام يمكنه إنشاء دوائر وبعثات مع بيانات دخول خاصة بها، ثم تظهر لكل جهة الشاشات المسموح بها فقط.</p>
+      </div>
+      <div class="stats-grid">
+        <div class="metric-card"><span>التقارير الظاهرة</span><strong>${reports.length}</strong></div>
+        <div class="metric-card"><span>الطلبات النشطة</span><strong>${activeRequests.length}</strong></div>
+        <div class="metric-card"><span>البعثات غير المنجزة</span><strong>${pending}</strong></div>
+      </div>
+    </section>
+    <section class="metrics-grid">
+      ${activeRequests.map((request) => {
+        const c = getCompletion(request);
+        return `
+          <article class="metric-card">
+            <span>${request.title}</span>
+            <strong>${c.percent}%</strong>
+            <div class="tag ${c.pending ? "warning" : "success"}">${c.done}/${c.total}</div>
+          </article>
+        `;
+      }).join("") || `<div class="panel empty">لا توجد طلبات نشطة في نطاق هذا الحساب.</div>`}
+    </section>
+  `;
+}
 
-  const creationForm = (user.type === "planning" || user.type === "admin") ? `
+function renderReportsPage(user) {
+  const reports = getVisibleReports(user);
+  const selected = reports.find((item) => item.id === state.selectedReportId) || reports[0] || null;
+  return `
+    <section class="panel">
+      <div class="topbar">
+        <div>
+          <span class="tag info">وحدة التقارير</span>
+          <h1 class="page-title">التقارير</h1>
+          <p class="muted">${user.role === "mission" ? "يمكنك رفع تقرير نشاط من حساب البعثة." : "يمكنك مراجعة التقارير التي تقع ضمن صلاحياتك."}</p>
+        </div>
+      </div>
+    </section>
+    <section class="content-grid">
+      <div class="panel">
+        ${user.role === "mission" ? renderMissionReportForm(user) : ""}
+        <div class="detail-card">
+          <div class="section-title">سجل التقارير</div>
+          <div class="record-list">
+            ${reports.map((report) => `
+              <article class="record-card ${selected && selected.id === report.id ? "selected" : ""}" data-report-id="${report.id}">
+                <div class="record-top">
+                  <div>
+                    <strong class="record-title">${report.title}</strong>
+                    <div class="record-meta">${getMissionName(report.missionId)} | ${report.type}</div>
+                  </div>
+                  <span class="tag ${stageTone(report.workflowStage)}">${report.workflowStage}</span>
+                </div>
+                <p class="record-desc">${report.summary}</p>
+              </article>
+            `).join("") || `<div class="empty">لا توجد تقارير بعد.</div>`}
+          </div>
+        </div>
+      </div>
+      <div class="panel">
+        ${selected ? renderReportDetails(selected, user) : `<div class="empty">اختر تقريرًا لعرض التفاصيل.</div>`}
+      </div>
+    </section>
+  `;
+}
+
+function renderMissionReportForm(user) {
+  const requests = getVisibleRequests(user).filter((item) => item.status === "نشط");
+  return `
     <div class="detail-card">
-      <div class="section-title">إصدار طلب تقرير جديد</div>
-      <form id="request-form" class="form-grid">
-        <label class="field-block">
-          <span>عنوان الطلب</span>
-          <input name="title" required placeholder="مثال: طلب التقارير السنوية 2026">
+      <div class="section-title">رفع تقرير نشاط</div>
+      <form id="report-form" class="form-grid">
+        <label class="field">
+          <span>عنوان التقرير</span>
+          <input name="title" required>
         </label>
-        <label class="field-block">
-          <span>نوع الطلب</span>
-          <select name="kind" required>
-            <option value="سنوي">سنوي</option>
-            <option value="نصف سنوي">نصف سنوي</option>
+        <label class="field">
+          <span>نوع التقرير</span>
+          <select name="type">
+            <option>نشاط</option>
+            <option>نصف سنوي</option>
+            <option>سنوي</option>
+            <option>موضوعي</option>
           </select>
         </label>
-        <label class="field-block">
-          <span>السنة</span>
-          <input name="year" required placeholder="2026">
+        <label class="field">
+          <span>المسار الموضوعي</span>
+          <select name="thematicTrack">
+            <option>سياسي</option>
+            <option>اقتصادي</option>
+            <option>إعلامي</option>
+            <option>ثقافي</option>
+            <option>قنصلي</option>
+          </select>
         </label>
-        <label class="field-block">
-          <span>الموعد النهائي</span>
-          <input type="date" name="dueDate" required>
+        <label class="field">
+          <span>الطلب المرتبط</span>
+          <select name="requestId">
+            <option value="">بدون ربط</option>
+            ${requests.map((request) => `<option value="${request.id}">${request.title}</option>`).join("")}
+          </select>
         </label>
-        <label class="field-block full">
-          <span>البعثات المستهدفة</span>
-          <div class="checkbox-grid">
-            ${missions.map((mission) => `
-              <label class="check-item">
-                <input type="checkbox" name="targetMission" value="${mission}" checked>
-                <span>${mission}</span>
-              </label>
-            `).join("")}
-          </div>
+        <label class="field">
+          <span>تاريخ النشاط</span>
+          <input type="date" name="activityDate" required>
         </label>
-        <div class="form-actions full">
-          <button class="primary-btn" type="submit">إصدار الطلب</button>
+        <label class="field">
+          <span>اسم المرفق</span>
+          <input name="attachmentName" required>
+        </label>
+        <label class="field full">
+          <span>الأهداف قبل الفعالية</span>
+          <textarea name="beforeGoals" required></textarea>
+        </label>
+        <label class="field full">
+          <span>المتوقع قبل الفعالية</span>
+          <textarea name="beforeExpected" required></textarea>
+        </label>
+        <label class="field full">
+          <span>النتائج بعد الفعالية</span>
+          <textarea name="afterResults" required></textarea>
+        </label>
+        <label class="field full">
+          <span>التوصيات بعد الفعالية</span>
+          <textarea name="afterRecommendations" required></textarea>
+        </label>
+        <label class="field full">
+          <span>الملخص التنفيذي</span>
+          <textarea name="summary" required></textarea>
+        </label>
+        <div class="field full">
+          <button class="btn primary" type="submit">رفع التقرير</button>
         </div>
       </form>
     </div>
-  ` : "";
-
-  mainContent.innerHTML = `
-    ${creationForm}
-    <div class="detail-card">
-      <div class="section-title">سجل الطلبات</div>
-      <div class="detail-list">${requestCards || '<div class="empty-state">لا توجد طلبات ظاهرة للحساب الحالي.</div>'}</div>
-    </div>
-  `;
-
-  detailPanel.innerHTML = `
-    <div class="detail-card">
-      <div class="detail-title">آلية المتابعة</div>
-      <p class="record-desc">بمجرد ربط التقرير بطلب سنوي أو نصف سنوي، تُحتسب البعثة ضمن الجهات المنجزة لذلك الطلب تلقائيًا.</p>
-    </div>
-  `;
-
-  const requestForm = document.getElementById("request-form");
-  if (requestForm) {
-    requestForm.addEventListener("submit", handleRequestSubmit);
-  }
-}
-
-function renderReportList(reports, user) {
-  const filteredReports = appState.showPendingOnly
-    ? reports.filter((report) => report.workflowStage !== "مغلق ومؤرشف")
-    : reports;
-
-  if (!filteredReports.length) {
-    return `<div class="empty-state">لا توجد تقارير مطابقة للحساب أو الفلتر الحالي.</div>`;
-  }
-
-  return `
-    <div class="record-list">
-      ${filteredReports.map((report) => `
-        <article class="record-card ${appState.selectedReportId === report.id ? "is-selected" : ""}" data-report-id="${report.id}">
-          <div class="record-top">
-            <div>
-              <div class="record-title">${report.title}</div>
-              <div class="record-meta">${report.mission} | ${report.thematicTrack}</div>
-            </div>
-            <span class="tag ${getStageTone(report.workflowStage)}">${report.workflowStage}</span>
-          </div>
-          <p class="record-desc">${report.summary}</p>
-          <div class="record-bottom">
-            <span class="tag info">${report.createdAt}</span>
-            <span class="table-subtext">${user.type === "mission" ? "حالة الظهور: ظاهر للإدارات المختصة" : report.author}</span>
-          </div>
-        </article>
-      `).join("")}
-    </div>
   `;
 }
 
-function renderReportDetails(report) {
-  const relatedRequest = appState.reportRequests.find((request) => request.id === report.requestId);
-  const actions = getAllowedActions(report);
-  const history = (report.workflowHistory || []).map((entry) => `
-    <div class="timeline-entry">
-      <strong>${entry.action}</strong>
-      <span>${entry.actor}</span>
-      <span>${entry.stage}</span>
-      <span>${entry.at}</span>
-    </div>
-  `).join("");
+function renderReportDetails(report, user) {
+  const request = state.reportRequests.find((item) => item.id === report.requestId);
+  const actions = getAllowedReportActions(report, user);
   return `
     <div class="detail-list">
       <div class="detail-card">
-        <div class="detail-title">${report.title}</div>
-        <div class="detail-row"><span>البعثة</span><span>${report.mission}</span></div>
-        <div class="detail-row"><span>نوع التقرير</span><span>${report.reportType}</span></div>
-        <div class="detail-row"><span>المسار</span><span>${report.thematicTrack}</span></div>
-        <div class="detail-row"><span>المرفق</span><span>${report.attachmentName}</span></div>
-        <div class="detail-row"><span>مرحلة الاعتماد</span><span class="tag ${getStageTone(report.workflowStage)}">${report.workflowStage}</span></div>
+        <div class="section-title">${report.title}</div>
+        <div class="detail-row"><span>البعثة</span><span>${getMissionName(report.missionId)}</span></div>
+        <div class="detail-row"><span>الدائرة</span><span>${getDepartmentName(report.departmentId)}</span></div>
+        <div class="detail-row"><span>مرحلة الاعتماد</span><span class="tag ${stageTone(report.workflowStage)}">${report.workflowStage}</span></div>
+        <div class="detail-row"><span>الطلب المرتبط</span><span>${request ? request.title : "لا يوجد"}</span></div>
       </div>
       <div class="detail-card">
-        <div class="detail-title">قبل الفعالية</div>
-        <p class="record-desc"><strong>الأهداف:</strong> ${report.beforeGoals}</p>
-        <p class="record-desc"><strong>المتوقع:</strong> ${report.beforeExpected}</p>
+        <div class="section-title">قبل الفعالية</div>
+        <p class="detail-note"><strong>الأهداف:</strong> ${report.beforeGoals}</p>
+        <p class="detail-note"><strong>المتوقع:</strong> ${report.beforeExpected}</p>
       </div>
       <div class="detail-card">
-        <div class="detail-title">بعد الفعالية</div>
-        <p class="record-desc"><strong>النتائج:</strong> ${report.afterResults}</p>
-        <p class="record-desc"><strong>التوصيات:</strong> ${report.afterRecommendations}</p>
+        <div class="section-title">بعد الفعالية</div>
+        <p class="detail-note"><strong>النتائج:</strong> ${report.afterResults}</p>
+        <p class="detail-note"><strong>التوصيات:</strong> ${report.afterRecommendations}</p>
       </div>
       <div class="detail-card">
-        <div class="detail-title">الربط التشغيلي</div>
-        <p class="record-desc">الجهة الراسلة: ${report.author}</p>
-        <p class="record-desc">يرتبط بطلب: ${relatedRequest ? relatedRequest.title : "لا يوجد"}</p>
-      </div>
-      <div class="detail-card">
-        <div class="detail-title">مسار الاعتماد</div>
-        <div class="timeline-list">${history || '<div class="empty-state">لا يوجد سجل إجراءات بعد.</div>'}</div>
+        <div class="section-title">سجل الاعتماد</div>
+        <div class="detail-list">
+          ${report.workflowHistory.map((item) => `
+            <div class="timeline-entry">
+              <strong>${item.action}</strong>
+              <span>${item.actor}</span>
+              <span>${item.stage}</span>
+              <span>${item.at}</span>
+            </div>
+          `).join("")}
+        </div>
       </div>
       ${actions.length ? `
         <div class="detail-card">
-          <div class="detail-title">إجراءات متاحة للحساب الحالي</div>
-          <div class="action-row">
-            ${actions.map((action) => `<button class="primary-btn workflow-action" data-report-id="${report.id}" data-action="${action.key}" data-stage="${action.nextStage}">${action.label}</button>`).join("")}
+          <div class="section-title">إجراءات متاحة</div>
+          <div class="inline-actions">
+            ${actions.map((action) => `<button class="btn primary report-action" data-report-id="${report.id}" data-stage="${action.nextStage}" data-action="${action.key}">${action.label}</button>`).join("")}
           </div>
         </div>
       ` : ""}
@@ -711,249 +502,380 @@ function renderReportDetails(report) {
   `;
 }
 
-function handleReportSubmit(event) {
-  event.preventDefault();
-  const user = getCurrentUser();
-  const formData = new FormData(event.currentTarget);
-  const requestId = formData.get("requestId");
-
-  const report = {
-    id: `report-${Date.now()}`,
-    mission: user.mission,
-    title: formData.get("title"),
-    reportType: formData.get("reportType"),
-    thematicTrack: formData.get("thematicTrack"),
-    activityDate: formData.get("activityDate"),
-    requestId,
-    author: user.name,
-    department: user.department,
-    status: "مرفوع من البعثة",
-    workflowStage: "مرفوع من البعثة",
-    visibility: ["planning", "admin", "department"],
-    workflowHistory: [],
-    summary: formData.get("summary"),
-    beforeGoals: formData.get("beforeGoals"),
-    beforeExpected: formData.get("beforeExpected"),
-    afterResults: formData.get("afterResults"),
-    afterRecommendations: formData.get("afterRecommendations"),
-    attachmentName: formData.get("attachmentName"),
-    createdAt: new Date().toLocaleString("ar-YE")
-  };
-
-  addWorkflowEntry(report, user.name, "رفع التقرير", "مرفوع من البعثة");
-
-  appState.reports.unshift(report);
-  appState.selectedReportId = report.id;
-
-  if (requestId) {
-    const request = appState.reportRequests.find((item) => item.id === requestId);
-    if (request && !request.completedMissions.includes(user.mission)) {
-      request.completedMissions.push(user.mission);
-    }
-  }
-
-  appState.alerts.unshift({
-    id: `alert-${Date.now()}`,
-    level: "success",
-    title: "تم رفع تقرير جديد",
-    text: `رفعت ${user.mission} التقرير "${report.title}" وأصبح ظاهرًا لإدارة التخطيط ومدير النظام والدائرة المعنية.`
-  });
-
-  saveState();
-  render();
-}
-
-function handleRequestSubmit(event) {
-  event.preventDefault();
-  const user = getCurrentUser();
-  const formData = new FormData(event.currentTarget);
-  const selectedMissions = formData.getAll("targetMission");
-
-  if (!selectedMissions.length) return;
-
-  const request = {
-    id: `req-${Date.now()}`,
-    title: formData.get("title"),
-    kind: formData.get("kind"),
-    year: formData.get("year"),
-    createdBy: user.name,
-    dueDate: formData.get("dueDate"),
-    targetMissions: selectedMissions,
-    completedMissions: [],
-    status: "نشط"
-  };
-
-  appState.reportRequests.unshift(request);
-  appState.alerts.unshift({
-    id: `alert-${Date.now()}`,
-    level: "info",
-    title: "تم إصدار طلب تقرير",
-    text: `أصدرت ${user.name} طلب "${request.title}" إلى ${selectedMissions.length} بعثات.`
-  });
-
-  saveState();
-  render();
-}
-
-function roleCapabilities(user) {
-  if (user.type === "mission") {
-    return [
-      "رفع تقرير نشاط نموذجي وربطه بطلب سنوي أو نصف سنوي إن وجد.",
-      "رؤية الطلبات الموجهة للبعثة وحالة الإنجاز الخاصة بها.",
-      "متابعة التقارير التي رفعتها البعثة نفسها فقط."
-    ];
-  }
-  if (user.type === "planning") {
-    return [
-      "إصدار طلبات تقارير سنوية أو نصف سنوية لجميع البعثات أو لبعثات محددة.",
-      "متابعة عدد البعثات المنجزة وغير المنجزة لكل طلب.",
-      "استعراض جميع التقارير الواردة وربطها بالطلبات."
-    ];
-  }
-  if (user.type === "admin") {
-    return [
-      "رؤية شاملة لكل التقارير والطلبات عبر النظام.",
-      "التأكد من تدفق البيانات بين حساب البعثة والجهات المركزية.",
-      "مراقبة سلامة المسار التشغيلي للوحدة."
-    ];
-  }
-  return [
-    "استعراض التقارير الواردة من البعثات التابعة للدائرة.",
-    "مراجعة الطلبات المرتبطة بالنطاق الجغرافي للدائرة.",
-    "متابعة البعثات التي لم تنجز التقارير المطلوبة."
-  ];
-}
-
-function isMissionPendingOnRequest(mission, requestId) {
-  const request = appState.reportRequests.find((item) => item.id === requestId);
-  if (!request) return false;
-  return !request.completedMissions.includes(mission);
-}
-
-function renderAlerts() {
-  const alerts = appState.alerts.slice(0, 4);
-  alertsPanel.innerHTML = `
-    <div class="alert-list">
-      ${alerts.map((alert) => `
-        <div class="alert-item">
-          <div class="record-top">
-            <div class="detail-title">${alert.title}</div>
-            <span class="tag ${alert.level === "success" ? "success" : alert.level}">${translateLevel(alert.level)}</span>
-          </div>
-          <div class="record-desc">${alert.text}</div>
+function renderRequestsPage(user) {
+  const requests = getVisibleRequests(user);
+  return `
+    <section class="panel">
+      <div class="topbar">
+        <div>
+          <span class="tag info">متابعة الإنجاز</span>
+          <h1 class="page-title">طلبات التقارير</h1>
+          <p class="muted">${user.role === "planning" || user.role === "admin" ? "يمكنك إصدار طلبات جديدة ومتابعة الإنجاز." : "يمكنك متابعة الطلبات الواقعة ضمن نطاقك."}</p>
         </div>
-      `).join("")}
+      </div>
+    </section>
+    <section class="two-col">
+      ${(user.role === "planning" || user.role === "admin") ? renderRequestForm() : ""}
+      <div class="panel">
+        <div class="section-title">سجل الطلبات</div>
+        <div class="detail-list">
+          ${requests.map((request) => {
+            const c = getCompletion(request);
+            return `
+              <div class="detail-card">
+                <div class="record-top">
+                  <div>
+                    <strong>${request.title}</strong>
+                    <div class="record-meta">${request.type} | الموعد ${formatDate(request.dueDate)}</div>
+                  </div>
+                  <span class="tag ${request.status === "نشط" ? "warning" : "success"}">${request.status}</span>
+                </div>
+                <div class="progress"><span style="width:${c.percent}%"></span></div>
+                <p class="record-desc">أنجزت ${c.done} بعثة ولم تنجز ${c.pending} بعثة من أصل ${c.total}.</p>
+                <div class="detail-list">
+                  ${request.targetMissionIds.map((missionId) => `
+                    <div class="detail-row">
+                      <span>${getMissionName(missionId)}</span>
+                      <span class="tag ${request.completedMissionIds.includes(missionId) ? "success" : "warning"}">${request.completedMissionIds.includes(missionId) ? "منجز" : "لم ينجز"}</span>
+                    </div>
+                  `).join("")}
+                </div>
+              </div>
+            `;
+          }).join("") || `<div class="empty">لا توجد طلبات ظاهرة لهذا الحساب.</div>`}
+        </div>
+      </div>
+    </section>
+  `;
+}
+
+function renderRequestForm() {
+  return `
+    <div class="panel">
+      <div class="section-title">إصدار طلب تقرير جديد</div>
+      <form id="request-form" class="form-grid">
+        <label class="field">
+          <span>عنوان الطلب</span>
+          <input name="title" required>
+        </label>
+        <label class="field">
+          <span>نوع الطلب</span>
+          <select name="type">
+            <option>سنوي</option>
+            <option>نصف سنوي</option>
+          </select>
+        </label>
+        <label class="field full">
+          <span>الموعد النهائي</span>
+          <input type="date" name="dueDate" required>
+        </label>
+        <label class="field full">
+          <span>البعثات المستهدفة</span>
+          <div class="checkbox-grid">
+            ${state.missions.map((mission) => `
+              <label class="check-item">
+                <input type="checkbox" name="missionId" value="${mission.id}" checked>
+                <span>${mission.name} - ${getDepartmentName(mission.departmentId)}</span>
+              </label>
+            `).join("")}
+          </div>
+        </label>
+        <div class="field full">
+          <button class="btn primary" type="submit">إصدار الطلب</button>
+        </div>
+      </form>
     </div>
   `;
 }
 
-function translateLevel(level) {
-  if (level === "warning") return "تنبيه";
-  if (level === "danger") return "حرج";
-  if (level === "success") return "نجاح";
-  return "معلومة";
+function renderManagementPage(user) {
+  if (user.role !== "admin") {
+    return `<section class="panel empty">هذه الشاشة متاحة فقط لمدير النظام.</section>`;
+  }
+  return `
+    <section class="panel">
+      <div class="topbar">
+        <div>
+          <span class="tag info">إدارة الكيانات</span>
+          <h1 class="page-title">الدوائر والبعثات</h1>
+          <p class="muted">يمكن لمدير النظام إضافة دائرة جديدة أو بعثة جديدة، مع التأكد من تبعية كل بعثة لدائرة محددة وإنشاء بيانات دخولها.</p>
+        </div>
+      </div>
+    </section>
+    <section class="two-col">
+      <div class="panel">
+        <div class="section-title">إضافة دائرة</div>
+        <form id="department-form" class="form-grid">
+          <label class="field">
+            <span>اسم الدائرة</span>
+            <input name="name" required>
+          </label>
+          <label class="field">
+            <span>اسم المستخدم</span>
+            <input name="username" required>
+          </label>
+          <label class="field full">
+            <span>كلمة المرور</span>
+            <input name="password" required>
+          </label>
+          <div class="field full">
+            <button class="btn primary" type="submit">إضافة الدائرة</button>
+          </div>
+        </form>
+      </div>
+      <div class="panel">
+        <div class="section-title">إضافة بعثة</div>
+        <form id="mission-form" class="form-grid">
+          <label class="field">
+            <span>اسم البعثة</span>
+            <input name="name" required>
+          </label>
+          <label class="field">
+            <span>الدائرة التابعة</span>
+            <select name="departmentId" required>
+              ${state.departments.map((department) => `<option value="${department.id}">${department.name}</option>`).join("")}
+            </select>
+          </label>
+          <label class="field">
+            <span>اسم المستخدم</span>
+            <input name="username" required>
+          </label>
+          <label class="field">
+            <span>كلمة المرور</span>
+            <input name="password" required>
+          </label>
+          <div class="field full">
+            <button class="btn primary" type="submit">إضافة البعثة</button>
+          </div>
+        </form>
+      </div>
+    </section>
+    <section class="two-col">
+      <div class="panel">
+        <div class="section-title">الدوائر الحالية</div>
+        <div class="detail-list">
+          ${state.departments.map((department) => `
+            <div class="detail-card">
+              <strong>${department.name}</strong>
+              <div class="detail-row"><span>اسم المستخدم</span><span>${department.username}</span></div>
+              <div class="detail-row"><span>عدد البعثات التابعة</span><span>${state.missions.filter((mission) => mission.departmentId === department.id).length}</span></div>
+            </div>
+          `).join("")}
+        </div>
+      </div>
+      <div class="panel">
+        <div class="section-title">البعثات الحالية</div>
+        <div class="detail-list">
+          ${state.missions.map((mission) => `
+            <div class="detail-card">
+              <strong>${mission.name}</strong>
+              <div class="detail-row"><span>الدائرة التابعة</span><span>${getDepartmentName(mission.departmentId)}</span></div>
+              <div class="detail-row"><span>اسم المستخدم</span><span>${mission.username}</span></div>
+            </div>
+          `).join("")}
+        </div>
+      </div>
+    </section>
+  `;
 }
 
-function bindReportCards() {
+function roleLabel(user) {
+  if (user.role === "admin") return "مدير النظام";
+  if (user.role === "planning") return "إدارة التخطيط";
+  if (user.role === "department") return `مدير دائرة - ${getDepartmentName(user.departmentId)}`;
+  return `بعثة - ${getMissionName(user.missionId)}`;
+}
+
+function bindEvents() {
+  const loginForm = document.getElementById("login-form");
+  if (loginForm) loginForm.addEventListener("submit", handleLogin);
+
+  document.querySelectorAll("[data-view]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.activeView = button.dataset.view;
+      saveState();
+      renderApp();
+    });
+  });
+
+  const logoutBtn = document.getElementById("logout-btn");
+  if (logoutBtn) logoutBtn.addEventListener("click", () => {
+    state.sessionUserId = null;
+    state.activeView = "dashboard";
+    saveState();
+    renderApp();
+  });
+
+  const resetBtn = document.getElementById("reset-btn");
+  if (resetBtn) resetBtn.addEventListener("click", resetState);
+
+  const reportForm = document.getElementById("report-form");
+  if (reportForm) reportForm.addEventListener("submit", handleReportSubmit);
+
+  const requestForm = document.getElementById("request-form");
+  if (requestForm) requestForm.addEventListener("submit", handleRequestSubmit);
+
+  const departmentForm = document.getElementById("department-form");
+  if (departmentForm) departmentForm.addEventListener("submit", handleDepartmentSubmit);
+
+  const missionForm = document.getElementById("mission-form");
+  if (missionForm) missionForm.addEventListener("submit", handleMissionSubmit);
+
   document.querySelectorAll("[data-report-id]").forEach((card) => {
     card.addEventListener("click", () => {
-      appState.selectedReportId = card.getAttribute("data-report-id");
+      state.selectedReportId = card.dataset.reportId;
       saveState();
-      render();
+      renderApp();
     });
   });
 
-  document.querySelectorAll(".workflow-action").forEach((button) => {
+  document.querySelectorAll(".report-action").forEach((button) => {
     button.addEventListener("click", () => {
-      updateReportWorkflow(
-        button.getAttribute("data-report-id"),
-        button.getAttribute("data-action"),
-        button.getAttribute("data-stage")
-      );
+      handleReportAction(button.dataset.reportId, button.dataset.action, button.dataset.stage);
     });
   });
 }
 
-function updateReportWorkflow(reportId, actionKey, nextStage) {
-  const report = appState.reports.find((item) => item.id === reportId);
-  const user = getCurrentUser();
-  if (!report) return;
+function handleLogin(event) {
+  event.preventDefault();
+  const form = new FormData(event.currentTarget);
+  const username = String(form.get("username")).trim();
+  const password = String(form.get("password")).trim();
+  const user = getAllUsers().find((item) => item.username === username && item.password === password);
+  if (!user) {
+    state.loginError = "بيانات الدخول غير صحيحة.";
+    saveState();
+    renderApp();
+    return;
+  }
+  state.loginError = "";
+  state.sessionUserId = user.id;
+  state.activeView = "dashboard";
+  saveState();
+  renderApp();
+}
 
-  report.workflowStage = nextStage;
-  report.status = nextStage;
+function handleReportSubmit(event) {
+  event.preventDefault();
+  const user = getSessionUser();
+  const form = new FormData(event.currentTarget);
+  const report = {
+    id: `report-${Date.now()}`,
+    missionId: user.missionId,
+    departmentId: user.departmentId,
+    title: String(form.get("title")),
+    type: String(form.get("type")),
+    thematicTrack: String(form.get("thematicTrack")),
+    requestId: String(form.get("requestId")) || "",
+    activityDate: String(form.get("activityDate")),
+    summary: String(form.get("summary")),
+    beforeGoals: String(form.get("beforeGoals")),
+    beforeExpected: String(form.get("beforeExpected")),
+    afterResults: String(form.get("afterResults")),
+    afterRecommendations: String(form.get("afterRecommendations")),
+    attachmentName: String(form.get("attachmentName")),
+    workflowStage: "مرفوع من البعثة",
+    createdAt: new Date().toLocaleString("ar-YE"),
+    workflowHistory: []
+  };
+  addWorkflowEntry(report, user.name, "رفع التقرير", "مرفوع من البعثة");
+  state.reports.unshift(report);
+  state.selectedReportId = report.id;
+  if (report.requestId) {
+    const request = state.reportRequests.find((item) => item.id === report.requestId);
+    if (request && !request.completedMissionIds.includes(report.missionId)) {
+      request.completedMissionIds.push(report.missionId);
+    }
+  }
+  addAlert("success", "تم رفع تقرير جديد", `رفعت ${user.name} التقرير "${report.title}" وأصبح مرئيًا للجهات المخولة.`);
+  saveState();
+  renderApp();
+}
 
-  const actionLabels = {
+function handleRequestSubmit(event) {
+  event.preventDefault();
+  const user = getSessionUser();
+  const form = new FormData(event.currentTarget);
+  const targetMissionIds = form.getAll("missionId");
+  if (!targetMissionIds.length) return;
+  state.reportRequests.unshift({
+    id: `request-${Date.now()}`,
+    title: String(form.get("title")),
+    type: String(form.get("type")),
+    createdBy: user.name,
+    dueDate: String(form.get("dueDate")),
+    targetMissionIds,
+    completedMissionIds: [],
+    status: "نشط"
+  });
+  addAlert("info", "تم إصدار طلب تقرير", `أصدرت ${user.name} طلب تقرير جديد إلى ${targetMissionIds.length} بعثات.`);
+  saveState();
+  renderApp();
+}
+
+function handleDepartmentSubmit(event) {
+  event.preventDefault();
+  const form = new FormData(event.currentTarget);
+  const username = String(form.get("username")).trim();
+  if (getAllUsers().some((user) => user.username === username)) {
+    addAlert("danger", "تعذر إضافة الدائرة", "اسم المستخدم مستخدم بالفعل.");
+    saveState();
+    renderApp();
+    return;
+  }
+  state.departments.push({
+    id: `dept-${Date.now()}`,
+    name: String(form.get("name")),
+    username,
+    password: String(form.get("password"))
+  });
+  addAlert("success", "تمت إضافة دائرة", `أضيفت دائرة جديدة مع حساب دخول خاص بها: ${username}`);
+  saveState();
+  renderApp();
+}
+
+function handleMissionSubmit(event) {
+  event.preventDefault();
+  const form = new FormData(event.currentTarget);
+  const username = String(form.get("username")).trim();
+  if (getAllUsers().some((user) => user.username === username)) {
+    addAlert("danger", "تعذر إضافة البعثة", "اسم المستخدم مستخدم بالفعل.");
+    saveState();
+    renderApp();
+    return;
+  }
+  state.missions.push({
+    id: `mission-${Date.now()}`,
+    name: String(form.get("name")),
+    departmentId: String(form.get("departmentId")),
+    username,
+    password: String(form.get("password"))
+  });
+  addAlert("success", "تمت إضافة بعثة", "أضيفت بعثة جديدة وربطت بالدائرة المختارة مع حساب دخول خاص.");
+  saveState();
+  renderApp();
+}
+
+function handleReportAction(reportId, actionKey, nextStage) {
+  const report = state.reports.find((item) => item.id === reportId);
+  const user = getSessionUser();
+  if (!report || !user) return;
+  const labels = {
     review: "بدء مراجعة الدائرة",
     return: "إعادة التقرير للبعثة",
     approve: "اعتماد التقرير",
     archive: "أرشفة التقرير",
     resubmit: "إعادة رفع التقرير"
   };
-
-  addWorkflowEntry(report, user.name, actionLabels[actionKey] || "تحديث المسار", nextStage);
-
-  appState.alerts.unshift({
-    id: `alert-${Date.now()}`,
-    level: nextStage === "مغلق ومؤرشف" ? "success" : nextStage === "أعيد للبعثة للاستكمال" ? "warning" : "info",
-    title: `تحديث مسار التقرير`,
-    text: `قام ${user.name} بتحديث التقرير "${report.title}" إلى المرحلة: ${nextStage}.`
-  });
-
+  report.workflowStage = nextStage;
+  addWorkflowEntry(report, user.name, labels[actionKey] || "تحديث المسار", nextStage);
+  addAlert(nextStage === "أعيد للبعثة للاستكمال" ? "warning" : "info", "تحديث مسار التقرير", `انتقل التقرير "${report.title}" إلى مرحلة "${nextStage}".`);
   saveState();
-  render();
+  renderApp();
 }
 
 function formatDate(value) {
-  if (!value) return "-";
-  return new Date(value).toLocaleDateString("ar-YE");
+  return value ? new Date(value).toLocaleDateString("ar-YE") : "-";
 }
 
-function bindGlobalEvents() {
-  document.querySelectorAll(".nav-item").forEach((button) => {
-    button.addEventListener("click", () => {
-      appState.activeView = button.dataset.view;
-      saveState();
-      render();
-    });
-  });
-
-  accountSwitcher.addEventListener("change", (event) => {
-    appState.currentUserId = event.target.value;
-    appState.selectedReportId = null;
-    saveState();
-    render();
-  });
-
-  document.getElementById("focus-toggle").addEventListener("click", () => {
-    appState.showPendingOnly = !appState.showPendingOnly;
-    saveState();
-    render();
-  });
-
-  document.getElementById("reset-demo").addEventListener("click", () => {
-    appState = initialData();
-    saveState();
-    render();
-  });
-}
-
-function render() {
-  populateAccountSwitcher();
-  updateUserCard();
-  renderHeader();
-  updateHero();
-  renderMetrics();
-  renderFilters();
-  renderAlerts();
-
-  if (appState.activeView === "dashboard") renderDashboard();
-  if (appState.activeView === "reports") renderReports();
-  if (appState.activeView === "requests") renderRequests();
-
-  document.querySelectorAll(".nav-item").forEach((button) => {
-    button.classList.toggle("active", button.dataset.view === appState.activeView);
-  });
-}
-
-bindGlobalEvents();
-render();
+renderApp();
