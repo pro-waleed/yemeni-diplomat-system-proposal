@@ -80,8 +80,11 @@ const seedState = () => ({
       departmentId: "dept-arabia",
       summary: "مراجعة تقدم الوحدات الأساسية والجاهزية التشغيلية.",
       tasks: [
-        { title: "استكمال نماذج التقارير", assignee: "بعثة الرياض", status: "قيد التنفيذ" },
-        { title: "مراجعة صلاحيات البعثات", assignee: "الدائرة الجغرافية لشبه الجزيرة العربية", status: "منجز" }
+        { id: "task-1", title: "استكمال نماذج التقارير", assignee: "بعثة الرياض", status: "قيد التنفيذ", priority: "عالية" },
+        { id: "task-2", title: "مراجعة صلاحيات البعثات", assignee: "الدائرة الجغرافية لشبه الجزيرة العربية", status: "منجز", priority: "متوسطة" }
+      ],
+      workflowHistory: [
+        { actor: "إدارة التخطيط", action: "تسجيل محضر الاجتماع", at: "2026-03-15 10:00" }
       ]
     }
   ],
@@ -139,7 +142,15 @@ function loadState() {
     workflowHistory: Array.isArray(circular.workflowHistory) ? circular.workflowHistory : [],
     processingLog: Array.isArray(circular.processingLog) ? circular.processingLog : []
   }));
-  parsed.meetings = Array.isArray(parsed.meetings) ? parsed.meetings : seedState().meetings;
+  parsed.meetings = (Array.isArray(parsed.meetings) ? parsed.meetings : seedState().meetings).map((meeting) => ({
+    ...meeting,
+    workflowHistory: Array.isArray(meeting.workflowHistory) ? meeting.workflowHistory : [],
+    tasks: Array.isArray(meeting.tasks) ? meeting.tasks.map((task) => ({
+      ...task,
+      id: task.id || `task-${Math.random().toString(16).slice(2, 8)}`,
+      priority: task.priority || "متوسطة"
+    })) : []
+  }));
   parsed.plans = Array.isArray(parsed.plans) ? parsed.plans : seedState().plans;
   parsed.trainings = Array.isArray(parsed.trainings) ? parsed.trainings : seedState().trainings;
   parsed.auditLog = Array.isArray(parsed.auditLog) ? parsed.auditLog : seedState().auditLog;
@@ -263,6 +274,22 @@ function getVisibleTrainings(user = getSessionUser()) {
   if (user.role === "admin" || user.role === "planning" || user.role === "leadership") return state.trainings;
   if (user.role === "department") return state.trainings;
   return state.trainings.filter((training) => training.audience === "جميع المستخدمين" || training.audience.includes("البعثات"));
+}
+
+function getMeetingActions(meeting, task, user = getSessionUser()) {
+  if (!user || !task) return [];
+  const actions = [];
+  const missionName = user.role === "mission" ? getMissionName(user.missionId) : "";
+  const departmentName = user.role === "department" ? getDepartmentName(user.departmentId) : "";
+  const canUpdateTask = user.role === "admin" || user.role === "planning" || task.assignee === missionName || task.assignee === departmentName;
+  if (canUpdateTask && task.status !== "منجز") {
+    actions.push({ key: "start-task", label: "بدء التنفيذ", nextStatus: "قيد التنفيذ" });
+    actions.push({ key: "complete-task", label: "إنجاز المهمة", nextStatus: "منجز" });
+  }
+  if (canUpdateTask && task.status !== "ملغى") {
+    actions.push({ key: "delay-task", label: "وضع كمُتأخر", nextStatus: "متأخر" });
+  }
+  return actions;
 }
 
 function getCircularCompletion(circular) {
@@ -788,12 +815,73 @@ function renderMeetingsPage(user) {
       </div>
     </section>
     <section class="two-col">
+      ${(user.role === "planning" || user.role === "admin" || user.role === "department") ? `
+        <div class="panel">
+          <div class="section-title">تسجيل اجتماع جديد</div>
+          <form id="meeting-form" class="form-grid">
+            <label class="field">
+              <span>عنوان الاجتماع</span>
+              <input name="title" required>
+            </label>
+            <label class="field">
+              <span>الدائرة المعنية</span>
+              <select name="departmentId" required>
+                ${state.departments.map((department) => `<option value="${department.id}">${department.name}</option>`).join("")}
+              </select>
+            </label>
+            <label class="field full">
+              <span>ملخص المحضر</span>
+              <textarea name="summary" required></textarea>
+            </label>
+            <label class="field">
+              <span>عنوان المهمة الأولى</span>
+              <input name="taskTitle" required>
+            </label>
+            <label class="field">
+              <span>الجهة المكلفة</span>
+              <select name="assignee" required>
+                ${[...state.missions.map((mission) => mission.name), ...state.departments.map((department) => department.name)].map((name) => `<option value="${name}">${name}</option>`).join("")}
+              </select>
+            </label>
+            <label class="field">
+              <span>الأولوية</span>
+              <select name="priority" required>
+                <option>عالية</option>
+                <option>متوسطة</option>
+                <option>منخفضة</option>
+              </select>
+            </label>
+            <div class="field full">
+              <button class="btn primary" type="submit">تسجيل الاجتماع</button>
+            </div>
+          </form>
+        </div>
+      ` : ""}
       ${meetings.map((meeting) => `
         <div class="panel">
           <div class="section-title">${meeting.title}</div>
           <p class="muted">${meeting.summary}</p>
           <div class="detail-list">
-            ${meeting.tasks.map((task) => `<div class="detail-row"><span>${task.title}</span><span class="tag ${task.status === "منجز" ? "success" : "warning"}">${task.assignee} - ${task.status}</span></div>`).join("")}
+            ${meeting.tasks.map((task) => `
+              <div class="detail-card">
+                <div class="record-top">
+                  <div>
+                    <strong>${task.title}</strong>
+                    <div class="record-meta">${task.assignee} | الأولوية ${task.priority}</div>
+                  </div>
+                  <span class="tag ${task.status === "منجز" ? "success" : task.status === "متأخر" ? "danger" : "warning"}">${task.status}</span>
+                </div>
+                ${getMeetingActions(meeting, task, user).length ? `<div class="inline-actions">${getMeetingActions(meeting, task, user).map((action) => `<button class="btn primary meeting-action" data-meeting-id="${meeting.id}" data-task-id="${task.id}" data-status="${action.nextStatus}">${action.label}</button>`).join("")}</div>` : ""}
+              </div>
+            `).join("")}
+            ${(meeting.workflowHistory || []).length ? `
+              <div class="detail-card">
+                <div class="section-title">سجل الاجتماع</div>
+                <div class="detail-list">
+                  ${meeting.workflowHistory.slice(0, 4).map((item) => `<div class="timeline-entry"><strong>${item.action}</strong><span>${item.actor}</span><span>${item.at}</span></div>`).join("")}
+                </div>
+              </div>
+            ` : ""}
           </div>
         </div>
       `).join("") || `<div class="panel empty">لا توجد اجتماعات في نطاق هذا الحساب.</div>`}
@@ -1159,6 +1247,9 @@ function bindEvents() {
   const circularForm = document.getElementById("circular-form");
   if (circularForm) circularForm.addEventListener("submit", handleCircularSubmit);
 
+  const meetingForm = document.getElementById("meeting-form");
+  if (meetingForm) meetingForm.addEventListener("submit", handleMeetingSubmit);
+
   const departmentForm = document.getElementById("department-form");
   if (departmentForm) departmentForm.addEventListener("submit", handleDepartmentSubmit);
 
@@ -1182,6 +1273,12 @@ function bindEvents() {
   document.querySelectorAll(".circular-action").forEach((button) => {
     button.addEventListener("click", () => {
       handleCircularAction(button.dataset.circularId, button.dataset.action);
+    });
+  });
+
+  document.querySelectorAll(".meeting-action").forEach((button) => {
+    button.addEventListener("click", () => {
+      handleMeetingTaskAction(button.dataset.meetingId, button.dataset.taskId, button.dataset.status);
     });
   });
 }
@@ -1299,6 +1396,41 @@ function handleCircularSubmit(event) {
   renderApp();
 }
 
+function handleMeetingSubmit(event) {
+  event.preventDefault();
+  const user = getSessionUser();
+  const form = new FormData(event.currentTarget);
+  const meeting = {
+    id: `meet-${Date.now()}`,
+    title: String(form.get("title")),
+    ownerRole: user.role,
+    departmentId: String(form.get("departmentId")),
+    summary: String(form.get("summary")),
+    tasks: [
+      {
+        id: `task-${Date.now()}`,
+        title: String(form.get("taskTitle")),
+        assignee: String(form.get("assignee")),
+        status: "قيد التنفيذ",
+        priority: String(form.get("priority"))
+      }
+    ],
+    workflowHistory: [
+      {
+        actor: user.name,
+        action: "تسجيل محضر الاجتماع",
+        at: new Date().toLocaleString("ar-YE")
+      }
+    ]
+  };
+
+  state.meetings.unshift(meeting);
+  addAlert("info", "تم تسجيل اجتماع", `سجل ${user.name} الاجتماع "${meeting.title}" مع مهمة تنفيذية أولية.`);
+  logAudit(user.name, "تسجيل اجتماع", meeting.title, getDepartmentName(meeting.departmentId));
+  saveState();
+  renderApp();
+}
+
 function handleDepartmentSubmit(event) {
   event.preventDefault();
   const form = new FormData(event.currentTarget);
@@ -1412,6 +1544,26 @@ function handleCircularAction(circularId, actionKey) {
     logAudit(user.name, "إغلاق تعميم", circular.title, "وزارة");
   }
 
+  saveState();
+  renderApp();
+}
+
+function handleMeetingTaskAction(meetingId, taskId, nextStatus) {
+  const meeting = state.meetings.find((item) => item.id === meetingId);
+  const user = getSessionUser();
+  if (!meeting || !user) return;
+  const task = meeting.tasks.find((item) => item.id === taskId);
+  if (!task) return;
+
+  task.status = nextStatus;
+  meeting.workflowHistory.unshift({
+    actor: user.name,
+    action: `تحديث حالة المهمة إلى ${nextStatus}`,
+    at: new Date().toLocaleString("ar-YE")
+  });
+
+  addAlert(nextStatus === "منجز" ? "success" : nextStatus === "متأخر" ? "warning" : "info", "تحديث مهمة اجتماع", `حدّث ${user.name} حالة المهمة "${task.title}" إلى "${nextStatus}".`);
+  logAudit(user.name, "تحديث مهمة اجتماع", task.title, meeting.title);
   saveState();
   renderApp();
 }
