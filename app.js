@@ -65,7 +65,11 @@ const seedState = () => ({
       dueDate: "2026-03-28",
       status: "نشط",
       readMissionIds: ["mission-cairo"],
-      completedMissionIds: []
+      completedMissionIds: [],
+      workflowHistory: [
+        { actor: "إدارة التخطيط", action: "إصدار التعميم", stage: "نشط", at: "2026-03-15 09:10" }
+      ],
+      processingLog: []
     }
   ],
   meetings: [
@@ -130,6 +134,11 @@ function loadState() {
     return seedState();
   }
   parsed.circulars = Array.isArray(parsed.circulars) ? parsed.circulars : seedState().circulars;
+  parsed.circulars = parsed.circulars.map((circular) => ({
+    ...circular,
+    workflowHistory: Array.isArray(circular.workflowHistory) ? circular.workflowHistory : [],
+    processingLog: Array.isArray(circular.processingLog) ? circular.processingLog : []
+  }));
   parsed.meetings = Array.isArray(parsed.meetings) ? parsed.meetings : seedState().meetings;
   parsed.plans = Array.isArray(parsed.plans) ? parsed.plans : seedState().plans;
   parsed.trainings = Array.isArray(parsed.trainings) ? parsed.trainings : seedState().trainings;
@@ -254,6 +263,38 @@ function getVisibleTrainings(user = getSessionUser()) {
   if (user.role === "admin" || user.role === "planning" || user.role === "leadership") return state.trainings;
   if (user.role === "department") return state.trainings;
   return state.trainings.filter((training) => training.audience === "جميع المستخدمين" || training.audience.includes("البعثات"));
+}
+
+function getCircularCompletion(circular) {
+  const total = circular.targetMissionIds.length;
+  const read = circular.readMissionIds.length;
+  const completed = circular.completedMissionIds.length;
+  return {
+    total,
+    read,
+    completed,
+    unread: total - read,
+    pending: total - completed,
+    readPercent: total ? Math.round((read / total) * 100) : 0,
+    completePercent: total ? Math.round((completed / total) * 100) : 0
+  };
+}
+
+function getCircularActions(circular, user = getSessionUser()) {
+  if (!user) return [];
+  const actions = [];
+  if (user.role === "mission" && circular.targetMissionIds.includes(user.missionId)) {
+    if (!circular.readMissionIds.includes(user.missionId)) {
+      actions.push({ key: "mark-read", label: "تأكيد القراءة" });
+    }
+    if (!circular.completedMissionIds.includes(user.missionId)) {
+      actions.push({ key: "mark-complete", label: "تأكيد الإنجاز" });
+    }
+  }
+  if ((user.role === "planning" || user.role === "admin") && circular.status === "نشط") {
+    actions.push({ key: "close", label: "إغلاق التعميم" });
+  }
+  return actions;
 }
 
 function getCompletion(request) {
@@ -657,9 +698,41 @@ function renderCircularsPage(user) {
     </section>
     <section class="two-col">
       <div class="panel">
+        ${(user.role === "planning" || user.role === "admin") ? `
+          <div class="detail-card">
+            <div class="section-title">إصدار تعميم جديد</div>
+            <form id="circular-form" class="form-grid">
+              <label class="field">
+                <span>عنوان التعميم</span>
+                <input name="title" required>
+              </label>
+              <label class="field">
+                <span>الموعد النهائي</span>
+                <input type="date" name="dueDate" required>
+              </label>
+              <label class="field full">
+                <span>البعثات المستهدفة</span>
+                <div class="checkbox-grid">
+                  ${state.missions.map((mission) => `
+                    <label class="check-item">
+                      <input type="checkbox" name="missionId" value="${mission.id}" checked>
+                      <span>${mission.name}</span>
+                    </label>
+                  `).join("")}
+                </div>
+              </label>
+              <div class="field full">
+                <button class="btn primary" type="submit">إصدار التعميم</button>
+              </div>
+            </form>
+          </div>
+        ` : ""}
         <div class="section-title">سجل التعاميم</div>
         <div class="detail-list">
-          ${circulars.map((circular) => `
+          ${circulars.map((circular) => {
+            const stats = getCircularCompletion(circular);
+            const actions = getCircularActions(circular, user);
+            return `
             <div class="detail-card">
               <div class="record-top">
                 <div>
@@ -668,18 +741,34 @@ function renderCircularsPage(user) {
                 </div>
                 <span class="tag ${circular.status === "نشط" ? "warning" : "success"}">${circular.status}</span>
               </div>
-              <div class="detail-row"><span>قرأ التعميم</span><span>${circular.readMissionIds.length}/${circular.targetMissionIds.length}</span></div>
-              <div class="detail-row"><span>أنجز التعميم</span><span>${circular.completedMissionIds.length}/${circular.targetMissionIds.length}</span></div>
+              <div class="detail-row"><span>قرأ التعميم</span><span>${stats.read}/${stats.total}</span></div>
+              <div class="detail-row"><span>أنجز التعميم</span><span>${stats.completed}/${stats.total}</span></div>
+              <div class="progress"><span style="width:${stats.completePercent}%"></span></div>
+              <p class="record-desc">المتبقي ${stats.pending} بعثات | غير المقروء ${stats.unread}</p>
+              ${actions.length ? `<div class="inline-actions">${actions.map((action) => `<button class="btn primary circular-action" data-circular-id="${circular.id}" data-action="${action.key}">${action.label}</button>`).join("")}</div>` : ""}
             </div>
-          `).join("") || `<div class="empty">لا توجد تعاميم في نطاق هذا الحساب.</div>`}
+          `;
+          }).join("") || `<div class="empty">لا توجد تعاميم في نطاق هذا الحساب.</div>`}
         </div>
       </div>
       <div class="panel">
-        <div class="section-title">تحسينات احترافية</div>
+        <div class="section-title">المسار التشغيلي</div>
         <div class="detail-list">
-          <div class="detail-card">تسجيل استلام وقراءة التعميم آليًا لكل بعثة.</div>
-          <div class="detail-card">تصعيد تلقائي بعد 3 أيام ثم بعد 7 أيام للقيادة.</div>
-          <div class="detail-card">مسار معالجة يوثق هل كان الرد مذكرة أو اجتماعًا أو إجراءً داخليًا.</div>
+          ${circulars.map((circular) => `
+            <div class="detail-card">
+              <strong>${circular.title}</strong>
+              <div class="detail-list">
+                ${(circular.workflowHistory || []).slice(0, 4).map((item) => `
+                  <div class="timeline-entry">
+                    <strong>${item.action}</strong>
+                    <span>${item.actor}</span>
+                    <span>${item.stage}</span>
+                    <span>${item.at}</span>
+                  </div>
+                `).join("") || '<div class="empty">لا يوجد سجل حركة.</div>'}
+              </div>
+            </div>
+          `).join("")}
         </div>
       </div>
     </section>
@@ -1067,6 +1156,9 @@ function bindEvents() {
   const requestForm = document.getElementById("request-form");
   if (requestForm) requestForm.addEventListener("submit", handleRequestSubmit);
 
+  const circularForm = document.getElementById("circular-form");
+  if (circularForm) circularForm.addEventListener("submit", handleCircularSubmit);
+
   const departmentForm = document.getElementById("department-form");
   if (departmentForm) departmentForm.addEventListener("submit", handleDepartmentSubmit);
 
@@ -1084,6 +1176,12 @@ function bindEvents() {
   document.querySelectorAll(".report-action").forEach((button) => {
     button.addEventListener("click", () => {
       handleReportAction(button.dataset.reportId, button.dataset.action, button.dataset.stage);
+    });
+  });
+
+  document.querySelectorAll(".circular-action").forEach((button) => {
+    button.addEventListener("click", () => {
+      handleCircularAction(button.dataset.circularId, button.dataset.action);
     });
   });
 }
@@ -1168,6 +1266,39 @@ function handleRequestSubmit(event) {
   renderApp();
 }
 
+function handleCircularSubmit(event) {
+  event.preventDefault();
+  const user = getSessionUser();
+  const form = new FormData(event.currentTarget);
+  const targetMissionIds = form.getAll("missionId");
+  if (!targetMissionIds.length) return;
+
+  const circular = {
+    id: `circ-${Date.now()}`,
+    title: String(form.get("title")),
+    issuedBy: user.name,
+    targetMissionIds,
+    dueDate: String(form.get("dueDate")),
+    status: "نشط",
+    readMissionIds: [],
+    completedMissionIds: [],
+    workflowHistory: [],
+    processingLog: []
+  };
+  circular.workflowHistory.unshift({
+    actor: user.name,
+    action: "إصدار التعميم",
+    stage: "نشط",
+    at: new Date().toLocaleString("ar-YE")
+  });
+
+  state.circulars.unshift(circular);
+  addAlert("info", "تم إصدار تعميم", `أصدر ${user.name} التعميم "${circular.title}" إلى ${targetMissionIds.length} بعثات.`);
+  logAudit(user.name, "إصدار تعميم", circular.title, "وزارة");
+  saveState();
+  renderApp();
+}
+
 function handleDepartmentSubmit(event) {
   event.preventDefault();
   const form = new FormData(event.currentTarget);
@@ -1228,6 +1359,59 @@ function handleReportAction(reportId, actionKey, nextStage) {
   addWorkflowEntry(report, user.name, labels[actionKey] || "تحديث المسار", nextStage);
   addAlert(nextStage === "أعيد للبعثة للاستكمال" ? "warning" : "info", "تحديث مسار التقرير", `انتقل التقرير "${report.title}" إلى مرحلة "${nextStage}".`);
   logAudit(user.name, labels[actionKey] || "تحديث المسار", report.title, getMissionName(report.missionId));
+  saveState();
+  renderApp();
+}
+
+function handleCircularAction(circularId, actionKey) {
+  const circular = state.circulars.find((item) => item.id === circularId);
+  const user = getSessionUser();
+  if (!circular || !user) return;
+
+  if (actionKey === "mark-read" && user.role === "mission" && !circular.readMissionIds.includes(user.missionId)) {
+    circular.readMissionIds.push(user.missionId);
+    circular.workflowHistory.unshift({
+      actor: user.name,
+      action: "تأكيد قراءة التعميم",
+      stage: circular.status,
+      at: new Date().toLocaleString("ar-YE")
+    });
+    addAlert("info", "تم تأكيد قراءة التعميم", `${user.name} أكد قراءة التعميم "${circular.title}".`);
+    logAudit(user.name, "قراءة تعميم", circular.title, getMissionName(user.missionId));
+  }
+
+  if (actionKey === "mark-complete" && user.role === "mission" && !circular.completedMissionIds.includes(user.missionId)) {
+    if (!circular.readMissionIds.includes(user.missionId)) {
+      circular.readMissionIds.push(user.missionId);
+    }
+    circular.completedMissionIds.push(user.missionId);
+    circular.processingLog.unshift({
+      actor: user.name,
+      result: "تم تنفيذ المطلوب",
+      at: new Date().toLocaleString("ar-YE")
+    });
+    circular.workflowHistory.unshift({
+      actor: user.name,
+      action: "تأكيد إنجاز التعميم",
+      stage: circular.status,
+      at: new Date().toLocaleString("ar-YE")
+    });
+    addAlert("success", "تم إنجاز التعميم", `${user.name} أكد تنفيذ المطلوب في التعميم "${circular.title}".`);
+    logAudit(user.name, "إنجاز تعميم", circular.title, getMissionName(user.missionId));
+  }
+
+  if (actionKey === "close" && (user.role === "planning" || user.role === "admin")) {
+    circular.status = "مغلق";
+    circular.workflowHistory.unshift({
+      actor: user.name,
+      action: "إغلاق التعميم",
+      stage: "مغلق",
+      at: new Date().toLocaleString("ar-YE")
+    });
+    addAlert("success", "تم إغلاق التعميم", `${user.name} أغلق التعميم "${circular.title}".`);
+    logAudit(user.name, "إغلاق تعميم", circular.title, "وزارة");
+  }
+
   saveState();
   renderApp();
 }
