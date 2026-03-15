@@ -488,6 +488,17 @@ textarea {
   gap: 14px;
 }
 
+.report-filter-bar {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 14px 0 18px;
+  padding: 16px;
+  border-radius: 22px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.78);
+}
+
 .report-record-card {
   padding: 18px;
   cursor: pointer;
@@ -759,7 +770,8 @@ textarea {
   .report-detail-hero,
   .report-panel-grid,
   .report-indicator-grid,
-  .report-periodic-status-grid {
+  .report-periodic-status-grid,
+  .report-filter-bar {
     grid-template-columns: 1fr;
   }
 }

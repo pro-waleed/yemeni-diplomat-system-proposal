@@ -210,6 +210,10 @@ const seedState = () => ({
   activeView: "dashboard",
   selectedReportId: "report-1",
   reportRegistryTab: "all",
+  reportSearch: "",
+  reportStageFilter: "all",
+  reportMissionFilter: "all",
+  reportSort: "latest",
   periodicReportTab: "bilateral",
   reportFormStep: "basics",
   periodicFormTab: "bilateral",
@@ -417,6 +421,10 @@ function loadState() {
   parsed.reportRequests = Array.isArray(parsed.reportRequests) ? parsed.reportRequests : seeded.reportRequests;
   parsed.editingReportId = parsed.editingReportId || null;
   parsed.reportRegistryTab = parsed.reportRegistryTab || "all";
+  parsed.reportSearch = parsed.reportSearch || "";
+  parsed.reportStageFilter = parsed.reportStageFilter || "all";
+  parsed.reportMissionFilter = parsed.reportMissionFilter || "all";
+  parsed.reportSort = parsed.reportSort || "latest";
   parsed.periodicReportTab = parsed.periodicReportTab || "bilateral";
   parsed.reportFormStep = parsed.reportFormStep || "basics";
   parsed.periodicFormTab = parsed.periodicFormTab || "bilateral";
@@ -983,6 +991,33 @@ function getReportsByFamily(reports, familyTab) {
   return reports.filter((report) => inferReportFamily(report) === familyTab);
 }
 
+function getRegistryReports(user = getSessionUser()) {
+  const reports = getReportsByFamily(getVisibleReports(user), state.reportRegistryTab);
+  const search = (state.reportSearch || "").trim().toLowerCase();
+  let filtered = reports.filter((report) => {
+    if (state.reportStageFilter !== "all" && report.workflowStage !== state.reportStageFilter) return false;
+    if (state.reportMissionFilter !== "all" && report.missionId !== state.reportMissionFilter) return false;
+    if (!search) return true;
+    const haystack = [
+      report.title,
+      report.summary,
+      report.type,
+      report.thematicTrack,
+      getMissionName(report.missionId),
+      getDepartmentName(report.departmentId)
+    ].join(" ").toLowerCase();
+    return haystack.includes(search);
+  });
+  const byQuality = (report) => getReportQualitySummary(report).average || 0;
+  filtered = filtered.sort((a, b) => {
+    if (state.reportSort === "quality") return byQuality(b) - byQuality(a);
+    if (state.reportSort === "mission") return getMissionName(a.missionId).localeCompare(getMissionName(b.missionId), "ar");
+    if (state.reportSort === "oldest") return String(a.submittedOn || a.activityDate || "").localeCompare(String(b.submittedOn || b.activityDate || ""));
+    return String(b.submittedOn || b.activityDate || "").localeCompare(String(a.submittedOn || a.activityDate || ""));
+  });
+  return filtered;
+}
+
 function getReportFamilyLabel(report) {
   const family = inferReportFamily(report);
   if (family === "periodic") return "زمني";
@@ -1054,6 +1089,11 @@ function renderReportsHero(reports, filteredReports, user) {
 
 function renderReportRecordCard(report, selected) {
   const quality = getReportQualitySummary(report);
+  const accent = inferReportFamily(report) === "periodic"
+    ? getPeriodicCoverageLabel(report)
+    : inferReportFamily(report) === "thematic"
+      ? (report.thematicTrack || "مسار موضوعي")
+      : (report.activityCategory || "نشاط عام");
   return `
     <article class="report-record-card ${selected && selected.id === report.id ? "selected" : ""}" data-report-id="${report.id}">
       <div class="record-top">
@@ -1064,6 +1104,7 @@ function renderReportRecordCard(report, selected) {
         <span class="tag ${stageTone(report.workflowStage)}">${report.workflowStage}</span>
       </div>
       <p class="record-desc">${report.summary}</p>
+      <div class="record-meta">${accent}</div>
       <div class="report-record-footer">
         <span class="tag info">${getReportOriginLabel(report)}</span>
         <span class="mini">${report.submittedOn ? `رفع في ${formatDate(report.submittedOn)}` : "لم يسجل تاريخ رفع"}</span>
@@ -1441,8 +1482,10 @@ function renderDashboard(user) {
 
 function renderReportsPage(user) {
   const reports = getVisibleReports(user);
-  const filteredReports = getReportsByFamily(reports, state.reportRegistryTab);
+  const filteredReports = getRegistryReports(user);
   const selected = filteredReports.find((item) => item.id === state.selectedReportId) || filteredReports[0] || null;
+  const missionOptions = [...new Map(reports.map((report) => [report.missionId, getMissionName(report.missionId)])).entries()];
+  const stageOptions = [...new Set(reports.map((report) => report.workflowStage).filter(Boolean))];
   return `
     ${renderReportsHero(reports, filteredReports, user)}
     <section class="reports-layout">
@@ -1458,6 +1501,35 @@ function renderReportsPage(user) {
           </div>
           <div class="tab-strip">
             ${REPORT_FAMILY_TABS.map((tab) => `<button class="tab-chip ${state.reportRegistryTab === tab.key ? "active" : ""}" type="button" data-report-family-tab="${tab.key}">${tab.label}</button>`).join("")}
+          </div>
+          <div class="report-filter-bar">
+            <label class="field">
+              <span>بحث</span>
+              <input id="report-search" value="${state.reportSearch || ""}" placeholder="عنوان التقرير أو البعثة أو النوع">
+            </label>
+            <label class="field">
+              <span>المرحلة</span>
+              <select id="report-stage-filter">
+                <option value="all">جميع المراحل</option>
+                ${stageOptions.map((item) => `<option value="${item}" ${state.reportStageFilter === item ? "selected" : ""}>${item}</option>`).join("")}
+              </select>
+            </label>
+            <label class="field">
+              <span>البعثة</span>
+              <select id="report-mission-filter">
+                <option value="all">جميع البعثات</option>
+                ${missionOptions.map(([id, name]) => `<option value="${id}" ${state.reportMissionFilter === id ? "selected" : ""}>${name}</option>`).join("")}
+              </select>
+            </label>
+            <label class="field">
+              <span>الفرز</span>
+              <select id="report-sort">
+                <option value="latest" ${state.reportSort === "latest" ? "selected" : ""}>الأحدث أولًا</option>
+                <option value="oldest" ${state.reportSort === "oldest" ? "selected" : ""}>الأقدم أولًا</option>
+                <option value="quality" ${state.reportSort === "quality" ? "selected" : ""}>الأعلى جودة</option>
+                <option value="mission" ${state.reportSort === "mission" ? "selected" : ""}>حسب اسم البعثة</option>
+              </select>
+            </label>
           </div>
           <div class="report-record-grid">
             ${filteredReports.map((report) => renderReportRecordCard(report, selected)).join("") || `<div class="empty">لا توجد تقارير ضمن هذا التبويب.</div>`}
@@ -2945,12 +3017,63 @@ function bindEvents() {
   document.querySelectorAll("[data-report-family-tab]").forEach((button) => {
     button.addEventListener("click", () => {
       state.reportRegistryTab = button.dataset.reportFamilyTab;
-      const visibleReports = getReportsByFamily(getVisibleReports(getSessionUser()), state.reportRegistryTab);
+      const visibleReports = getRegistryReports(getSessionUser());
       state.selectedReportId = visibleReports[0]?.id || null;
       saveState();
       renderApp();
     });
   });
+
+  const reportSearch = document.getElementById("report-search");
+  if (reportSearch) {
+    const applyReportSearch = () => {
+      state.reportSearch = reportSearch.value;
+      const visibleReports = getRegistryReports(getSessionUser());
+      state.selectedReportId = visibleReports.find((item) => item.id === state.selectedReportId)?.id || visibleReports[0]?.id || null;
+      saveState();
+      renderApp();
+    };
+    reportSearch.addEventListener("change", applyReportSearch);
+    reportSearch.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        applyReportSearch();
+      }
+    });
+  }
+
+  const reportStageFilter = document.getElementById("report-stage-filter");
+  if (reportStageFilter) {
+    reportStageFilter.addEventListener("change", () => {
+      state.reportStageFilter = reportStageFilter.value;
+      const visibleReports = getRegistryReports(getSessionUser());
+      state.selectedReportId = visibleReports[0]?.id || null;
+      saveState();
+      renderApp();
+    });
+  }
+
+  const reportMissionFilter = document.getElementById("report-mission-filter");
+  if (reportMissionFilter) {
+    reportMissionFilter.addEventListener("change", () => {
+      state.reportMissionFilter = reportMissionFilter.value;
+      const visibleReports = getRegistryReports(getSessionUser());
+      state.selectedReportId = visibleReports[0]?.id || null;
+      saveState();
+      renderApp();
+    });
+  }
+
+  const reportSort = document.getElementById("report-sort");
+  if (reportSort) {
+    reportSort.addEventListener("change", () => {
+      state.reportSort = reportSort.value;
+      const visibleReports = getRegistryReports(getSessionUser());
+      state.selectedReportId = visibleReports[0]?.id || null;
+      saveState();
+      renderApp();
+    });
+  }
 
   document.querySelectorAll("[data-periodic-tab]").forEach((button) => {
     button.addEventListener("click", () => {
