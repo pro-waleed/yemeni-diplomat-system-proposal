@@ -1033,6 +1033,13 @@ function getMissionReportProfile(missionId) {
     const status = getMissionRequestStatus(request.id, missionId).label;
     return status === "لم يرفع" || status === "مرفوع";
   });
+  const approvedSorted = [...approved].sort((a, b) => String(b.submittedOn || b.activityDate || "").localeCompare(String(a.submittedOn || a.activityDate || "")));
+  const recentQuality = approvedSorted.slice(0, 2).map((report) => getReportQualitySummary(report).average || 0);
+  let qualityTrend = "مستقر";
+  if (recentQuality.length >= 2) {
+    if (recentQuality[0] > recentQuality[1]) qualityTrend = "تحسن";
+    if (recentQuality[0] < recentQuality[1]) qualityTrend = "تراجع";
+  }
   return {
     reports,
     approvedCount: approved.length,
@@ -1042,7 +1049,8 @@ function getMissionReportProfile(missionId) {
     averageQuality,
     latestReport,
     overdueRequests,
-    pendingRequests
+    pendingRequests,
+    qualityTrend
   };
 }
 
@@ -1063,6 +1071,14 @@ function getDepartmentReportProfile(departmentId) {
     .sort((a, b) => Number(a.profile.averageQuality) - Number(b.profile.averageQuality))[0] || null;
   const mostDelayedMission = [...missionProfiles]
     .sort((a, b) => b.profile.overdueRequests.length - a.profile.overdueRequests.length)[0] || null;
+  const trendValues = missionProfiles
+    .map((item) => item.profile.qualityTrend)
+    .filter(Boolean);
+  const improvingCount = trendValues.filter((item) => item === "تحسن").length;
+  const decliningCount = trendValues.filter((item) => item === "تراجع").length;
+  let qualityTrend = "مستقر";
+  if (improvingCount > decliningCount) qualityTrend = "تحسن";
+  if (decliningCount > improvingCount) qualityTrend = "تراجع";
   return {
     missions: missionProfiles,
     approvedCount,
@@ -1071,7 +1087,8 @@ function getDepartmentReportProfile(departmentId) {
     overdueCount,
     averageQuality,
     weakestMission,
-    mostDelayedMission
+    mostDelayedMission,
+    qualityTrend
   };
 }
 
@@ -1109,7 +1126,24 @@ function getReportsExecutiveMetrics(user = getSessionUser()) {
     .filter((item) => item.profile.pendingDepartmentCount > 0)
     .sort((a, b) => b.profile.pendingDepartmentCount - a.profile.pendingDepartmentCount)
     .slice(0, 3);
-  return { topMission, delayedMission, topDepartment, stageDistribution, familyDistribution, lowQualityMissions, returnedHeavyMissions, backlogDepartments };
+  const improvingMissions = missionProfiles.filter((item) => item.profile.qualityTrend === "تحسن").length;
+  const decliningMissions = missionProfiles.filter((item) => item.profile.qualityTrend === "تراجع").length;
+  const improvingDepartments = departmentProfiles.filter((item) => item.profile.qualityTrend === "تحسن").length;
+  const decliningDepartments = departmentProfiles.filter((item) => item.profile.qualityTrend === "تراجع").length;
+  return {
+    topMission,
+    delayedMission,
+    topDepartment,
+    stageDistribution,
+    familyDistribution,
+    lowQualityMissions,
+    returnedHeavyMissions,
+    backlogDepartments,
+    improvingMissions,
+    decliningMissions,
+    improvingDepartments,
+    decliningDepartments
+  };
 }
 
 function getReportFamilyLabel(report) {
@@ -1218,6 +1252,26 @@ function renderReportsHero(reports, filteredReports, user) {
                   </div>
                 `).join("") : `<div class="empty">لا توجد تراكمات مراجعة ضمن النطاق الحالي.</div>`}
               </div>
+            </div>
+          </div>
+          <div class="reports-executive-grid">
+            <div class="detail-card">
+              <div class="section-title">اتجاه جودة البعثات</div>
+              <div class="detail-list">
+                <div class="detail-row"><span>بعثات تتحسن</span><span>${executive.improvingMissions}</span></div>
+                <div class="detail-row"><span>بعثات تتراجع</span><span>${executive.decliningMissions}</span></div>
+              </div>
+            </div>
+            <div class="detail-card">
+              <div class="section-title">اتجاه جودة الدوائر</div>
+              <div class="detail-list">
+                <div class="detail-row"><span>دوائر تتحسن</span><span>${executive.improvingDepartments}</span></div>
+                <div class="detail-row"><span>دوائر تتراجع</span><span>${executive.decliningDepartments}</span></div>
+              </div>
+            </div>
+            <div class="detail-card">
+              <div class="section-title">قراءة الاتجاه العام</div>
+              <p class="detail-note">${executive.improvingMissions > executive.decliningMissions ? "اتجاه الجودة العام للبعثات يميل إلى التحسن." : executive.decliningMissions > executive.improvingMissions ? "هناك تراجع نسبي في جودة مخرجات بعض البعثات ويحتاج متابعة." : "الاتجاه العام متوازن ويحتاج استمرار المراقبة."}</p>
             </div>
           </div>
         ` : ""}
@@ -2626,6 +2680,7 @@ function renderEntitiesPage(user) {
                 <div class="detail-row"><span>الأقل جودة</span><span>${profile.weakestMission ? `${profile.weakestMission.mission.name} (${profile.weakestMission.profile.averageQuality}/5)` : "لا توجد بيانات كافية"}</span></div>
                 <div class="detail-row"><span>الأكثر تأخرًا</span><span>${profile.mostDelayedMission && profile.mostDelayedMission.profile.overdueRequests.length ? `${profile.mostDelayedMission.mission.name} (${profile.mostDelayedMission.profile.overdueRequests.length})` : "لا توجد طلبات متأخرة"}</span></div>
                 <div class="detail-row"><span>التقييم العام</span><span>${Number(profile.averageQuality) >= 4 ? "أداء قوي" : Number(profile.averageQuality) >= 3 ? "أداء متوسط" : "يحتاج متابعة مركزة"}</span></div>
+                <div class="detail-row"><span>اتجاه الجودة</span><span>${profile.qualityTrend}</span></div>
               </div>
             </div>
           </div>
@@ -2684,6 +2739,7 @@ function renderEntitiesPage(user) {
                   <div class="detail-row"><span>طلبات متأخرة</span><span>${profile.overdueRequests.length ? profile.overdueRequests.map((request) => request.title).join("، ") : "لا توجد"}</span></div>
                   <div class="detail-row"><span>تقارير معادة</span><span>${profile.returnedCount ? `${profile.returnedCount} تقرير يحتاج استكمال` : "لا توجد"}</span></div>
                   <div class="detail-row"><span>مستوى الجودة</span><span>${Number(profile.averageQuality) >= 4 ? "مرتفع" : Number(profile.averageQuality) >= 3 ? "متوسط" : "بحاجة إلى تحسين"}</span></div>
+                  <div class="detail-row"><span>اتجاه الجودة</span><span>${profile.qualityTrend}</span></div>
                 </div>
               </div>
             </div>
