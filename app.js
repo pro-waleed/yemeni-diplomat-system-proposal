@@ -1618,6 +1618,18 @@ function renderRequestsPage(user) {
           ${requests.map((request) => {
             const c = getCompletion(request);
             const lifecycle = getRequestLifecycle(request);
+            const missionApproved = user.role === "mission" && state.reports.some((report) => (
+              report.requestId === request.id &&
+              report.missionId === user.missionId &&
+              (report.workflowStage === "معتمد من التخطيط" || report.workflowStage === "مغلق ومؤرشف")
+            ));
+            const missionSubmitted = user.role === "mission" && state.reports.some((report) => (
+              report.requestId === request.id &&
+              report.missionId === user.missionId &&
+              report.workflowStage !== "أعيد للبعثة للاستكمال"
+            ));
+            const missionStatusLabel = missionApproved ? "معتمد" : missionSubmitted ? "مرفوع" : "لم يرفع";
+            const missionStatusTone = missionApproved ? "success" : missionSubmitted ? "info" : "warning";
             return `
               <div class="detail-card">
                 <div class="record-top">
@@ -1630,15 +1642,25 @@ function renderRequestsPage(user) {
                 <div class="detail-row"><span>الجهة الطالبة</span><span>${request.createdBy}</span></div>
                 ${request.thematicTrack ? `<div class="detail-row"><span>المسار الموضوعي</span><span>${request.thematicTrack}</span></div>` : ""}
                 <div class="progress"><span style="width:${c.percent}%"></span></div>
-                <p class="record-desc">رفعت ${c.done} بعثة تقاريرها، واعتمد ${c.approved} تقريرًا، وما يزال ${c.pending} بعثة دون رفع من أصل ${c.total}.</p>
-                <div class="detail-list">
-                  ${request.targetMissionIds.map((missionId) => `
+                ${user.role === "mission" ? `
+                  <p class="record-desc">هذا الطلب موجّه إلى ${getMissionName(user.missionId)}، وحالة الإنجاز الحالية للبعثة هي ${missionStatusLabel}.</p>
+                  <div class="detail-list">
                     <div class="detail-row">
-                      <span>${getMissionName(missionId)}</span>
-                      <span class="tag ${state.reports.some((report) => report.requestId === request.id && report.missionId === missionId && (report.workflowStage === "معتمد من التخطيط" || report.workflowStage === "مغلق ومؤرشف")) ? "success" : state.reports.some((report) => report.requestId === request.id && report.missionId === missionId && report.workflowStage !== "أعيد للبعثة للاستكمال") ? "info" : "warning"}">${state.reports.some((report) => report.requestId === request.id && report.missionId === missionId && (report.workflowStage === "معتمد من التخطيط" || report.workflowStage === "مغلق ومؤرشف")) ? "معتمد" : state.reports.some((report) => report.requestId === request.id && report.missionId === missionId && report.workflowStage !== "أعيد للبعثة للاستكمال") ? "مرفوع" : "لم يرفع"}</span>
+                      <span>${getMissionName(user.missionId)}</span>
+                      <span class="tag ${missionStatusTone}">${missionStatusLabel}</span>
                     </div>
-                  `).join("")}
-                </div>
+                  </div>
+                ` : `
+                  <p class="record-desc">رفعت ${c.done} بعثة تقاريرها، واعتمد ${c.approved} تقريرًا، وما يزال ${c.pending} بعثة دون رفع من أصل ${c.total}.</p>
+                  <div class="detail-list">
+                    ${request.targetMissionIds.map((missionId) => `
+                      <div class="detail-row">
+                        <span>${getMissionName(missionId)}</span>
+                        <span class="tag ${state.reports.some((report) => report.requestId === request.id && report.missionId === missionId && (report.workflowStage === "معتمد من التخطيط" || report.workflowStage === "مغلق ومؤرشف")) ? "success" : state.reports.some((report) => report.requestId === request.id && report.missionId === missionId && report.workflowStage !== "أعيد للبعثة للاستكمال") ? "info" : "warning"}">${state.reports.some((report) => report.requestId === request.id && report.missionId === missionId && (report.workflowStage === "معتمد من التخطيط" || report.workflowStage === "مغلق ومؤرشف")) ? "معتمد" : state.reports.some((report) => report.requestId === request.id && report.missionId === missionId && report.workflowStage !== "أعيد للبعثة للاستكمال") ? "مرفوع" : "لم يرفع"}</span>
+                      </div>
+                    `).join("")}
+                  </div>
+                `}
               </div>
             `;
           }).join("") || `<div class="empty">لا توجد طلبات ظاهرة لهذا الحساب.</div>`}
