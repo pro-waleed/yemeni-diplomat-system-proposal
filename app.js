@@ -114,6 +114,19 @@ const seedState = () => ({
       afterResults: "تم تنفيذ 6 لقاءات رسمية و3 فعاليات رئيسية وإعداد مذكرة متابعة.",
       afterRecommendations: "جدولة متابعة فنية واستمرار التنسيق الإعلامي خلال الربع القادم.",
       attachmentName: "cairo-half-year-2026.pdf",
+      reportFamily: "periodic",
+      countrySnapshot: "ملف موجز عن بلد الاعتماد وأهم المتغيرات السياسية والاقتصادية ذات الصلة بالعلاقات الثنائية.",
+      bilateralAssessment: "قراءة تقييمية لمؤشرات العلاقات الثنائية واتجاهها العام خلال الفترة محل التقرير.",
+      supportCooperation: "عرض لأوجه الدعم والتعاون السياسي والاقتصادي والإنساني والتدريبي وما تحقق منها.",
+      agreementsStatus: "موقف الاتفاقيات ومذكرات التفاهم النافذة وما يحتاج إلى تفعيل أو متابعة.",
+      completedActivities: "أبرز الأنشطة والملفات التي أنجزتها البعثة خلال الفترة.",
+      pendingActivities: "الملفات والأنشطة التي لم تستكمل وتحتاج إلى متابعة لاحقة.",
+      relationshipOutlook: "تقدير البعثة لمستقبل العلاقات وأهم الفرص والمعوقات.",
+      visitsSummary: "خلاصة الزيارات المتبادلة والاتصالات الرسمية خلال الفترة.",
+      communityUpdate: "تحديث موجز عن شؤون الجالية اليمنية ذات الصلة ببلد الاعتماد.",
+      thematicSituation: "",
+      thematicImplications: "",
+      thematicRecommendations: "",
       workflowStage: "معتمد من التخطيط",
       createdAt: "2026-03-10 09:20",
       workflowHistory: [
@@ -267,6 +280,19 @@ function loadState() {
   parsed.reports = parsed.reports.map((report) => ({
     ...report,
     departmentId: parsed.missions.find((mission) => mission.id === report.missionId)?.departmentId || LEGACY_DEPARTMENT_ID_MAP[report.departmentId] || report.departmentId,
+    reportFamily: inferReportFamily(report),
+    countrySnapshot: report.countrySnapshot || "",
+    bilateralAssessment: report.bilateralAssessment || "",
+    supportCooperation: report.supportCooperation || "",
+    agreementsStatus: report.agreementsStatus || "",
+    completedActivities: report.completedActivities || "",
+    pendingActivities: report.pendingActivities || "",
+    relationshipOutlook: report.relationshipOutlook || "",
+    visitsSummary: report.visitsSummary || "",
+    communityUpdate: report.communityUpdate || "",
+    thematicSituation: report.thematicSituation || "",
+    thematicImplications: report.thematicImplications || "",
+    thematicRecommendations: report.thematicRecommendations || "",
     workflowStage: report.workflowStage || "مرفوع من البعثة",
     workflowHistory: Array.isArray(report.workflowHistory) ? report.workflowHistory : []
   }));
@@ -467,6 +493,13 @@ function getPlanStatusTone(status) {
   if (status === "متأخرة") return "danger";
   if (status === "قيد التنفيذ") return "warning";
   return "info";
+}
+
+function inferReportFamily(report) {
+  if (report?.reportFamily) return report.reportFamily;
+  if (report?.type === "سنوي" || report?.type === "نصف سنوي" || report?.type === "ربع سنوي") return "periodic";
+  if (report?.type === "موضوعي") return "thematic";
+  return "activity";
 }
 
 function addAlert(level, title, text) {
@@ -805,13 +838,21 @@ function renderMissionReportForm(user) {
       `}
       <form id="report-form" class="form-grid">
         <label class="field">
+          <span>عائلة القالب</span>
+          <select name="reportFamily" id="report-family">
+            <option value="activity" ${!editingReport || inferReportFamily(editingReport) === "activity" ? "selected" : ""}>تقرير نشاط</option>
+            <option value="periodic" ${editingReport && inferReportFamily(editingReport) === "periodic" ? "selected" : ""}>تقرير زمني</option>
+            <option value="thematic" ${editingReport && inferReportFamily(editingReport) === "thematic" ? "selected" : ""}>تقرير موضوعي</option>
+          </select>
+        </label>
+        <label class="field">
           <span>عنوان التقرير</span>
           <input name="title" value="${editingReport ? editingReport.title : ""}" required>
         </label>
         <label class="field">
           <span>نوع التقرير</span>
           <select name="type">
-            ${["نشاط", "نصف سنوي", "سنوي", "موضوعي"].map((item) => `<option ${editingReport && editingReport.type === item ? "selected" : ""}>${item}</option>`).join("")}
+            ${["نشاط", "ربع سنوي", "نصف سنوي", "سنوي", "موضوعي"].map((item) => `<option ${editingReport && editingReport.type === item ? "selected" : ""}>${item}</option>`).join("")}
           </select>
         </label>
         <label class="field">
@@ -855,6 +896,66 @@ function renderMissionReportForm(user) {
           <span>الملخص التنفيذي</span>
           <textarea name="summary" required>${editingReport ? editingReport.summary : ""}</textarea>
         </label>
+        <div class="field full report-template-section" data-template="periodic">
+          <div class="detail-card">
+            <div class="section-title">محاور التقرير الزمني</div>
+            <p class="muted">يعتمد هذا القالب على النموذج السنوي ويصلح للسنوي والنصف سنوي والربع سنوي.</p>
+          </div>
+        </div>
+        <label class="field full report-template-section" data-template="periodic">
+          <span>بيانات أساسية عن بلد الاعتماد</span>
+          <textarea name="countrySnapshot">${editingReport ? editingReport.countrySnapshot : ""}</textarea>
+        </label>
+        <label class="field full report-template-section" data-template="periodic">
+          <span>تقييم العلاقات الثنائية ومؤشراتها</span>
+          <textarea name="bilateralAssessment">${editingReport ? editingReport.bilateralAssessment : ""}</textarea>
+        </label>
+        <label class="field full report-template-section" data-template="periodic">
+          <span>أوجه الدعم والتعاون المحققة</span>
+          <textarea name="supportCooperation">${editingReport ? editingReport.supportCooperation : ""}</textarea>
+        </label>
+        <label class="field full report-template-section" data-template="periodic">
+          <span>وضع الاتفاقيات ومذكرات التفاهم</span>
+          <textarea name="agreementsStatus">${editingReport ? editingReport.agreementsStatus : ""}</textarea>
+        </label>
+        <label class="field full report-template-section" data-template="periodic">
+          <span>أهم الأنشطة المنجزة خلال الفترة</span>
+          <textarea name="completedActivities">${editingReport ? editingReport.completedActivities : ""}</textarea>
+        </label>
+        <label class="field full report-template-section" data-template="periodic">
+          <span>الأنشطة أو الملفات غير المنجزة</span>
+          <textarea name="pendingActivities">${editingReport ? editingReport.pendingActivities : ""}</textarea>
+        </label>
+        <label class="field full report-template-section" data-template="periodic">
+          <span>تقييم العلاقة والرؤية المستقبلية</span>
+          <textarea name="relationshipOutlook">${editingReport ? editingReport.relationshipOutlook : ""}</textarea>
+        </label>
+        <label class="field full report-template-section" data-template="periodic">
+          <span>الزيارات والاتصالات الرسمية</span>
+          <textarea name="visitsSummary">${editingReport ? editingReport.visitsSummary : ""}</textarea>
+        </label>
+        <label class="field full report-template-section" data-template="periodic">
+          <span>أوضاع الجالية أو الملاحظات المجتمعية</span>
+          <textarea name="communityUpdate">${editingReport ? editingReport.communityUpdate : ""}</textarea>
+        </label>
+        <div class="field full report-template-section" data-template="thematic">
+          <div class="detail-card">
+            <div class="section-title">محاور التقرير الموضوعي</div>
+            <p class="muted">يصلح للتقارير السياسية والاقتصادية والإعلامية والثقافية والقنصلية المتخصصة.</p>
+          </div>
+        </div>
+        <label class="field full report-template-section" data-template="thematic">
+          <span>الوضع القائم وتحليل الموضوع</span>
+          <textarea name="thematicSituation">${editingReport ? editingReport.thematicSituation : ""}</textarea>
+        </label>
+        <label class="field full report-template-section" data-template="thematic">
+          <span>الانعكاسات على مصالح اليمن</span>
+          <textarea name="thematicImplications">${editingReport ? editingReport.thematicImplications : ""}</textarea>
+        </label>
+        <label class="field full report-template-section" data-template="thematic">
+          <span>التوصيات الموضوعية</span>
+          <textarea name="thematicRecommendations">${editingReport ? editingReport.thematicRecommendations : ""}</textarea>
+        </label>
         <div class="field full">
           <button class="btn primary" type="submit">${editingReport ? "حفظ التعديلات" : "رفع التقرير"}</button>
           ${editingReport ? `<button class="btn secondary cancel-edit" type="button" data-kind="report">إلغاء التعديل</button>` : ""}
@@ -887,6 +988,28 @@ function renderReportDetails(report, user) {
         <p class="detail-note"><strong>النتائج:</strong> ${report.afterResults}</p>
         <p class="detail-note"><strong>التوصيات:</strong> ${report.afterRecommendations}</p>
       </div>
+      ${inferReportFamily(report) === "periodic" ? `
+        <div class="detail-card">
+          <div class="section-title">محاور التقرير الزمني</div>
+          <p class="detail-note"><strong>بلد الاعتماد:</strong> ${report.countrySnapshot || "لا يوجد"}</p>
+          <p class="detail-note"><strong>العلاقات الثنائية:</strong> ${report.bilateralAssessment || "لا يوجد"}</p>
+          <p class="detail-note"><strong>الدعم والتعاون:</strong> ${report.supportCooperation || "لا يوجد"}</p>
+          <p class="detail-note"><strong>الاتفاقيات:</strong> ${report.agreementsStatus || "لا يوجد"}</p>
+          <p class="detail-note"><strong>الأنشطة المنجزة:</strong> ${report.completedActivities || "لا يوجد"}</p>
+          <p class="detail-note"><strong>الأنشطة غير المنجزة:</strong> ${report.pendingActivities || "لا يوجد"}</p>
+          <p class="detail-note"><strong>الرؤية المستقبلية:</strong> ${report.relationshipOutlook || "لا يوجد"}</p>
+          <p class="detail-note"><strong>الزيارات والاتصالات:</strong> ${report.visitsSummary || "لا يوجد"}</p>
+          <p class="detail-note"><strong>الجالية والملاحظات:</strong> ${report.communityUpdate || "لا يوجد"}</p>
+        </div>
+      ` : ""}
+      ${inferReportFamily(report) === "thematic" ? `
+        <div class="detail-card">
+          <div class="section-title">محاور التقرير الموضوعي</div>
+          <p class="detail-note"><strong>الوضع القائم:</strong> ${report.thematicSituation || "لا يوجد"}</p>
+          <p class="detail-note"><strong>الانعكاسات:</strong> ${report.thematicImplications || "لا يوجد"}</p>
+          <p class="detail-note"><strong>التوصيات الموضوعية:</strong> ${report.thematicRecommendations || "لا يوجد"}</p>
+        </div>
+      ` : ""}
       <div class="detail-card">
         <div class="section-title">سجل الاعتماد</div>
         <div class="detail-list">
@@ -1504,6 +1627,18 @@ function bindEvents() {
   const reportForm = document.getElementById("report-form");
   if (reportForm) reportForm.addEventListener("submit", handleReportSubmit);
 
+  const reportFamily = document.getElementById("report-family");
+  if (reportFamily) {
+    const updateReportSections = () => {
+      const value = reportFamily.value;
+      document.querySelectorAll(".report-template-section").forEach((section) => {
+        section.style.display = section.dataset.template === value ? "" : "none";
+      });
+    };
+    reportFamily.addEventListener("change", updateReportSections);
+    updateReportSections();
+  }
+
   const requestForm = document.getElementById("request-form");
   if (requestForm) requestForm.addEventListener("submit", handleRequestSubmit);
 
@@ -1648,6 +1783,7 @@ function handleReportSubmit(event) {
     workflowHistory: []
   };
   Object.assign(report, {
+    reportFamily: String(form.get("reportFamily") || "activity"),
     title: String(form.get("title")),
     type: String(form.get("type")),
     thematicTrack: String(form.get("thematicTrack")),
@@ -1658,7 +1794,19 @@ function handleReportSubmit(event) {
     beforeExpected: String(form.get("beforeExpected")),
     afterResults: String(form.get("afterResults")),
     afterRecommendations: String(form.get("afterRecommendations")),
-    attachmentName: String(form.get("attachmentName"))
+    attachmentName: String(form.get("attachmentName")),
+    countrySnapshot: String(form.get("countrySnapshot") || ""),
+    bilateralAssessment: String(form.get("bilateralAssessment") || ""),
+    supportCooperation: String(form.get("supportCooperation") || ""),
+    agreementsStatus: String(form.get("agreementsStatus") || ""),
+    completedActivities: String(form.get("completedActivities") || ""),
+    pendingActivities: String(form.get("pendingActivities") || ""),
+    relationshipOutlook: String(form.get("relationshipOutlook") || ""),
+    visitsSummary: String(form.get("visitsSummary") || ""),
+    communityUpdate: String(form.get("communityUpdate") || ""),
+    thematicSituation: String(form.get("thematicSituation") || ""),
+    thematicImplications: String(form.get("thematicImplications") || ""),
+    thematicRecommendations: String(form.get("thematicRecommendations") || "")
   });
   addWorkflowEntry(report, user.name, editingReport ? "تعديل التقرير" : "رفع التقرير", report.workflowStage);
   if (!editingReport) {
