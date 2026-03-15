@@ -1097,7 +1097,19 @@ function getReportsExecutiveMetrics(user = getSessionUser()) {
     { label: "موضوعي", count: reports.filter((report) => inferReportFamily(report) === "thematic").length },
     { label: "نشاط", count: reports.filter((report) => inferReportFamily(report) === "activity").length }
   ];
-  return { topMission, delayedMission, topDepartment, stageDistribution, familyDistribution };
+  const lowQualityMissions = [...missionProfiles]
+    .filter((item) => item.profile.reports.length && Number(item.profile.averageQuality) > 0 && Number(item.profile.averageQuality) < 3.5)
+    .sort((a, b) => Number(a.profile.averageQuality) - Number(b.profile.averageQuality))
+    .slice(0, 3);
+  const returnedHeavyMissions = [...missionProfiles]
+    .filter((item) => item.profile.returnedCount > 0)
+    .sort((a, b) => b.profile.returnedCount - a.profile.returnedCount)
+    .slice(0, 3);
+  const backlogDepartments = [...departmentProfiles]
+    .filter((item) => item.profile.pendingDepartmentCount > 0)
+    .sort((a, b) => b.profile.pendingDepartmentCount - a.profile.pendingDepartmentCount)
+    .slice(0, 3);
+  return { topMission, delayedMission, topDepartment, stageDistribution, familyDistribution, lowQualityMissions, returnedHeavyMissions, backlogDepartments };
 }
 
 function getReportFamilyLabel(report) {
@@ -1170,6 +1182,41 @@ function renderReportsHero(reports, filteredReports, user) {
               <div class="section-title">التوزيع حسب النوع</div>
               <div class="detail-list">
                 ${executive.familyDistribution.map((item) => `<div class="detail-row"><span>${item.label}</span><span>${item.count}</span></div>`).join("")}
+              </div>
+            </div>
+          </div>
+          <div class="reports-executive-grid">
+            <div class="detail-card">
+              <div class="section-title">بعثات بحاجة لتحسين الجودة</div>
+              <div class="detail-list">
+                ${executive.lowQualityMissions.length ? executive.lowQualityMissions.map((item) => `
+                  <div class="detail-row">
+                    <span>${getMissionName(item.missionId)}</span>
+                    <span>${item.profile.averageQuality}/5</span>
+                  </div>
+                `).join("") : `<div class="empty">لا توجد بعثات منخفضة الجودة ضمن النطاق الحالي.</div>`}
+              </div>
+            </div>
+            <div class="detail-card">
+              <div class="section-title">بعثات تكرر إرجاع تقاريرها</div>
+              <div class="detail-list">
+                ${executive.returnedHeavyMissions.length ? executive.returnedHeavyMissions.map((item) => `
+                  <div class="detail-row">
+                    <span>${getMissionName(item.missionId)}</span>
+                    <span>${item.profile.returnedCount} مرات</span>
+                  </div>
+                `).join("") : `<div class="empty">لا توجد حالات إرجاع متكررة ضمن النطاق الحالي.</div>`}
+              </div>
+            </div>
+            <div class="detail-card">
+              <div class="section-title">دوائر لديها تراكم مراجعات</div>
+              <div class="detail-list">
+                ${executive.backlogDepartments.length ? executive.backlogDepartments.map((item) => `
+                  <div class="detail-row">
+                    <span>${getDepartmentName(item.departmentId)}</span>
+                    <span>${item.profile.pendingDepartmentCount} تقارير</span>
+                  </div>
+                `).join("") : `<div class="empty">لا توجد تراكمات مراجعة ضمن النطاق الحالي.</div>`}
               </div>
             </div>
           </div>
