@@ -70,6 +70,28 @@ const LEGACY_DEPARTMENT_ID_MAP = {
   "dept-arabia": "dept-gulf"
 };
 
+const REPORT_TYPE_OPTIONS = {
+  activity: ["نشاط"],
+  periodic: ["ربع سنوي", "نصف سنوي", "سنوي"],
+  thematic: ["موضوعي"]
+};
+
+const THEMATIC_TRACK_OPTIONS = ["سياسي", "اقتصادي", "إعلامي", "ثقافي", "قنصلي"];
+
+const BILATERAL_INDICATOR_FIELDS = [
+  { key: "political", label: "السياسية", hint: "الاتصالات الرسمية، الزيارات، التنسيق في المحافل الدولية" },
+  { key: "economic", label: "الاقتصادية والاستثمارية", hint: "التبادل التجاري، الاستثمارات، الاتفاقيات الاقتصادية" },
+  { key: "parliamentary", label: "البرلمانية", hint: "الزيارات البرلمانية، مذكرات التفاهم، لجان الصداقة" },
+  { key: "humanitarian", label: "الإنسانية والإغاثية", hint: "المساعدات الإنسانية وبرامج الدعم والتنمية" },
+  { key: "health", label: "الصحية والطبية", hint: "الصحة العامة، البعثات الطبية، دعم القطاع الصحي" },
+  { key: "military", label: "العسكرية", hint: "التعاون الدفاعي، التدريب، تبادل المعلومات" },
+  { key: "security", label: "الأمنية", hint: "مكافحة الإرهاب والجريمة والهجرة غير الشرعية" },
+  { key: "consular", label: "القنصلية", hint: "التسهيلات القنصلية وتبادل الخبرات القانونية" },
+  { key: "cultural", label: "الثقافية والعلمية", hint: "التبادل الثقافي والمنح والأنشطة الأكاديمية" },
+  { key: "international", label: "المنظمات الدولية", hint: "التنسيق والتصويت المتبادل والمبادرات المشتركة" },
+  { key: "other", label: "أخرى", hint: "الرياضة والسياحة والإعلام وغيرها" }
+];
+
 const seedState = () => ({
   sessionUserId: null,
   activeView: "dashboard",
@@ -91,7 +113,11 @@ const seedState = () => ({
       id: "request-h1-2026",
       title: "طلب التقارير النصف سنوية 2026",
       type: "نصف سنوي",
+      requestFamily: "periodic",
+      thematicTrack: "",
       createdBy: "إدارة التخطيط",
+      createdByRole: "planning",
+      requestedByDepartmentId: "",
       dueDate: "2026-06-30",
       targetMissionIds: CANONICAL_MISSIONS.map((mission) => mission.id),
       completedMissionIds: ["mission-cairo", "mission-riyadh", "mission-paris"],
@@ -124,6 +150,19 @@ const seedState = () => ({
       relationshipOutlook: "تقدير البعثة لمستقبل العلاقات وأهم الفرص والمعوقات.",
       visitsSummary: "خلاصة الزيارات المتبادلة والاتصالات الرسمية خلال الفترة.",
       communityUpdate: "تحديث موجز عن شؤون الجالية اليمنية ذات الصلة ببلد الاعتماد.",
+      bilateralIndicators: {
+        political: { trend: "تنامي", note: "نشاط اتصالات رسمية منتظم وتنسيق في المواقف الدولية." },
+        economic: { trend: "استقرار", note: "حراك اقتصادي محدود مع فرص توسع قائمة." },
+        parliamentary: { trend: "استقرار", note: "قنوات البرلمان قائمة دون تطور كبير." },
+        humanitarian: { trend: "تنامي", note: "وجود دعم إنساني وتسهيلات لبرامج الإغاثة." },
+        health: { trend: "استقرار", note: "تعاون صحي متقطع ويحتاج إلى تأطير مؤسسي." },
+        military: { trend: "تراجع", note: "غياب برامج تعاون عسكرية خلال الفترة." },
+        security: { trend: "استقرار", note: "تنسيق أمني محدود في قضايا مشتركة." },
+        consular: { trend: "تنامي", note: "تحسن في الخدمات والمعالجات القنصلية." },
+        cultural: { trend: "استقرار", note: "مبادرات ثقافية وأكاديمية محدودة." },
+        international: { trend: "تنامي", note: "تنسيق أفضل في بعض ملفات المنظمات الدولية." },
+        other: { trend: "استقرار", note: "لا توجد متغيرات كبيرة في المجالات الأخرى." }
+      },
       thematicSituation: "",
       thematicImplications: "",
       thematicRecommendations: "",
@@ -250,6 +289,10 @@ function loadState() {
   parsed.editingPlanId = parsed.editingPlanId || null;
   parsed.reportRequests = parsed.reportRequests.map((request) => ({
     ...request,
+    requestFamily: request.requestFamily || inferReportFamily(request),
+    thematicTrack: request.thematicTrack || "",
+    createdByRole: request.createdByRole || "planning",
+    requestedByDepartmentId: request.requestedByDepartmentId || "",
     targetMissionIds: Array.isArray(request.targetMissionIds) ? request.targetMissionIds : [],
     completedMissionIds: Array.isArray(request.completedMissionIds) ? request.completedMissionIds : [],
     status: request.status || "نشط"
@@ -290,6 +333,7 @@ function loadState() {
     relationshipOutlook: report.relationshipOutlook || "",
     visitsSummary: report.visitsSummary || "",
     communityUpdate: report.communityUpdate || "",
+    bilateralIndicators: normalizeBilateralIndicators(report.bilateralIndicators),
     thematicSituation: report.thematicSituation || "",
     thematicImplications: report.thematicImplications || "",
     thematicRecommendations: report.thematicRecommendations || "",
@@ -373,7 +417,10 @@ function getVisibleRequests(user = getSessionUser()) {
   if (user.role === "admin" || user.role === "planning" || user.role === "leadership") return state.reportRequests;
   if (user.role === "department") {
     const missionIds = state.missions.filter((mission) => mission.departmentId === user.departmentId).map((mission) => mission.id);
-    return state.reportRequests.filter((request) => request.targetMissionIds.some((id) => missionIds.includes(id)));
+    return state.reportRequests.filter((request) => (
+      request.requestedByDepartmentId === user.departmentId ||
+      request.targetMissionIds.some((id) => missionIds.includes(id))
+    ));
   }
   if (user.role === "mission") return state.reportRequests.filter((request) => request.targetMissionIds.includes(user.missionId));
   return [];
@@ -476,9 +523,21 @@ function getCircularActions(circular, user = getSessionUser()) {
 }
 
 function getCompletion(request) {
-  const done = request.completedMissionIds.length;
+  const submittedMissionIds = [...new Set(state.reports
+    .filter((report) => report.requestId === request.id && report.workflowStage !== "أعيد للبعثة للاستكمال")
+    .map((report) => report.missionId))];
+  const approvedMissionIds = [...new Set(state.reports
+    .filter((report) => report.requestId === request.id && (report.workflowStage === "معتمد من التخطيط" || report.workflowStage === "مغلق ومؤرشف"))
+    .map((report) => report.missionId))];
+  const done = submittedMissionIds.length;
   const total = request.targetMissionIds.length;
-  return { done, total, pending: total - done, percent: total ? Math.round((done / total) * 100) : 0 };
+  return {
+    done,
+    approved: approvedMissionIds.length,
+    total,
+    pending: total - done,
+    percent: total ? Math.round((done / total) * 100) : 0
+  };
 }
 
 function stageTone(stage) {
@@ -500,6 +559,25 @@ function inferReportFamily(report) {
   if (report?.type === "سنوي" || report?.type === "نصف سنوي" || report?.type === "ربع سنوي") return "periodic";
   if (report?.type === "موضوعي") return "thematic";
   return "activity";
+}
+
+function normalizeBilateralIndicators(indicators = {}) {
+  return BILATERAL_INDICATOR_FIELDS.reduce((acc, field) => {
+    const current = indicators[field.key] || {};
+    acc[field.key] = {
+      trend: current.trend || "",
+      note: current.note || ""
+    };
+    return acc;
+  }, {});
+}
+
+function canIssueReportRequest(user = getSessionUser(), requestFamily = "activity") {
+  if (!user) return false;
+  if (requestFamily === "periodic") {
+    return user.role === "admin" || user.role === "planning" || user.role === "leadership";
+  }
+  return user.role === "admin" || user.role === "planning" || user.role === "leadership" || user.role === "department";
 }
 
 function addAlert(level, title, text) {
@@ -818,6 +896,7 @@ function renderReportsPage(user) {
 function renderMissionReportForm(user) {
   const requests = getVisibleRequests(user).filter((item) => item.status === "نشط");
   const editingReport = state.reports.find((item) => item.id === state.editingReportId && item.missionId === user.missionId) || null;
+  const indicatorSource = normalizeBilateralIndicators(editingReport?.bilateralIndicators);
   return `
     <div class="detail-card">
       <div class="section-title">${editingReport ? "تعديل التقرير" : "رفع تقرير نشاط"}</div>
@@ -836,6 +915,7 @@ function renderMissionReportForm(user) {
       ` : `
         <div class="detail-note">لا توجد حاليًا طلبات تقارير نشطة موجّهة إلى هذه البعثة.</div>
       `}
+      <div class="detail-note">التقارير الزمنية تُرفع استجابة لطلب رسمي فقط، بينما يمكن للبعثة إنشاء تقارير الأنشطة والتقارير الموضوعية مباشرة أو استجابة لطلب من الدائرة أو الجهات القيادية.</div>
       <form id="report-form" class="form-grid">
         <label class="field">
           <span>عائلة القالب</span>
@@ -851,14 +931,14 @@ function renderMissionReportForm(user) {
         </label>
         <label class="field">
           <span>نوع التقرير</span>
-          <select name="type">
-            ${["نشاط", "ربع سنوي", "نصف سنوي", "سنوي", "موضوعي"].map((item) => `<option ${editingReport && editingReport.type === item ? "selected" : ""}>${item}</option>`).join("")}
+          <select name="type" data-current-type="${editingReport ? editingReport.type : "نشاط"}">
+            ${[...REPORT_TYPE_OPTIONS.activity, ...REPORT_TYPE_OPTIONS.periodic, ...REPORT_TYPE_OPTIONS.thematic].map((item) => `<option ${editingReport && editingReport.type === item ? "selected" : ""}>${item}</option>`).join("")}
           </select>
         </label>
         <label class="field">
           <span>المسار الموضوعي</span>
           <select name="thematicTrack">
-            ${["سياسي", "اقتصادي", "إعلامي", "ثقافي", "قنصلي"].map((item) => `<option ${editingReport && editingReport.thematicTrack === item ? "selected" : ""}>${item}</option>`).join("")}
+            ${THEMATIC_TRACK_OPTIONS.map((item) => `<option ${editingReport && editingReport.thematicTrack === item ? "selected" : ""}>${item}</option>`).join("")}
           </select>
         </label>
         <label class="field">
@@ -938,6 +1018,30 @@ function renderMissionReportForm(user) {
           <span>أوضاع الجالية أو الملاحظات المجتمعية</span>
           <textarea name="communityUpdate">${editingReport ? editingReport.communityUpdate : ""}</textarea>
         </label>
+        <div class="field full report-template-section" data-template="periodic">
+          <div class="detail-card">
+            <div class="section-title">مؤشر العلاقات الثنائية</div>
+            <div class="detail-list">
+              ${BILATERAL_INDICATOR_FIELDS.map((field) => `
+                <div class="detail-card">
+                  <strong>${field.label}</strong>
+                  <div class="record-meta">${field.hint}</div>
+                  <label class="field">
+                    <span>اتجاه المؤشر</span>
+                    <select name="indicator_trend_${field.key}">
+                      <option value="">غير محدد</option>
+                      ${["تنامي", "استقرار", "تراجع"].map((item) => `<option value="${item}" ${indicatorSource[field.key].trend === item ? "selected" : ""}>${item}</option>`).join("")}
+                    </select>
+                  </label>
+                  <label class="field">
+                    <span>العوامل والمؤشرات المعبّرة</span>
+                    <textarea name="indicator_note_${field.key}">${indicatorSource[field.key].note}</textarea>
+                  </label>
+                </div>
+              `).join("")}
+            </div>
+          </div>
+        </div>
         <div class="field full report-template-section" data-template="thematic">
           <div class="detail-card">
             <div class="section-title">محاور التقرير الموضوعي</div>
@@ -1000,6 +1104,18 @@ function renderReportDetails(report, user) {
           <p class="detail-note"><strong>الرؤية المستقبلية:</strong> ${report.relationshipOutlook || "لا يوجد"}</p>
           <p class="detail-note"><strong>الزيارات والاتصالات:</strong> ${report.visitsSummary || "لا يوجد"}</p>
           <p class="detail-note"><strong>الجالية والملاحظات:</strong> ${report.communityUpdate || "لا يوجد"}</p>
+        </div>
+        <div class="detail-card">
+          <div class="section-title">مؤشر العلاقات الثنائية</div>
+          <div class="detail-list">
+            ${BILATERAL_INDICATOR_FIELDS.map((field) => `
+              <div class="detail-row">
+                <span>${field.label}</span>
+                <span class="tag ${report.bilateralIndicators?.[field.key]?.trend === "تنامي" ? "success" : report.bilateralIndicators?.[field.key]?.trend === "تراجع" ? "danger" : "warning"}">${report.bilateralIndicators?.[field.key]?.trend || "غير محدد"}</span>
+                <span>${report.bilateralIndicators?.[field.key]?.note || "لا توجد ملاحظات"}</span>
+              </div>
+            `).join("")}
+          </div>
         </div>
       ` : ""}
       ${inferReportFamily(report) === "thematic" ? `
@@ -1414,18 +1530,19 @@ function renderGovernancePage(user) {
 
 function renderRequestsPage(user) {
   const requests = getVisibleRequests(user);
+  const canRequest = canIssueReportRequest(user, "activity") || canIssueReportRequest(user, "periodic");
   return `
     <section class="panel">
       <div class="topbar">
         <div>
           <span class="tag info">متابعة الإنجاز</span>
           <h1 class="page-title">طلبات التقارير</h1>
-          <p class="muted">${user.role === "planning" || user.role === "admin" ? "يمكنك إصدار طلبات جديدة ومتابعة الإنجاز." : "يمكنك متابعة الطلبات الواقعة ضمن نطاقك."}</p>
+          <p class="muted">${canRequest ? "يمكنك إصدار طلبات تقارير ومتابعة الإنجاز بحسب صلاحيتك." : "يمكنك متابعة الطلبات الواقعة ضمن نطاقك."}</p>
         </div>
       </div>
     </section>
     <section class="two-col">
-      ${(user.role === "planning" || user.role === "admin") ? renderRequestForm() : ""}
+      ${canRequest ? renderRequestForm(user) : ""}
       <div class="panel">
         <div class="section-title">سجل الطلبات</div>
         <div class="detail-list">
@@ -1436,17 +1553,19 @@ function renderRequestsPage(user) {
                 <div class="record-top">
                   <div>
                     <strong>${request.title}</strong>
-                    <div class="record-meta">${request.type} | الموعد ${formatDate(request.dueDate)}</div>
+                    <div class="record-meta">${request.requestFamily === "periodic" ? "طلب زمني" : request.requestFamily === "thematic" ? "طلب موضوعي" : "طلب نشاط"} | ${request.type} | الموعد ${formatDate(request.dueDate)}</div>
                   </div>
                   <span class="tag ${request.status === "نشط" ? "warning" : "success"}">${request.status}</span>
                 </div>
+                <div class="detail-row"><span>الجهة الطالبة</span><span>${request.createdBy}</span></div>
+                ${request.thematicTrack ? `<div class="detail-row"><span>المسار الموضوعي</span><span>${request.thematicTrack}</span></div>` : ""}
                 <div class="progress"><span style="width:${c.percent}%"></span></div>
-                <p class="record-desc">أنجزت ${c.done} بعثة ولم تنجز ${c.pending} بعثة من أصل ${c.total}.</p>
+                <p class="record-desc">رفعت ${c.done} بعثة تقاريرها، واعتمد ${c.approved} تقريرًا، وما يزال ${c.pending} بعثة دون رفع من أصل ${c.total}.</p>
                 <div class="detail-list">
                   ${request.targetMissionIds.map((missionId) => `
                     <div class="detail-row">
                       <span>${getMissionName(missionId)}</span>
-                      <span class="tag ${request.completedMissionIds.includes(missionId) ? "success" : "warning"}">${request.completedMissionIds.includes(missionId) ? "منجز" : "لم ينجز"}</span>
+                      <span class="tag ${state.reports.some((report) => report.requestId === request.id && report.missionId === missionId && (report.workflowStage === "معتمد من التخطيط" || report.workflowStage === "مغلق ومؤرشف")) ? "success" : state.reports.some((report) => report.requestId === request.id && report.missionId === missionId && report.workflowStage !== "أعيد للبعثة للاستكمال") ? "info" : "warning"}">${state.reports.some((report) => report.requestId === request.id && report.missionId === missionId && (report.workflowStage === "معتمد من التخطيط" || report.workflowStage === "مغلق ومؤرشف")) ? "معتمد" : state.reports.some((report) => report.requestId === request.id && report.missionId === missionId && report.workflowStage !== "أعيد للبعثة للاستكمال") ? "مرفوع" : "لم يرفع"}</span>
                     </div>
                   `).join("")}
                 </div>
@@ -1459,20 +1578,41 @@ function renderRequestsPage(user) {
   `;
 }
 
-function renderRequestForm() {
+function renderRequestForm(user) {
+  const availableMissionIds = user.role === "department"
+    ? state.missions.filter((mission) => mission.departmentId === user.departmentId).map((mission) => mission.id)
+    : state.missions.map((mission) => mission.id);
   return `
     <div class="panel">
       <div class="section-title">إصدار طلب تقرير جديد</div>
       <form id="request-form" class="form-grid">
+        <label class="field">
+          <span>عائلة الطلب</span>
+          <select name="requestFamily" id="request-family">
+            ${canIssueReportRequest(user, "activity") ? `<option value="activity">طلب نشاط</option>` : ""}
+            ${canIssueReportRequest(user, "thematic") ? `<option value="thematic">طلب موضوعي</option>` : ""}
+            ${canIssueReportRequest(user, "periodic") ? `<option value="periodic">طلب زمني</option>` : ""}
+          </select>
+        </label>
         <label class="field">
           <span>عنوان الطلب</span>
           <input name="title" required>
         </label>
         <label class="field">
           <span>نوع الطلب</span>
-          <select name="type">
-            <option>سنوي</option>
+          <select name="type" id="request-type">
+            <option>نشاط</option>
+            <option>موضوعي</option>
+            <option>ربع سنوي</option>
             <option>نصف سنوي</option>
+            <option>سنوي</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>المسار الموضوعي</span>
+          <select name="thematicTrack" id="request-thematic-track">
+            <option value="">غير منطبق</option>
+            ${THEMATIC_TRACK_OPTIONS.map((item) => `<option value="${item}">${item}</option>`).join("")}
           </select>
         </label>
         <label class="field full">
@@ -1482,7 +1622,7 @@ function renderRequestForm() {
         <label class="field full">
           <span>البعثات المستهدفة</span>
           <div class="checkbox-grid">
-            ${state.missions.map((mission) => `
+            ${state.missions.filter((mission) => availableMissionIds.includes(mission.id)).map((mission) => `
               <label class="check-item">
                 <input type="checkbox" name="missionId" value="${mission.id}" checked>
                 <span>${mission.name} - ${getDepartmentName(mission.departmentId)}</span>
@@ -1628,19 +1768,43 @@ function bindEvents() {
   if (reportForm) reportForm.addEventListener("submit", handleReportSubmit);
 
   const reportFamily = document.getElementById("report-family");
-  if (reportFamily) {
+  const reportType = document.querySelector('#report-form select[name="type"]');
+  const thematicTrack = document.querySelector('#report-form select[name="thematicTrack"]');
+  if (reportFamily && reportType && thematicTrack) {
     const updateReportSections = () => {
       const value = reportFamily.value;
+      const currentType = reportType.dataset.currentType || reportType.value;
+      reportType.innerHTML = REPORT_TYPE_OPTIONS[value].map((item) => `<option ${currentType === item ? "selected" : ""}>${item}</option>`).join("");
+      reportType.dataset.currentType = reportType.value;
+      thematicTrack.disabled = value !== "thematic";
+      if (value !== "thematic") thematicTrack.value = "";
       document.querySelectorAll(".report-template-section").forEach((section) => {
         section.style.display = section.dataset.template === value ? "" : "none";
       });
     };
     reportFamily.addEventListener("change", updateReportSections);
+    reportType.addEventListener("change", () => {
+      reportType.dataset.currentType = reportType.value;
+    });
     updateReportSections();
   }
 
   const requestForm = document.getElementById("request-form");
   if (requestForm) requestForm.addEventListener("submit", handleRequestSubmit);
+
+  const requestFamily = document.getElementById("request-family");
+  const requestType = document.getElementById("request-type");
+  const requestThematicTrack = document.getElementById("request-thematic-track");
+  if (requestFamily && requestType && requestThematicTrack) {
+    const updateRequestControls = () => {
+      const family = requestFamily.value;
+      requestType.innerHTML = REPORT_TYPE_OPTIONS[family].map((item) => `<option>${item}</option>`).join("");
+      requestThematicTrack.disabled = family !== "thematic";
+      if (family !== "thematic") requestThematicTrack.value = "";
+    };
+    requestFamily.addEventListener("change", updateRequestControls);
+    updateRequestControls();
+  }
 
   const circularForm = document.getElementById("circular-form");
   if (circularForm) circularForm.addEventListener("submit", handleCircularSubmit);
@@ -1774,6 +1938,15 @@ function handleReportSubmit(event) {
   const user = getSessionUser();
   const form = new FormData(event.currentTarget);
   const editingReport = state.reports.find((item) => item.id === state.editingReportId && item.missionId === user.missionId);
+  const previousRequestId = editingReport?.requestId || "";
+  const linkedRequest = state.reportRequests.find((item) => item.id === String(form.get("requestId") || ""));
+  const proposedFamily = String(form.get("reportFamily") || "activity");
+  if (proposedFamily === "periodic" && !linkedRequest && !editingReport) {
+    addAlert("danger", "تعذر رفع التقرير", "التقارير الزمنية لا تُرفع إلا استجابة لطلب رسمي صادر من الجهات القيادية.");
+    saveState();
+    renderApp();
+    return;
+  }
   const report = editingReport || {
     id: `report-${Date.now()}`,
     missionId: user.missionId,
@@ -1782,11 +1955,19 @@ function handleReportSubmit(event) {
     createdAt: new Date().toLocaleString("ar-YE"),
     workflowHistory: []
   };
+  const bilateralIndicators = BILATERAL_INDICATOR_FIELDS.reduce((acc, field) => {
+    acc[field.key] = {
+      trend: String(form.get(`indicator_trend_${field.key}`) || ""),
+      note: String(form.get(`indicator_note_${field.key}`) || "")
+    };
+    return acc;
+  }, {});
+  const resolvedFamily = linkedRequest ? linkedRequest.requestFamily : proposedFamily;
   Object.assign(report, {
-    reportFamily: String(form.get("reportFamily") || "activity"),
+    reportFamily: resolvedFamily,
     title: String(form.get("title")),
-    type: String(form.get("type")),
-    thematicTrack: String(form.get("thematicTrack")),
+    type: linkedRequest ? linkedRequest.type : String(form.get("type")),
+    thematicTrack: linkedRequest && linkedRequest.requestFamily === "thematic" ? linkedRequest.thematicTrack : String(form.get("thematicTrack")),
     requestId: String(form.get("requestId")) || "",
     activityDate: String(form.get("activityDate")),
     summary: String(form.get("summary")),
@@ -1804,6 +1985,7 @@ function handleReportSubmit(event) {
     relationshipOutlook: String(form.get("relationshipOutlook") || ""),
     visitsSummary: String(form.get("visitsSummary") || ""),
     communityUpdate: String(form.get("communityUpdate") || ""),
+    bilateralIndicators,
     thematicSituation: String(form.get("thematicSituation") || ""),
     thematicImplications: String(form.get("thematicImplications") || ""),
     thematicRecommendations: String(form.get("thematicRecommendations") || "")
@@ -1814,6 +1996,7 @@ function handleReportSubmit(event) {
   }
   state.selectedReportId = report.id;
   state.editingReportId = null;
+  if (previousRequestId && previousRequestId !== report.requestId) syncRequestCompletion(previousRequestId, report.missionId);
   if (report.requestId) syncRequestCompletion(report.requestId, report.missionId);
   addAlert("success", "تم رفع تقرير جديد", `رفعت ${user.name} التقرير "${report.title}" وأصبح مرئيًا للجهات المخولة.`);
   logAudit(user.name, editingReport ? "تعديل تقرير" : "رفع تقرير", report.title, getMissionName(report.missionId));
@@ -1825,13 +2008,24 @@ function handleRequestSubmit(event) {
   event.preventDefault();
   const user = getSessionUser();
   const form = new FormData(event.currentTarget);
+  const requestFamily = String(form.get("requestFamily"));
   const targetMissionIds = form.getAll("missionId");
   if (!targetMissionIds.length) return;
+  if (!canIssueReportRequest(user, requestFamily)) {
+    addAlert("danger", "تعذر إصدار الطلب", "لا تملك هذه الجهة صلاحية إصدار هذا النوع من طلبات التقارير.");
+    saveState();
+    renderApp();
+    return;
+  }
   state.reportRequests.unshift({
     id: `request-${Date.now()}`,
     title: String(form.get("title")),
     type: String(form.get("type")),
+    requestFamily,
+    thematicTrack: String(form.get("thematicTrack") || ""),
     createdBy: user.name,
+    createdByRole: user.role,
+    requestedByDepartmentId: user.role === "department" ? user.departmentId : "",
     dueDate: String(form.get("dueDate")),
     targetMissionIds,
     completedMissionIds: [],
