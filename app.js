@@ -78,6 +78,74 @@ const REPORT_TYPE_OPTIONS = {
 
 const THEMATIC_TRACK_OPTIONS = ["سياسي", "اقتصادي", "إعلامي", "ثقافي", "قنصلي"];
 
+const THEMATIC_TRACK_CONFIG = {
+  "سياسي": {
+    title: "المسار السياسي",
+    description: "يركز على التطورات السياسية واتجاهات المواقف الرسمية وانعكاساتها على مصالح اليمن وحركتها الدبلوماسية.",
+    labels: {
+      situation: "الوضع القائم وتحليل الملف السياسي",
+      developments: "أهم التطورات والاتصالات والرسائل السياسية",
+      stakeholders: "الأطراف الفاعلة والجهات المؤثرة",
+      implications: "الانعكاسات على مصالح اليمن وموقفها السياسي",
+      risks: "الفرص والمخاطر والتحديات",
+      missionAction: "تحرك البعثة المطلوب أو المنجز",
+      recommendations: "التوصيات السياسية وخطوات المتابعة"
+    }
+  },
+  "اقتصادي": {
+    title: "المسار الاقتصادي",
+    description: "يركز على التجارة والاستثمار والمساعدات والتنمية والفرص الاقتصادية ذات الصلة ببلد الاعتماد.",
+    labels: {
+      situation: "الوضع الاقتصادي القائم وتحليل الموضوع",
+      developments: "أهم التطورات الاقتصادية والتجارية والاستثمارية",
+      stakeholders: "الجهات الاقتصادية والشركاء الرئيسيون",
+      implications: "الانعكاسات على مصالح اليمن الاقتصادية والتنموية",
+      risks: "الفرص والمعوقات والتحديات الاقتصادية",
+      missionAction: "تحرك البعثة الاقتصادي والتنسيقي",
+      recommendations: "التوصيات الاقتصادية وخطوات المتابعة"
+    }
+  },
+  "إعلامي": {
+    title: "المسار الإعلامي",
+    description: "يركز على صورة اليمن في الإعلام والرأي العام والمنصات المؤثرة والرسائل التي تحتاج إلى إدارة ومتابعة.",
+    labels: {
+      situation: "الوضع الإعلامي القائم وتحليل التغطية",
+      developments: "أهم التطورات الإعلامية والرسائل المتداولة",
+      stakeholders: "المنابر الإعلامية والجهات والشخصيات المؤثرة",
+      implications: "الانعكاسات على صورة اليمن ومصالحها",
+      risks: "الفرص والمخاطر الإعلامية والتحديات",
+      missionAction: "تحرك البعثة الإعلامي والتواصلي",
+      recommendations: "التوصيات الإعلامية وخطوات المتابعة"
+    }
+  },
+  "ثقافي": {
+    title: "المسار الثقافي",
+    description: "يركز على الحضور الثقافي والتعليمي والعلمي والتبادل الأكاديمي والأنشطة التي تعزز الصورة الحضارية لليمن.",
+    labels: {
+      situation: "الوضع الثقافي/التعليمي القائم",
+      developments: "أهم التطورات والأنشطة الثقافية والعلمية",
+      stakeholders: "المؤسسات الثقافية والأكاديمية والشركاء",
+      implications: "الانعكاسات على حضور اليمن الثقافي والعلمي",
+      risks: "الفرص والمعوقات والتحديات الثقافية",
+      missionAction: "تحرك البعثة الثقافي والتعليمي",
+      recommendations: "التوصيات الثقافية وخطوات المتابعة"
+    }
+  },
+  "قنصلي": {
+    title: "المسار القنصلي",
+    description: "يركز على الخدمات القنصلية وشؤون الجالية والتنسيق مع الجهات المختصة والمعالجات الإجرائية.",
+    labels: {
+      situation: "الوضع القنصلي القائم وتحليل الخدمة",
+      developments: "أهم التطورات والمعاملات والقضايا القنصلية",
+      stakeholders: "الجهات الرسمية والشركاء المعنيون بالخدمة",
+      implications: "الانعكاسات على الجالية والمصالح اليمنية",
+      risks: "التحديات التشغيلية والفرص التحسينية",
+      missionAction: "تحرك البعثة القنصلي والإجرائي",
+      recommendations: "التوصيات القنصلية وخطوات المتابعة"
+    }
+  }
+};
+
 const BILATERAL_INDICATOR_FIELDS = [
   { key: "political", label: "السياسية", hint: "الاتصالات الرسمية، الزيارات، التنسيق في المحافل الدولية" },
   { key: "economic", label: "الاقتصادية والاستثمارية", hint: "التبادل التجاري، الاستثمارات، الاتفاقيات الاقتصادية" },
@@ -406,7 +474,11 @@ function loadState() {
     qualityScores: normalizeQualityScores(report.qualityScores),
     submittedOn: report.submittedOn || "",
     thematicSituation: report.thematicSituation || "",
+    thematicDevelopments: report.thematicDevelopments || "",
+    thematicStakeholders: report.thematicStakeholders || "",
     thematicImplications: report.thematicImplications || "",
+    thematicRisks: report.thematicRisks || "",
+    thematicMissionAction: report.thematicMissionAction || "",
     thematicRecommendations: report.thematicRecommendations || "",
     workflowStage: report.workflowStage || "مرفوع من البعثة",
     workflowHistory: Array.isArray(report.workflowHistory) ? report.workflowHistory : []
@@ -750,6 +822,45 @@ function buildPeriodicDraft(form) {
       };
       return acc;
     }, {})
+  };
+}
+
+function getThematicTrackConfig(track) {
+  return THEMATIC_TRACK_CONFIG[track] || THEMATIC_TRACK_CONFIG["سياسي"];
+}
+
+function buildThematicDraft(form) {
+  return {
+    thematicTrack: String(form.get("thematicTrack") || "سياسي"),
+    thematicSituation: String(form.get("thematicSituation") || ""),
+    thematicDevelopments: String(form.get("thematicDevelopments") || ""),
+    thematicStakeholders: String(form.get("thematicStakeholders") || ""),
+    thematicImplications: String(form.get("thematicImplications") || ""),
+    thematicRisks: String(form.get("thematicRisks") || ""),
+    thematicMissionAction: String(form.get("thematicMissionAction") || ""),
+    thematicRecommendations: String(form.get("thematicRecommendations") || "")
+  };
+}
+
+function getThematicCompletion(report = {}) {
+  const config = getThematicTrackConfig(report.thematicTrack || "سياسي");
+  const sections = [
+    { key: "situation", label: config.labels.situation, complete: hasMeaningfulValue(report.thematicSituation) },
+    { key: "developments", label: config.labels.developments, complete: hasMeaningfulValue(report.thematicDevelopments) },
+    { key: "stakeholders", label: config.labels.stakeholders, complete: hasMeaningfulValue(report.thematicStakeholders) },
+    { key: "implications", label: config.labels.implications, complete: hasMeaningfulValue(report.thematicImplications) },
+    { key: "risks", label: config.labels.risks, complete: hasMeaningfulValue(report.thematicRisks) },
+    { key: "missionAction", label: config.labels.missionAction, complete: hasMeaningfulValue(report.thematicMissionAction) },
+    { key: "recommendations", label: config.labels.recommendations, complete: hasMeaningfulValue(report.thematicRecommendations) }
+  ];
+  const completed = sections.filter((section) => section.complete).length;
+  return {
+    config,
+    sections,
+    completed,
+    total: sections.length,
+    percent: sections.length ? Math.round((completed / sections.length) * 100) : 0,
+    missing: sections.filter((section) => !section.complete)
   };
 }
 
@@ -1320,6 +1431,9 @@ function renderMissionReportForm(user) {
   const periodicType = editingReport && inferReportFamily(editingReport) === "periodic" ? editingReport.type : "نصف سنوي";
   const periodicGuidance = getPeriodicTypeGuidance(periodicType);
   const periodicCompletion = getPeriodicCompletion(editingReport || {});
+  const thematicTrack = editingReport && inferReportFamily(editingReport) === "thematic" ? (editingReport.thematicTrack || "سياسي") : "سياسي";
+  const thematicConfig = getThematicTrackConfig(thematicTrack);
+  const thematicCompletion = getThematicCompletion(editingReport || { thematicTrack });
   return `
     <div class="report-form-shell">
       <div class="report-form-header">
@@ -1389,6 +1503,18 @@ function renderMissionReportForm(user) {
                 ${THEMATIC_TRACK_OPTIONS.map((item) => `<option ${editingReport && editingReport.thematicTrack === item ? "selected" : ""}>${item}</option>`).join("")}
               </select>
             </label>
+            <div class="field full report-family-section" data-family="thematic">
+              <div class="report-periodic-meta-card" id="thematic-meta-card">
+                <div>
+                  <div class="section-title" id="thematic-track-title">${thematicConfig.title}</div>
+                  <p class="muted" id="thematic-track-description">${thematicConfig.description}</p>
+                </div>
+                <div class="report-periodic-kpis">
+                  <span class="tag info" id="thematic-track-badge">${thematicTrack}</span>
+                  <span class="tag ${thematicCompletion.percent === 100 ? "success" : "warning"}" id="thematic-progress-badge">اكتمال ${thematicCompletion.completed}/${thematicCompletion.total}</span>
+                </div>
+              </div>
+            </div>
             <label class="field report-core-field">
               <span>الطلب المرتبط</span>
               <select name="requestId" id="report-request-id" data-current-request-id="${editingReport ? editingReport.requestId || "" : ""}">
@@ -1453,17 +1579,54 @@ function renderMissionReportForm(user) {
               <div class="section-title">قالب التقرير الموضوعي</div>
               <p class="muted">يبنى على تحليل الموضوع وآثاره على مصالح اليمن ثم يختتم بتوصيات قابلة للتنفيذ والمتابعة.</p>
             </div>
+            <div class="report-periodic-quality-card" id="thematic-quality-card">
+              <div class="report-periodic-quality-header">
+                <div>
+                  <div class="section-title">مؤشر جاهزية التقرير الموضوعي</div>
+                  <p class="muted">لكل مسار موضوعي عناصره الخاصة، ويجب استكمال الصورة العامة والجهات الفاعلة والآثار والفرص والتوصيات التشغيلية.</p>
+                </div>
+                <div class="report-periodic-kpis">
+                  <span class="tag info" id="thematic-quality-type">${thematicTrack}</span>
+                  <span class="tag ${thematicCompletion.percent === 100 ? "success" : "warning"}" id="thematic-quality-progress">جاهزية ${thematicCompletion.percent}%</span>
+                </div>
+              </div>
+              <div class="progress"><span id="thematic-quality-bar" style="width:${thematicCompletion.percent}%"></span></div>
+              <div class="report-periodic-status-grid" id="thematic-status-grid">
+                ${thematicCompletion.sections.map((section) => `
+                  <div class="check-item ${section.complete ? "complete" : ""}" data-thematic-status="${section.key}">
+                    <strong>${section.label}</strong>
+                    <span>${section.complete ? "مكتمل" : "يحتاج استكمال"}</span>
+                  </div>
+                `).join("")}
+              </div>
+            </div>
             <div class="report-panel-grid">
               <label class="field full" data-required-families="thematic">
-                <span>الوضع القائم وتحليل الموضوع</span>
+                <span id="thematic-label-situation">${thematicConfig.labels.situation}</span>
                 <textarea name="thematicSituation">${editingReport ? editingReport.thematicSituation : ""}</textarea>
               </label>
               <label class="field full" data-required-families="thematic">
-                <span>الانعكاسات على مصالح اليمن</span>
+                <span id="thematic-label-developments">${thematicConfig.labels.developments}</span>
+                <textarea name="thematicDevelopments">${editingReport ? (editingReport.thematicDevelopments || "") : ""}</textarea>
+              </label>
+              <label class="field full" data-required-families="thematic">
+                <span id="thematic-label-stakeholders">${thematicConfig.labels.stakeholders}</span>
+                <textarea name="thematicStakeholders">${editingReport ? (editingReport.thematicStakeholders || "") : ""}</textarea>
+              </label>
+              <label class="field full" data-required-families="thematic">
+                <span id="thematic-label-implications">${thematicConfig.labels.implications}</span>
                 <textarea name="thematicImplications">${editingReport ? editingReport.thematicImplications : ""}</textarea>
               </label>
               <label class="field full" data-required-families="thematic">
-                <span>التوصيات الموضوعية</span>
+                <span id="thematic-label-risks">${thematicConfig.labels.risks}</span>
+                <textarea name="thematicRisks">${editingReport ? (editingReport.thematicRisks || "") : ""}</textarea>
+              </label>
+              <label class="field full" data-required-families="thematic">
+                <span id="thematic-label-action">${thematicConfig.labels.missionAction}</span>
+                <textarea name="thematicMissionAction">${editingReport ? (editingReport.thematicMissionAction || "") : ""}</textarea>
+              </label>
+              <label class="field full" data-required-families="thematic">
+                <span id="thematic-label-recommendations">${thematicConfig.labels.recommendations}</span>
                 <textarea name="thematicRecommendations">${editingReport ? editingReport.thematicRecommendations : ""}</textarea>
               </label>
             </div>
@@ -1615,6 +1778,16 @@ function renderMissionReportForm(user) {
               </div>
             </div>
           </div>
+          <div class="report-family-section" data-family="thematic">
+            <div class="report-review-checklist" id="thematic-review-checklist">
+              <div class="section-title">قائمة تحقق التقرير الموضوعي</div>
+              <div class="detail-list">
+                <div class="detail-row"><span>المسار</span><span id="thematic-review-track">${thematicTrack}</span></div>
+                <div class="detail-row"><span>مستوى الجاهزية</span><span id="thematic-review-readiness">${thematicCompletion.completed}/${thematicCompletion.total} محاور مكتملة</span></div>
+                <div class="detail-row"><span>المحاور غير المكتملة</span><span id="thematic-review-missing">${thematicCompletion.missing.length ? thematicCompletion.missing.map((section) => section.label).join("، ") : "لا توجد نواقص"}</span></div>
+              </div>
+            </div>
+          </div>
           <div class="report-panel-grid">
             <label class="field full">
               <span>الملخص التنفيذي</span>
@@ -1706,9 +1879,17 @@ function renderReportDetails(report, user) {
       ${inferReportFamily(report) === "thematic" ? `
         <div class="detail-card">
           <div class="section-title">محاور التقرير الموضوعي</div>
-          <p class="detail-note"><strong>الوضع القائم:</strong> ${report.thematicSituation || "لا يوجد"}</p>
-          <p class="detail-note"><strong>الانعكاسات:</strong> ${report.thematicImplications || "لا يوجد"}</p>
-          <p class="detail-note"><strong>التوصيات الموضوعية:</strong> ${report.thematicRecommendations || "لا يوجد"}</p>
+          <div class="report-periodic-kpis">
+            <span class="tag info">${getThematicTrackConfig(report.thematicTrack || "سياسي").title}</span>
+            <span class="tag ${getThematicCompletion(report).percent === 100 ? "success" : "warning"}">جاهزية ${getThematicCompletion(report).percent}%</span>
+          </div>
+          <p class="detail-note"><strong>${getThematicTrackConfig(report.thematicTrack || "سياسي").labels.situation}:</strong> ${report.thematicSituation || "لا يوجد"}</p>
+          <p class="detail-note"><strong>${getThematicTrackConfig(report.thematicTrack || "سياسي").labels.developments}:</strong> ${report.thematicDevelopments || "لا يوجد"}</p>
+          <p class="detail-note"><strong>${getThematicTrackConfig(report.thematicTrack || "سياسي").labels.stakeholders}:</strong> ${report.thematicStakeholders || "لا يوجد"}</p>
+          <p class="detail-note"><strong>${getThematicTrackConfig(report.thematicTrack || "سياسي").labels.implications}:</strong> ${report.thematicImplications || "لا يوجد"}</p>
+          <p class="detail-note"><strong>${getThematicTrackConfig(report.thematicTrack || "سياسي").labels.risks}:</strong> ${report.thematicRisks || "لا يوجد"}</p>
+          <p class="detail-note"><strong>${getThematicTrackConfig(report.thematicTrack || "سياسي").labels.missionAction}:</strong> ${report.thematicMissionAction || "لا يوجد"}</p>
+          <p class="detail-note"><strong>${getThematicTrackConfig(report.thematicTrack || "سياسي").labels.recommendations}:</strong> ${report.thematicRecommendations || "لا يوجد"}</p>
         </div>
       ` : ""}
       <div class="detail-card">
@@ -2388,6 +2569,25 @@ function bindEvents() {
     const periodicReviewCoverage = document.getElementById("periodic-review-coverage");
     const periodicReviewReadiness = document.getElementById("periodic-review-readiness");
     const periodicReviewMissing = document.getElementById("periodic-review-missing");
+    const thematicTrackTitle = document.getElementById("thematic-track-title");
+    const thematicTrackDescription = document.getElementById("thematic-track-description");
+    const thematicTrackBadge = document.getElementById("thematic-track-badge");
+    const thematicProgressBadge = document.getElementById("thematic-progress-badge");
+    const thematicQualityType = document.getElementById("thematic-quality-type");
+    const thematicQualityProgress = document.getElementById("thematic-quality-progress");
+    const thematicQualityBar = document.getElementById("thematic-quality-bar");
+    const thematicReviewTrack = document.getElementById("thematic-review-track");
+    const thematicReviewReadiness = document.getElementById("thematic-review-readiness");
+    const thematicReviewMissing = document.getElementById("thematic-review-missing");
+    const thematicLabels = {
+      situation: document.getElementById("thematic-label-situation"),
+      developments: document.getElementById("thematic-label-developments"),
+      stakeholders: document.getElementById("thematic-label-stakeholders"),
+      implications: document.getElementById("thematic-label-implications"),
+      risks: document.getElementById("thematic-label-risks"),
+      action: document.getElementById("thematic-label-action"),
+      recommendations: document.getElementById("thematic-label-recommendations")
+    };
     const updatePeriodicInsights = () => {
       const draft = buildPeriodicDraft(new FormData(reportForm));
       const guidance = getPeriodicTypeGuidance(reportType.value);
@@ -2411,6 +2611,40 @@ function bindEvents() {
       if (periodicReviewMissing) periodicReviewMissing.textContent = completion.missing.length ? completion.missing.map((section) => section.label).join("، ") : "لا توجد نواقص";
       document.querySelectorAll("[data-periodic-status]").forEach((item) => {
         const section = completion.sections.find((entry) => entry.key === item.dataset.periodicStatus);
+        if (!section) return;
+        item.classList.toggle("complete", section.complete);
+        const note = item.querySelector("span");
+        if (note) note.textContent = section.complete ? "مكتمل" : "يحتاج استكمال";
+      });
+    };
+    const updateThematicInsights = () => {
+      const draft = buildThematicDraft(new FormData(reportForm));
+      const completion = getThematicCompletion(draft);
+      if (thematicTrackTitle) thematicTrackTitle.textContent = completion.config.title;
+      if (thematicTrackDescription) thematicTrackDescription.textContent = completion.config.description;
+      if (thematicTrackBadge) thematicTrackBadge.textContent = draft.thematicTrack || "سياسي";
+      if (thematicProgressBadge) {
+        thematicProgressBadge.textContent = `اكتمال ${completion.completed}/${completion.total}`;
+        thematicProgressBadge.className = `tag ${completion.percent === 100 ? "success" : "warning"}`;
+      }
+      if (thematicQualityType) thematicQualityType.textContent = draft.thematicTrack || "سياسي";
+      if (thematicQualityProgress) {
+        thematicQualityProgress.textContent = `جاهزية ${completion.percent}%`;
+        thematicQualityProgress.className = `tag ${completion.percent === 100 ? "success" : "warning"}`;
+      }
+      if (thematicQualityBar) thematicQualityBar.style.width = `${completion.percent}%`;
+      if (thematicReviewTrack) thematicReviewTrack.textContent = draft.thematicTrack || "سياسي";
+      if (thematicReviewReadiness) thematicReviewReadiness.textContent = `${completion.completed}/${completion.total} محاور مكتملة`;
+      if (thematicReviewMissing) thematicReviewMissing.textContent = completion.missing.length ? completion.missing.map((section) => section.label).join("، ") : "لا توجد نواقص";
+      if (thematicLabels.situation) thematicLabels.situation.textContent = completion.config.labels.situation;
+      if (thematicLabels.developments) thematicLabels.developments.textContent = completion.config.labels.developments;
+      if (thematicLabels.stakeholders) thematicLabels.stakeholders.textContent = completion.config.labels.stakeholders;
+      if (thematicLabels.implications) thematicLabels.implications.textContent = completion.config.labels.implications;
+      if (thematicLabels.risks) thematicLabels.risks.textContent = completion.config.labels.risks;
+      if (thematicLabels.action) thematicLabels.action.textContent = completion.config.labels.missionAction;
+      if (thematicLabels.recommendations) thematicLabels.recommendations.textContent = completion.config.labels.recommendations;
+      document.querySelectorAll("[data-thematic-status]").forEach((item) => {
+        const section = completion.sections.find((entry) => entry.key === item.dataset.thematicStatus);
         if (!section) return;
         item.classList.toggle("complete", section.complete);
         const note = item.querySelector("span");
@@ -2482,6 +2716,7 @@ function bindEvents() {
         panel.classList.toggle("active", panel.dataset.reportFormPanel === state.reportFormStep);
       });
       updatePeriodicInsights();
+      updateThematicInsights();
     };
     reportFamily.addEventListener("change", updateReportSections);
     reportType.addEventListener("change", () => {
@@ -2512,8 +2747,14 @@ function bindEvents() {
         });
       });
     });
-    reportForm.addEventListener("input", updatePeriodicInsights);
-    reportForm.addEventListener("change", updatePeriodicInsights);
+    reportForm.addEventListener("input", () => {
+      updatePeriodicInsights();
+      updateThematicInsights();
+    });
+    reportForm.addEventListener("change", () => {
+      updatePeriodicInsights();
+      updateThematicInsights();
+    });
     updateReportSections();
   }
 
@@ -2691,6 +2932,7 @@ function handleReportSubmit(event) {
   const currentFamily = editingReport ? inferReportFamily(editingReport) : "";
   const resolvedFamily = linkedRequest ? linkedRequest.requestFamily : proposedFamily;
   const isPeriodicSubmission = resolvedFamily === "periodic" || currentFamily === "periodic";
+  const isThematicSubmission = resolvedFamily === "thematic" || currentFamily === "thematic";
   if (!linkedRequest && requestId) {
     addAlert("danger", "تعذر رفع التقرير", "الطلب المرتبط غير صحيح أو لم يعد ظاهرًا ضمن نطاق هذه البعثة.");
     saveState();
@@ -2716,6 +2958,7 @@ function handleReportSubmit(event) {
     return;
   }
   const periodicDraft = buildPeriodicDraft(form);
+  const thematicDraft = buildThematicDraft(form);
   if (isPeriodicSubmission) {
     if (!hasMeaningfulValue(periodicDraft.reportingYear) || !hasMeaningfulValue(periodicDraft.coverageFrom) || !hasMeaningfulValue(periodicDraft.coverageTo)) {
       addAlert("danger", "تعذر رفع التقرير", "يجب استكمال سنة التقرير ونطاق التغطية الزمنية للتقرير السنوي أو النصف سنوي.");
@@ -2740,6 +2983,15 @@ function handleReportSubmit(event) {
     const periodicCompletion = getPeriodicCompletion(periodicDraft);
     if (periodicCompletion.missing.length) {
       addAlert("danger", "تعذر رفع التقرير", `لا يمكن رفع التقرير الزمني قبل استكمال التبويبات التالية: ${periodicCompletion.missing.map((section) => section.label).join("، ")}.`);
+      saveState();
+      renderApp();
+      return;
+    }
+  }
+  if (isThematicSubmission) {
+    const thematicCompletion = getThematicCompletion(thematicDraft);
+    if (thematicCompletion.missing.length) {
+      addAlert("danger", "تعذر رفع التقرير", `لا يمكن رفع التقرير الموضوعي قبل استكمال المحاور التالية: ${thematicCompletion.missing.map((section) => section.label).join("، ")}.`);
       saveState();
       renderApp();
       return;
@@ -2795,7 +3047,11 @@ function handleReportSubmit(event) {
     reviewNotes: editingReport && editingReport.workflowStage !== "أعيد للبعثة للاستكمال" ? editingReport.reviewNotes || "" : "",
     qualityScores: editingReport ? normalizeQualityScores(editingReport.qualityScores) : normalizeQualityScores({}),
     thematicSituation: String(form.get("thematicSituation") || ""),
+    thematicDevelopments: String(form.get("thematicDevelopments") || ""),
+    thematicStakeholders: String(form.get("thematicStakeholders") || ""),
     thematicImplications: String(form.get("thematicImplications") || ""),
+    thematicRisks: String(form.get("thematicRisks") || ""),
+    thematicMissionAction: String(form.get("thematicMissionAction") || ""),
     thematicRecommendations: String(form.get("thematicRecommendations") || "")
   });
   addWorkflowEntry(report, user.name, editingReport ? "تعديل التقرير" : "رفع التقرير", report.workflowStage);
