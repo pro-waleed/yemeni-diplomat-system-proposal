@@ -553,7 +553,10 @@ textarea {
 
 .report-incoming-card,
 .report-form-intro-card,
-.report-indicator-card {
+.report-indicator-card,
+.report-periodic-meta-card,
+.report-periodic-quality-card,
+.report-review-checklist {
   padding: 18px;
   border-radius: 22px;
   border: 1px solid var(--line);
@@ -604,6 +607,28 @@ textarea {
 
 .report-inner-tabs {
   margin-bottom: 10px;
+}
+
+.report-periodic-meta-card,
+.report-periodic-quality-card,
+.report-review-checklist {
+  display: grid;
+  gap: 12px;
+}
+
+.report-periodic-quality-header,
+.report-periodic-kpis {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.report-periodic-status-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .periodic-form-panels {
@@ -688,12 +713,23 @@ textarea {
 
 .check-item {
   display: flex;
+  justify-content: space-between;
   gap: 8px;
   align-items: center;
   padding: 10px 12px;
   border-radius: 14px;
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.72);
+}
+
+.check-item.complete {
+  border-color: rgba(15, 118, 110, 0.2);
+  background: rgba(15, 118, 110, 0.08);
+}
+
+.check-item span {
+  color: var(--muted);
+  font-size: 0.92rem;
 }
 
 .empty {
@@ -722,7 +758,8 @@ textarea {
   .report-story-grid,
   .report-detail-hero,
   .report-panel-grid,
-  .report-indicator-grid {
+  .report-indicator-grid,
+  .report-periodic-status-grid {
     grid-template-columns: 1fr;
   }
 }

@@ -116,6 +116,19 @@ const PERIODIC_REPORT_TABS = [
   { key: "community", label: "الجالية والإحصاءات" }
 ];
 
+const PERIODIC_TYPE_GUIDANCE = {
+  "سنوي": {
+    label: "تقرير سنوي",
+    description: "يغطي سنة كاملة، ويركز على الاتجاهات التراكمية والنتائج الممتدة ومقارنة الأداء بالأعوام السابقة.",
+    emphasis: "أبرز التحولات الكبرى، وما تحقق خلال العام كاملًا، والفرص والمعوقات والتوصيات القابلة للمتابعة."
+  },
+  "نصف سنوي": {
+    label: "تقرير نصف سنوي",
+    description: "يغطي نصف عام، ويركز على المتغيرات المرحلية ومستوى التقدم وما يحتاج إلى استكمال في الفترة التالية.",
+    emphasis: "أبرز ما أُنجز خلال الفترة، وما تعثر، وما يجب نقله مباشرة إلى خطة المتابعة القادمة."
+  }
+};
+
 const REPORT_FORM_STEPS = [
   { key: "basics", label: "البيانات الأساسية" },
   { key: "content", label: "محتوى التقرير" },
@@ -187,6 +200,9 @@ const seedState = () => ({
       visitsFromHostCountry: "أهم الزيارات المتبادلة من جانب بلد الاعتماد خلال الفترة.",
       communityUpdate: "تحديث موجز عن شؤون الجالية اليمنية ذات الصلة ببلد الاعتماد.",
       communityStats: "إحصاءات عامة عن الجالية اليمنية في بلد الاعتماد.",
+      reportingYear: "2026",
+      coverageFrom: "2026-01-01",
+      coverageTo: "2026-06-30",
       bilateralIndicators: {
         political: { trend: "تنامي", note: "نشاط اتصالات رسمية منتظم وتنسيق في المواقف الدولية." },
         economic: { trend: "استقرار", note: "حراك اقتصادي محدود مع فرص توسع قائمة." },
@@ -382,6 +398,9 @@ function loadState() {
     visitsFromHostCountry: report.visitsFromHostCountry || "",
     communityUpdate: report.communityUpdate || "",
     communityStats: report.communityStats || "",
+    reportingYear: report.reportingYear || "",
+    coverageFrom: report.coverageFrom || "",
+    coverageTo: report.coverageTo || "",
     bilateralIndicators: normalizeBilateralIndicators(report.bilateralIndicators),
     reviewNotes: report.reviewNotes || "",
     qualityScores: normalizeQualityScores(report.qualityScores),
@@ -632,6 +651,108 @@ function normalizeQualityScores(scores = {}) {
   }, {});
 }
 
+function hasMeaningfulValue(value) {
+  return Boolean(String(value || "").trim());
+}
+
+function getPeriodicTypeGuidance(type) {
+  return PERIODIC_TYPE_GUIDANCE[type] || {
+    label: "تقرير زمني",
+    description: "قالب زمني منظم يركز على العلاقات الثنائية، الإنجاز، والمتابعة المؤسسية.",
+    emphasis: "استكمل جميع التبويبات ثم راجع الاتساق بين المؤشرات والأنشطة والتوصيات."
+  };
+}
+
+function getCompletedIndicatorCount(indicators = {}) {
+  const normalized = normalizeBilateralIndicators(indicators);
+  return BILATERAL_INDICATOR_FIELDS.filter((field) => (
+    hasMeaningfulValue(normalized[field.key].trend) && hasMeaningfulValue(normalized[field.key].note)
+  )).length;
+}
+
+function getPeriodicSectionSummaries(report = {}) {
+  const completedIndicators = getCompletedIndicatorCount(report.bilateralIndicators);
+  return PERIODIC_REPORT_TABS.map((tab) => {
+    let complete = false;
+    let note = "";
+    if (tab.key === "bilateral") {
+      complete = hasMeaningfulValue(report.bilateralAssessment) && completedIndicators >= 5;
+      note = complete ? `تم استكمال ${completedIndicators} مؤشرات ثنائية.` : "يتطلب تقييمًا تحليليًا واستكمال خمسة مؤشرات على الأقل.";
+    } else if (tab.key === "cooperation") {
+      complete = hasMeaningfulValue(report.supportCooperation);
+      note = complete ? "تم توثيق أوجه الدعم والتعاون." : "أدخل أوجه الدعم والتعاون الثنائي المحقق.";
+    } else if (tab.key === "agreements") {
+      complete = hasMeaningfulValue(report.activeAgreements) && hasMeaningfulValue(report.agreementsNeedingActivation);
+      note = complete ? "تم الفصل بين الاتفاقيات السارية وتلك التي تحتاج متابعة." : "يلزم استكمال الاتفاقيات السارية والاتفاقيات التي تحتاج متابعة.";
+    } else if (tab.key === "achievements") {
+      complete = hasMeaningfulValue(report.completedActivities);
+      note = complete ? "تم توثيق الأنشطة والملفات المنجزة." : "أدخل أهم الموضوعات والأنشطة المنجزة خلال الفترة.";
+    } else if (tab.key === "followup") {
+      complete = hasMeaningfulValue(report.pendingActivities);
+      note = complete ? "تم تحديد ملفات المتابعة غير المنجزة." : "أدخل الملفات التي تحتاج مواصلة المتابعة.";
+    } else if (tab.key === "outlook") {
+      complete = hasMeaningfulValue(report.relationshipOutlook);
+      note = complete ? "تم إدخال التقييم والرؤية المستقبلية." : "أدخل تقييم البعثة للعلاقات الثنائية والرؤية المستقبلية والتوصيات.";
+    } else if (tab.key === "visits") {
+      complete = hasMeaningfulValue(report.visitsFromYemen) && hasMeaningfulValue(report.visitsFromHostCountry);
+      note = complete ? "تم توثيق الزيارات من الجانبين." : "أدخل الزيارات من جانب بلادنا ومن جانب بلد الاعتماد.";
+    } else if (tab.key === "community") {
+      complete = hasMeaningfulValue(report.communityUpdate) && hasMeaningfulValue(report.communityStats);
+      note = complete ? "تم تحديث وضع الجالية والإحصاءات العامة." : "أدخل وصفًا موجزًا للجالية مع الإحصاءات العامة.";
+    }
+    return { key: tab.key, label: tab.label, complete, note };
+  });
+}
+
+function getPeriodicCompletion(report = {}) {
+  const sections = getPeriodicSectionSummaries(report);
+  const completed = sections.filter((section) => section.complete).length;
+  return {
+    sections,
+    completed,
+    total: sections.length,
+    percent: sections.length ? Math.round((completed / sections.length) * 100) : 0,
+    missing: sections.filter((section) => !section.complete)
+  };
+}
+
+function getPeriodicCoverageLabel(report = {}) {
+  if (hasMeaningfulValue(report.coverageFrom) && hasMeaningfulValue(report.coverageTo)) {
+    return `${formatDate(report.coverageFrom)} - ${formatDate(report.coverageTo)}`;
+  }
+  if (hasMeaningfulValue(report.reportingYear)) {
+    return `سنة التقرير ${report.reportingYear}`;
+  }
+  return "لم يحدد نطاق التغطية بعد";
+}
+
+function buildPeriodicDraft(form) {
+  return {
+    type: String(form.get("type") || ""),
+    reportingYear: String(form.get("reportingYear") || ""),
+    coverageFrom: String(form.get("coverageFrom") || ""),
+    coverageTo: String(form.get("coverageTo") || ""),
+    bilateralAssessment: String(form.get("bilateralAssessment") || ""),
+    supportCooperation: String(form.get("supportCooperation") || ""),
+    activeAgreements: String(form.get("activeAgreements") || ""),
+    agreementsNeedingActivation: String(form.get("agreementsNeedingActivation") || ""),
+    completedActivities: String(form.get("completedActivities") || ""),
+    pendingActivities: String(form.get("pendingActivities") || ""),
+    relationshipOutlook: String(form.get("relationshipOutlook") || ""),
+    visitsFromYemen: String(form.get("visitsFromYemen") || ""),
+    visitsFromHostCountry: String(form.get("visitsFromHostCountry") || ""),
+    communityUpdate: String(form.get("communityUpdate") || ""),
+    communityStats: String(form.get("communityStats") || ""),
+    bilateralIndicators: BILATERAL_INDICATOR_FIELDS.reduce((acc, field) => {
+      acc[field.key] = {
+        trend: String(form.get(`indicator_trend_${field.key}`) || ""),
+        note: String(form.get(`indicator_note_${field.key}`) || "")
+      };
+      return acc;
+    }, {})
+  };
+}
+
 function getRequestLifecycle(request) {
   const completion = getCompletion(request);
   const today = new Date().toISOString().slice(0, 10);
@@ -793,9 +914,15 @@ function renderReportRecordCard(report, selected) {
 
 function renderPeriodicDetailContent(report, tabKey) {
   if (tabKey === "bilateral") {
+    const completedIndicators = getCompletedIndicatorCount(report.bilateralIndicators);
     return `
       <div class="detail-card">
         <div class="section-title">أولًا: العلاقات الثنائية</div>
+        <div class="report-periodic-kpis">
+          <span class="tag info">${getPeriodicTypeGuidance(report.type).label}</span>
+          <span class="tag warning">نطاق التغطية: ${getPeriodicCoverageLabel(report)}</span>
+          <span class="tag ${completedIndicators >= 5 ? "success" : "warning"}">المؤشرات المكتملة ${completedIndicators}/${BILATERAL_INDICATOR_FIELDS.length}</span>
+        </div>
         <p class="detail-note"><strong>أ. مؤشر العلاقات الثنائية بين بلادنا وبلد الاعتماد في المجالات المختلفة</strong></p>
         <div class="detail-list">
           ${BILATERAL_INDICATOR_FIELDS.map((field) => `
@@ -1190,6 +1317,9 @@ function renderMissionReportForm(user) {
   const currentFamily = editingReport ? inferReportFamily(editingReport) : "activity";
   const activeStep = state.reportFormStep || "basics";
   const periodicFormTab = state.periodicFormTab || "bilateral";
+  const periodicType = editingReport && inferReportFamily(editingReport) === "periodic" ? editingReport.type : "نصف سنوي";
+  const periodicGuidance = getPeriodicTypeGuidance(periodicType);
+  const periodicCompletion = getPeriodicCompletion(editingReport || {});
   return `
     <div class="report-form-shell">
       <div class="report-form-header">
@@ -1240,6 +1370,19 @@ function renderMissionReportForm(user) {
                 ${[...REPORT_TYPE_OPTIONS.activity, ...REPORT_TYPE_OPTIONS.periodic, ...REPORT_TYPE_OPTIONS.thematic].map((item) => `<option ${editingReport && editingReport.type === item ? "selected" : ""}>${item}</option>`).join("")}
               </select>
             </label>
+            <div class="field full report-family-section" data-family="periodic">
+              <div class="report-periodic-meta-card" id="periodic-meta-card">
+                <div>
+                  <div class="section-title" id="periodic-type-title">${periodicGuidance.label}</div>
+                  <p class="muted" id="periodic-type-description">${periodicGuidance.description}</p>
+                </div>
+                <p class="detail-note" id="periodic-type-emphasis">${periodicGuidance.emphasis}</p>
+                <div class="report-periodic-kpis">
+                  <span class="tag info" id="periodic-coverage-badge">${getPeriodicCoverageLabel(editingReport || {})}</span>
+                  <span class="tag ${periodicCompletion.percent === 100 ? "success" : "warning"}" id="periodic-progress-badge">اكتمال ${periodicCompletion.completed}/${periodicCompletion.total}</span>
+                </div>
+              </div>
+            </div>
             <label class="field report-core-field report-family-section" data-family="thematic">
               <span>المسار الموضوعي</span>
               <select name="thematicTrack">
@@ -1260,6 +1403,18 @@ function renderMissionReportForm(user) {
             <label class="field full report-core-field">
               <span>اسم المرفق</span>
               <input name="attachmentName" value="${editingReport ? editingReport.attachmentName : ""}" required>
+            </label>
+            <label class="field report-core-field report-family-section" data-family="periodic" data-required-families="periodic">
+              <span>سنة التقرير</span>
+              <input type="number" min="2020" max="2100" name="reportingYear" value="${editingReport ? (editingReport.reportingYear || "") : "2026"}">
+            </label>
+            <label class="field report-core-field report-family-section" data-family="periodic" data-required-families="periodic">
+              <span>من تاريخ</span>
+              <input type="date" name="coverageFrom" value="${editingReport ? (editingReport.coverageFrom || "") : ""}">
+            </label>
+            <label class="field report-core-field report-family-section" data-family="periodic" data-required-families="periodic">
+              <span>إلى تاريخ</span>
+              <input type="date" name="coverageTo" value="${editingReport ? (editingReport.coverageTo || "") : ""}">
             </label>
             <div class="field full">
               <div class="detail-note" id="report-request-guidance">${currentFamily === "periodic" ? "في التقارير الزمنية يجب اختيار الطلب الرسمي الوارد للبعثة قبل الرفع." : "في تقارير النشاط والتقارير الموضوعية يمكن ترك الطلب المرتبط فارغًا إذا كان التقرير مبادرة من البعثة."}</div>
@@ -1318,6 +1473,27 @@ function renderMissionReportForm(user) {
             <div class="report-form-intro-card">
               <div class="section-title">قالب التقرير الزمني</div>
               <p class="muted">مساحة إدخال مبوبة لملء التقرير السنوي أو النصف سنوي بصورة تدريجية ومنظمة وفق محاور النموذج المعتمد.</p>
+            </div>
+            <div class="report-periodic-quality-card" id="periodic-quality-card">
+              <div class="report-periodic-quality-header">
+                <div>
+                  <div class="section-title">مؤشر جودة التقرير الزمني</div>
+                  <p class="muted">استكمل التبويبات الثمانية مع ربط المؤشرات الثنائية بالتقييم النهائي والأنشطة والزيارات والجالية.</p>
+                </div>
+                <div class="report-periodic-kpis">
+                  <span class="tag info" id="periodic-quality-type">${periodicGuidance.label}</span>
+                  <span class="tag ${periodicCompletion.percent === 100 ? "success" : "warning"}" id="periodic-quality-progress">جاهزية ${periodicCompletion.percent}%</span>
+                </div>
+              </div>
+              <div class="progress"><span id="periodic-quality-bar" style="width:${periodicCompletion.percent}%"></span></div>
+              <div class="report-periodic-status-grid" id="periodic-status-grid">
+                ${periodicCompletion.sections.map((section) => `
+                  <div class="check-item ${section.complete ? "complete" : ""}" data-periodic-status="${section.key}">
+                    <strong>${section.label}</strong>
+                    <span>${section.complete ? "مكتمل" : "يحتاج استكمال"}</span>
+                  </div>
+                `).join("")}
+              </div>
             </div>
             <div class="tab-strip report-inner-tabs">
               ${PERIODIC_REPORT_TABS.map((tab) => `<button class="tab-chip ${periodicFormTab === tab.key ? "active" : ""}" type="button" data-periodic-form-tab="${tab.key}">${tab.label}</button>`).join("")}
@@ -1428,6 +1604,16 @@ function renderMissionReportForm(user) {
           <div class="report-form-intro-card">
             <div class="section-title">المراجعة النهائية</div>
             <p class="muted">راجع الملخص التنفيذي وتأكد من اكتمال البيانات الأساسية والمرفقات قبل رفع التقرير إلى الدائرة المعنية.</p>
+          </div>
+          <div class="report-family-section" data-family="periodic">
+            <div class="report-review-checklist" id="periodic-review-checklist">
+              <div class="section-title">قائمة تحقق التقرير الزمني</div>
+              <div class="detail-list">
+                <div class="detail-row"><span>نطاق التغطية</span><span id="periodic-review-coverage">${getPeriodicCoverageLabel(editingReport || {})}</span></div>
+                <div class="detail-row"><span>مستوى الجاهزية</span><span id="periodic-review-readiness">${periodicCompletion.completed}/${periodicCompletion.total} تبويبات مكتملة</span></div>
+                <div class="detail-row"><span>التبويبات غير المكتملة</span><span id="periodic-review-missing">${periodicCompletion.missing.length ? periodicCompletion.missing.map((section) => section.label).join("، ") : "لا توجد نواقص"}</span></div>
+              </div>
+            </div>
           </div>
           <div class="report-panel-grid">
             <label class="field full">
@@ -2191,6 +2377,46 @@ function bindEvents() {
   const reportFormStepButtons = document.querySelectorAll("[data-report-form-step]");
   const periodicFormTabButtons = document.querySelectorAll("[data-periodic-form-tab]");
   if (reportFamily && reportType && thematicTrack) {
+    const periodicCoverageBadge = document.getElementById("periodic-coverage-badge");
+    const periodicProgressBadge = document.getElementById("periodic-progress-badge");
+    const periodicTypeTitle = document.getElementById("periodic-type-title");
+    const periodicTypeDescription = document.getElementById("periodic-type-description");
+    const periodicTypeEmphasis = document.getElementById("periodic-type-emphasis");
+    const periodicQualityType = document.getElementById("periodic-quality-type");
+    const periodicQualityProgress = document.getElementById("periodic-quality-progress");
+    const periodicQualityBar = document.getElementById("periodic-quality-bar");
+    const periodicReviewCoverage = document.getElementById("periodic-review-coverage");
+    const periodicReviewReadiness = document.getElementById("periodic-review-readiness");
+    const periodicReviewMissing = document.getElementById("periodic-review-missing");
+    const updatePeriodicInsights = () => {
+      const draft = buildPeriodicDraft(new FormData(reportForm));
+      const guidance = getPeriodicTypeGuidance(reportType.value);
+      const completion = getPeriodicCompletion(draft);
+      if (periodicTypeTitle) periodicTypeTitle.textContent = guidance.label;
+      if (periodicTypeDescription) periodicTypeDescription.textContent = guidance.description;
+      if (periodicTypeEmphasis) periodicTypeEmphasis.textContent = guidance.emphasis;
+      if (periodicQualityType) periodicQualityType.textContent = guidance.label;
+      if (periodicCoverageBadge) periodicCoverageBadge.textContent = getPeriodicCoverageLabel(draft);
+      if (periodicProgressBadge) {
+        periodicProgressBadge.textContent = `اكتمال ${completion.completed}/${completion.total}`;
+        periodicProgressBadge.className = `tag ${completion.percent === 100 ? "success" : "warning"}`;
+      }
+      if (periodicQualityProgress) {
+        periodicQualityProgress.textContent = `جاهزية ${completion.percent}%`;
+        periodicQualityProgress.className = `tag ${completion.percent === 100 ? "success" : "warning"}`;
+      }
+      if (periodicQualityBar) periodicQualityBar.style.width = `${completion.percent}%`;
+      if (periodicReviewCoverage) periodicReviewCoverage.textContent = getPeriodicCoverageLabel(draft);
+      if (periodicReviewReadiness) periodicReviewReadiness.textContent = `${completion.completed}/${completion.total} تبويبات مكتملة`;
+      if (periodicReviewMissing) periodicReviewMissing.textContent = completion.missing.length ? completion.missing.map((section) => section.label).join("، ") : "لا توجد نواقص";
+      document.querySelectorAll("[data-periodic-status]").forEach((item) => {
+        const section = completion.sections.find((entry) => entry.key === item.dataset.periodicStatus);
+        if (!section) return;
+        item.classList.toggle("complete", section.complete);
+        const note = item.querySelector("span");
+        if (note) note.textContent = section.complete ? "مكتمل" : "يحتاج استكمال";
+      });
+    };
     const updateReportSections = () => {
       const value = reportFamily.value;
       const currentType = reportType.dataset.currentType || reportType.value;
@@ -2255,25 +2481,39 @@ function bindEvents() {
       reportFormPanels.forEach((panel) => {
         panel.classList.toggle("active", panel.dataset.reportFormPanel === state.reportFormStep);
       });
+      updatePeriodicInsights();
     };
     reportFamily.addEventListener("change", updateReportSections);
     reportType.addEventListener("change", () => {
       reportType.dataset.currentType = reportType.value;
+      updatePeriodicInsights();
     });
     reportFormStepButtons.forEach((button) => {
       button.addEventListener("click", () => {
         state.reportFormStep = button.dataset.reportFormStep;
         saveState();
-        renderApp();
+        reportFormPanels.forEach((panel) => {
+          panel.classList.toggle("active", panel.dataset.reportFormPanel === state.reportFormStep);
+        });
+        reportFormStepButtons.forEach((chip) => {
+          chip.classList.toggle("active", chip.dataset.reportFormStep === state.reportFormStep);
+        });
       });
     });
     periodicFormTabButtons.forEach((button) => {
       button.addEventListener("click", () => {
         state.periodicFormTab = button.dataset.periodicFormTab;
         saveState();
-        renderApp();
+        periodicFormTabButtons.forEach((chip) => {
+          chip.classList.toggle("active", chip.dataset.periodicFormTab === state.periodicFormTab);
+        });
+        document.querySelectorAll("[data-periodic-form-panel]").forEach((panel) => {
+          panel.classList.toggle("active", panel.dataset.periodicFormPanel === state.periodicFormTab);
+        });
       });
     });
+    reportForm.addEventListener("input", updatePeriodicInsights);
+    reportForm.addEventListener("change", updatePeriodicInsights);
     updateReportSections();
   }
 
@@ -2475,6 +2715,36 @@ function handleReportSubmit(event) {
     renderApp();
     return;
   }
+  const periodicDraft = buildPeriodicDraft(form);
+  if (isPeriodicSubmission) {
+    if (!hasMeaningfulValue(periodicDraft.reportingYear) || !hasMeaningfulValue(periodicDraft.coverageFrom) || !hasMeaningfulValue(periodicDraft.coverageTo)) {
+      addAlert("danger", "تعذر رفع التقرير", "يجب استكمال سنة التقرير ونطاق التغطية الزمنية للتقرير السنوي أو النصف سنوي.");
+      saveState();
+      renderApp();
+      return;
+    }
+    if (periodicDraft.coverageTo < periodicDraft.coverageFrom) {
+      addAlert("danger", "تعذر رفع التقرير", "تاريخ نهاية التغطية يجب أن يكون لاحقًا أو مساويًا لتاريخ البداية.");
+      saveState();
+      renderApp();
+      return;
+    }
+    const coverageYearFrom = periodicDraft.coverageFrom.slice(0, 4);
+    const coverageYearTo = periodicDraft.coverageTo.slice(0, 4);
+    if (periodicDraft.reportingYear !== coverageYearFrom && periodicDraft.reportingYear !== coverageYearTo) {
+      addAlert("danger", "تعذر رفع التقرير", "سنة التقرير يجب أن تتسق مع نطاق التغطية الزمنية المحدد.");
+      saveState();
+      renderApp();
+      return;
+    }
+    const periodicCompletion = getPeriodicCompletion(periodicDraft);
+    if (periodicCompletion.missing.length) {
+      addAlert("danger", "تعذر رفع التقرير", `لا يمكن رفع التقرير الزمني قبل استكمال التبويبات التالية: ${periodicCompletion.missing.map((section) => section.label).join("، ")}.`);
+      saveState();
+      renderApp();
+      return;
+    }
+  }
   const report = editingReport || {
     id: `report-${Date.now()}`,
     missionId: user.missionId,
@@ -2517,6 +2787,9 @@ function handleReportSubmit(event) {
     visitsFromHostCountry: String(form.get("visitsFromHostCountry") || ""),
     communityUpdate: String(form.get("communityUpdate") || ""),
     communityStats: String(form.get("communityStats") || ""),
+    reportingYear: periodicDraft.reportingYear,
+    coverageFrom: periodicDraft.coverageFrom,
+    coverageTo: periodicDraft.coverageTo,
     bilateralIndicators,
     submittedOn: new Date().toISOString().slice(0, 10),
     reviewNotes: editingReport && editingReport.workflowStage !== "أعيد للبعثة للاستكمال" ? editingReport.reviewNotes || "" : "",
