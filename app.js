@@ -146,6 +146,8 @@ const THEMATIC_TRACK_CONFIG = {
   }
 };
 
+const ACTIVITY_CATEGORY_OPTIONS = ["سياسي", "اقتصادي", "إعلامي", "ثقافي", "قنصلي", "بروتوكولي", "متعدد المسارات"];
+
 const BILATERAL_INDICATOR_FIELDS = [
   { key: "political", label: "السياسية", hint: "الاتصالات الرسمية، الزيارات، التنسيق في المحافل الدولية" },
   { key: "economic", label: "الاقتصادية والاستثمارية", hint: "التبادل التجاري، الاستثمارات، الاتفاقيات الاقتصادية" },
@@ -252,6 +254,12 @@ const seedState = () => ({
       summary: "ملخص تنفيذي عن الاتصالات الرسمية والفعاليات والتغطية الإعلامية خلال النصف الأول.",
       beforeGoals: "تعزيز الحضور السياسي اليمني وتوسيع التنسيق الإعلامي.",
       beforeExpected: "لقاءات تنسيقية وتغطية إعلامية إيجابية ومذكرات متابعة.",
+      activityCategory: "سياسي",
+      activityPartners: "وزارة الخارجية المصرية، وسائل إعلام مختارة، وشركاء تنسيق رسمي.",
+      activityOutputs: "مذكرة متابعة، نقاط حديث، وخطة تنسيق للربع التالي.",
+      activityMediaEcho: "تغطية إيجابية محدودة في الصحافة المحلية ومنصات البعثة.",
+      activityDiplomaticImpact: "عزز حضور البعثة وفتح مسار متابعة مع جهات رسمية وإعلامية.",
+      activityFollowupOwner: "الملحق السياسي والإعلامي في البعثة",
       afterResults: "تم تنفيذ 6 لقاءات رسمية و3 فعاليات رئيسية وإعداد مذكرة متابعة.",
       afterRecommendations: "جدولة متابعة فنية واستمرار التنسيق الإعلامي خلال الربع القادم.",
       attachmentName: "cairo-half-year-2026.pdf",
@@ -480,6 +488,12 @@ function loadState() {
     thematicRisks: report.thematicRisks || "",
     thematicMissionAction: report.thematicMissionAction || "",
     thematicRecommendations: report.thematicRecommendations || "",
+    activityCategory: report.activityCategory || "",
+    activityPartners: report.activityPartners || "",
+    activityOutputs: report.activityOutputs || "",
+    activityMediaEcho: report.activityMediaEcho || "",
+    activityDiplomaticImpact: report.activityDiplomaticImpact || "",
+    activityFollowupOwner: report.activityFollowupOwner || "",
     workflowStage: report.workflowStage || "مرفوع من البعثة",
     workflowHistory: Array.isArray(report.workflowHistory) ? report.workflowHistory : []
   }));
@@ -856,6 +870,42 @@ function getThematicCompletion(report = {}) {
   const completed = sections.filter((section) => section.complete).length;
   return {
     config,
+    sections,
+    completed,
+    total: sections.length,
+    percent: sections.length ? Math.round((completed / sections.length) * 100) : 0,
+    missing: sections.filter((section) => !section.complete)
+  };
+}
+
+function buildActivityDraft(form) {
+  return {
+    activityCategory: String(form.get("activityCategory") || ""),
+    activityPartners: String(form.get("activityPartners") || ""),
+    beforeGoals: String(form.get("beforeGoals") || ""),
+    beforeExpected: String(form.get("beforeExpected") || ""),
+    activityOutputs: String(form.get("activityOutputs") || ""),
+    activityMediaEcho: String(form.get("activityMediaEcho") || ""),
+    activityDiplomaticImpact: String(form.get("activityDiplomaticImpact") || ""),
+    afterResults: String(form.get("afterResults") || ""),
+    afterRecommendations: String(form.get("afterRecommendations") || ""),
+    activityFollowupOwner: String(form.get("activityFollowupOwner") || "")
+  };
+}
+
+function getActivityCompletion(report = {}) {
+  const sections = [
+    { key: "category", label: "نوع النشاط ومساره", complete: hasMeaningfulValue(report.activityCategory) },
+    { key: "partners", label: "الجهات المشاركة والشركاء", complete: hasMeaningfulValue(report.activityPartners) },
+    { key: "goals", label: "الأهداف قبل الفعالية", complete: hasMeaningfulValue(report.beforeGoals) },
+    { key: "expected", label: "المتوقع قبل الفعالية", complete: hasMeaningfulValue(report.beforeExpected) },
+    { key: "outputs", label: "المخرجات والصدى الإعلامي", complete: hasMeaningfulValue(report.activityOutputs) && hasMeaningfulValue(report.activityMediaEcho) },
+    { key: "impact", label: "الأثر الدبلوماسي أو المؤسسي", complete: hasMeaningfulValue(report.activityDiplomaticImpact) },
+    { key: "results", label: "النتائج بعد الفعالية", complete: hasMeaningfulValue(report.afterResults) },
+    { key: "followup", label: "التوصيات والمتابعة", complete: hasMeaningfulValue(report.afterRecommendations) && hasMeaningfulValue(report.activityFollowupOwner) }
+  ];
+  const completed = sections.filter((section) => section.complete).length;
+  return {
     sections,
     completed,
     total: sections.length,
@@ -1434,6 +1484,7 @@ function renderMissionReportForm(user) {
   const thematicTrack = editingReport && inferReportFamily(editingReport) === "thematic" ? (editingReport.thematicTrack || "سياسي") : "سياسي";
   const thematicConfig = getThematicTrackConfig(thematicTrack);
   const thematicCompletion = getThematicCompletion(editingReport || { thematicTrack });
+  const activityCompletion = getActivityCompletion(editingReport || {});
   return `
     <div class="report-form-shell">
       <div class="report-form-header">
@@ -1554,7 +1605,39 @@ function renderMissionReportForm(user) {
               <div class="section-title">قالب تقرير النشاط</div>
               <p class="muted">نموذج قصير ومنظم يركّز على الهدف، المتوقع، النتائج، والتوصيات العملية اللاحقة.</p>
             </div>
+            <div class="report-periodic-quality-card" id="activity-quality-card">
+              <div class="report-periodic-quality-header">
+                <div>
+                  <div class="section-title">مؤشر جاهزية تقرير النشاط</div>
+                  <p class="muted">يركز على نوع النشاط، الشركاء، المخرجات، الأثر الدبلوماسي، والجهة المسؤولة عن المتابعة بعد الفعالية.</p>
+                </div>
+                <div class="report-periodic-kpis">
+                  <span class="tag info" id="activity-quality-type">${editingReport?.activityCategory || "لم يحدد بعد"}</span>
+                  <span class="tag ${activityCompletion.percent === 100 ? "success" : "warning"}" id="activity-quality-progress">جاهزية ${activityCompletion.percent}%</span>
+                </div>
+              </div>
+              <div class="progress"><span id="activity-quality-bar" style="width:${activityCompletion.percent}%"></span></div>
+              <div class="report-periodic-status-grid" id="activity-status-grid">
+                ${activityCompletion.sections.map((section) => `
+                  <div class="check-item ${section.complete ? "complete" : ""}" data-activity-status="${section.key}">
+                    <strong>${section.label}</strong>
+                    <span>${section.complete ? "مكتمل" : "يحتاج استكمال"}</span>
+                  </div>
+                `).join("")}
+              </div>
+            </div>
             <div class="report-panel-grid">
+              <label class="field" data-required-families="activity">
+                <span>مسار النشاط</span>
+                <select name="activityCategory">
+                  <option value="">اختر المسار</option>
+                  ${ACTIVITY_CATEGORY_OPTIONS.map((item) => `<option ${editingReport && editingReport.activityCategory === item ? "selected" : ""}>${item}</option>`).join("")}
+                </select>
+              </label>
+              <label class="field" data-required-families="activity">
+                <span>الجهات المشاركة والشركاء</span>
+                <input name="activityPartners" value="${editingReport ? (editingReport.activityPartners || "") : ""}">
+              </label>
               <label class="field full" data-required-families="activity">
                 <span>الأهداف قبل الفعالية</span>
                 <textarea name="beforeGoals">${editingReport ? editingReport.beforeGoals : ""}</textarea>
@@ -1564,12 +1647,28 @@ function renderMissionReportForm(user) {
                 <textarea name="beforeExpected">${editingReport ? editingReport.beforeExpected : ""}</textarea>
               </label>
               <label class="field full" data-required-families="activity">
+                <span>المخرجات المباشرة للنشاط</span>
+                <textarea name="activityOutputs">${editingReport ? (editingReport.activityOutputs || "") : ""}</textarea>
+              </label>
+              <label class="field full" data-required-families="activity">
+                <span>الصدى الإعلامي أو التغطية المصاحبة</span>
+                <textarea name="activityMediaEcho">${editingReport ? (editingReport.activityMediaEcho || "") : ""}</textarea>
+              </label>
+              <label class="field full" data-required-families="activity">
+                <span>الأثر الدبلوماسي أو المؤسسي للنشاط</span>
+                <textarea name="activityDiplomaticImpact">${editingReport ? (editingReport.activityDiplomaticImpact || "") : ""}</textarea>
+              </label>
+              <label class="field full" data-required-families="activity">
                 <span>النتائج بعد الفعالية</span>
                 <textarea name="afterResults">${editingReport ? editingReport.afterResults : ""}</textarea>
               </label>
               <label class="field full" data-required-families="activity">
                 <span>التوصيات بعد الفعالية</span>
                 <textarea name="afterRecommendations">${editingReport ? editingReport.afterRecommendations : ""}</textarea>
+              </label>
+              <label class="field full" data-required-families="activity">
+                <span>مسؤول المتابعة بعد النشاط</span>
+                <input name="activityFollowupOwner" value="${editingReport ? (editingReport.activityFollowupOwner || "") : ""}">
               </label>
             </div>
           </div>
@@ -1788,6 +1887,16 @@ function renderMissionReportForm(user) {
               </div>
             </div>
           </div>
+          <div class="report-family-section" data-family="activity">
+            <div class="report-review-checklist" id="activity-review-checklist">
+              <div class="section-title">قائمة تحقق تقرير النشاط</div>
+              <div class="detail-list">
+                <div class="detail-row"><span>مسار النشاط</span><span id="activity-review-category">${editingReport?.activityCategory || "لم يحدد بعد"}</span></div>
+                <div class="detail-row"><span>مستوى الجاهزية</span><span id="activity-review-readiness">${activityCompletion.completed}/${activityCompletion.total} محاور مكتملة</span></div>
+                <div class="detail-row"><span>المحاور غير المكتملة</span><span id="activity-review-missing">${activityCompletion.missing.length ? activityCompletion.missing.map((section) => section.label).join("، ") : "لا توجد نواقص"}</span></div>
+              </div>
+            </div>
+          </div>
           <div class="report-panel-grid">
             <label class="field full">
               <span>الملخص التنفيذي</span>
@@ -1852,13 +1961,19 @@ function renderReportDetails(report, user) {
       <div class="report-story-grid">
         <div class="detail-card">
           <div class="section-title">قبل الفعالية</div>
+          <p class="detail-note"><strong>مسار النشاط:</strong> ${report.activityCategory || "لا يوجد"}</p>
+          <p class="detail-note"><strong>الجهات المشاركة:</strong> ${report.activityPartners || "لا يوجد"}</p>
           <p class="detail-note"><strong>الأهداف:</strong> ${report.beforeGoals}</p>
           <p class="detail-note"><strong>المتوقع:</strong> ${report.beforeExpected}</p>
         </div>
         <div class="detail-card">
           <div class="section-title">بعد الفعالية</div>
+          <p class="detail-note"><strong>المخرجات:</strong> ${report.activityOutputs || "لا يوجد"}</p>
+          <p class="detail-note"><strong>الصدى الإعلامي:</strong> ${report.activityMediaEcho || "لا يوجد"}</p>
+          <p class="detail-note"><strong>الأثر:</strong> ${report.activityDiplomaticImpact || "لا يوجد"}</p>
           <p class="detail-note"><strong>النتائج:</strong> ${report.afterResults}</p>
           <p class="detail-note"><strong>التوصيات:</strong> ${report.afterRecommendations}</p>
+          <p class="detail-note"><strong>مسؤول المتابعة:</strong> ${report.activityFollowupOwner || "لا يوجد"}</p>
         </div>
       </div>
       ${canEditReport(report, user) ? `
@@ -2579,6 +2694,12 @@ function bindEvents() {
     const thematicReviewTrack = document.getElementById("thematic-review-track");
     const thematicReviewReadiness = document.getElementById("thematic-review-readiness");
     const thematicReviewMissing = document.getElementById("thematic-review-missing");
+    const activityQualityType = document.getElementById("activity-quality-type");
+    const activityQualityProgress = document.getElementById("activity-quality-progress");
+    const activityQualityBar = document.getElementById("activity-quality-bar");
+    const activityReviewCategory = document.getElementById("activity-review-category");
+    const activityReviewReadiness = document.getElementById("activity-review-readiness");
+    const activityReviewMissing = document.getElementById("activity-review-missing");
     const thematicLabels = {
       situation: document.getElementById("thematic-label-situation"),
       developments: document.getElementById("thematic-label-developments"),
@@ -2651,6 +2772,26 @@ function bindEvents() {
         if (note) note.textContent = section.complete ? "مكتمل" : "يحتاج استكمال";
       });
     };
+    const updateActivityInsights = () => {
+      const draft = buildActivityDraft(new FormData(reportForm));
+      const completion = getActivityCompletion(draft);
+      if (activityQualityType) activityQualityType.textContent = draft.activityCategory || "لم يحدد بعد";
+      if (activityQualityProgress) {
+        activityQualityProgress.textContent = `جاهزية ${completion.percent}%`;
+        activityQualityProgress.className = `tag ${completion.percent === 100 ? "success" : "warning"}`;
+      }
+      if (activityQualityBar) activityQualityBar.style.width = `${completion.percent}%`;
+      if (activityReviewCategory) activityReviewCategory.textContent = draft.activityCategory || "لم يحدد بعد";
+      if (activityReviewReadiness) activityReviewReadiness.textContent = `${completion.completed}/${completion.total} محاور مكتملة`;
+      if (activityReviewMissing) activityReviewMissing.textContent = completion.missing.length ? completion.missing.map((section) => section.label).join("، ") : "لا توجد نواقص";
+      document.querySelectorAll("[data-activity-status]").forEach((item) => {
+        const section = completion.sections.find((entry) => entry.key === item.dataset.activityStatus);
+        if (!section) return;
+        item.classList.toggle("complete", section.complete);
+        const note = item.querySelector("span");
+        if (note) note.textContent = section.complete ? "مكتمل" : "يحتاج استكمال";
+      });
+    };
     const updateReportSections = () => {
       const value = reportFamily.value;
       const currentType = reportType.dataset.currentType || reportType.value;
@@ -2717,6 +2858,7 @@ function bindEvents() {
       });
       updatePeriodicInsights();
       updateThematicInsights();
+      updateActivityInsights();
     };
     reportFamily.addEventListener("change", updateReportSections);
     reportType.addEventListener("change", () => {
@@ -2750,10 +2892,12 @@ function bindEvents() {
     reportForm.addEventListener("input", () => {
       updatePeriodicInsights();
       updateThematicInsights();
+      updateActivityInsights();
     });
     reportForm.addEventListener("change", () => {
       updatePeriodicInsights();
       updateThematicInsights();
+      updateActivityInsights();
     });
     updateReportSections();
   }
@@ -2931,6 +3075,7 @@ function handleReportSubmit(event) {
   const proposedFamily = String(form.get("reportFamily") || "activity");
   const currentFamily = editingReport ? inferReportFamily(editingReport) : "";
   const resolvedFamily = linkedRequest ? linkedRequest.requestFamily : proposedFamily;
+  const isActivitySubmission = resolvedFamily === "activity" || currentFamily === "activity";
   const isPeriodicSubmission = resolvedFamily === "periodic" || currentFamily === "periodic";
   const isThematicSubmission = resolvedFamily === "thematic" || currentFamily === "thematic";
   if (!linkedRequest && requestId) {
@@ -2959,6 +3104,16 @@ function handleReportSubmit(event) {
   }
   const periodicDraft = buildPeriodicDraft(form);
   const thematicDraft = buildThematicDraft(form);
+  const activityDraft = buildActivityDraft(form);
+  if (isActivitySubmission) {
+    const activityCompletion = getActivityCompletion(activityDraft);
+    if (activityCompletion.missing.length) {
+      addAlert("danger", "تعذر رفع التقرير", `لا يمكن رفع تقرير النشاط قبل استكمال المحاور التالية: ${activityCompletion.missing.map((section) => section.label).join("، ")}.`);
+      saveState();
+      renderApp();
+      return;
+    }
+  }
   if (isPeriodicSubmission) {
     if (!hasMeaningfulValue(periodicDraft.reportingYear) || !hasMeaningfulValue(periodicDraft.coverageFrom) || !hasMeaningfulValue(periodicDraft.coverageTo)) {
       addAlert("danger", "تعذر رفع التقرير", "يجب استكمال سنة التقرير ونطاق التغطية الزمنية للتقرير السنوي أو النصف سنوي.");
@@ -3020,10 +3175,16 @@ function handleReportSubmit(event) {
     requestId,
     activityDate: String(form.get("activityDate")),
     summary: String(form.get("summary")),
+    activityCategory: String(form.get("activityCategory") || ""),
+    activityPartners: String(form.get("activityPartners") || ""),
     beforeGoals: String(form.get("beforeGoals")),
     beforeExpected: String(form.get("beforeExpected")),
+    activityOutputs: String(form.get("activityOutputs") || ""),
+    activityMediaEcho: String(form.get("activityMediaEcho") || ""),
+    activityDiplomaticImpact: String(form.get("activityDiplomaticImpact") || ""),
     afterResults: String(form.get("afterResults")),
     afterRecommendations: String(form.get("afterRecommendations")),
+    activityFollowupOwner: String(form.get("activityFollowupOwner") || ""),
     attachmentName: String(form.get("attachmentName")),
     countrySnapshot: String(form.get("countrySnapshot") || ""),
     bilateralAssessment: String(form.get("bilateralAssessment") || ""),
