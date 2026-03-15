@@ -691,6 +691,96 @@ function getReportsByFamily(reports, familyTab) {
   return reports.filter((report) => inferReportFamily(report) === familyTab);
 }
 
+function getReportFamilyLabel(report) {
+  const family = inferReportFamily(report);
+  if (family === "periodic") return "زمني";
+  if (family === "thematic") return "موضوعي";
+  return "نشاط";
+}
+
+function getReportStageCount(reports, stage) {
+  return reports.filter((report) => report.workflowStage === stage).length;
+}
+
+function renderReportsHero(reports, filteredReports, user) {
+  const periodicReports = reports.filter((report) => inferReportFamily(report) === "periodic");
+  const approvedReports = reports.filter((report) => report.workflowStage === "معتمد من التخطيط" || report.workflowStage === "مغلق ومؤرشف");
+  const pendingReview = reports.filter((report) => report.workflowStage === "مرفوع من البعثة" || report.workflowStage === "قيد مراجعة الدائرة");
+  return `
+    <section class="reports-hero">
+      <article class="reports-hero-main">
+        <span class="tag info">منصة التقارير</span>
+        <h1 class="page-title">وحدة التقارير الدبلوماسية</h1>
+        <p class="muted">${user.role === "mission" ? "ارفع تقارير الأنشطة والتقارير الموضوعية مباشرة من البعثة، وارفع التقارير الزمنية استجابة للطلبات الرسمية الواردة فقط." : "تابع دورة حياة التقارير من الرفع حتى المراجعة والاعتماد والأرشفة، مع فصل واضح بين التقارير الزمنية والموضوعية وتقارير الأنشطة."}</p>
+        <div class="reports-stat-strip">
+          <div class="reports-stat-card">
+            <span>إجمالي التقارير</span>
+            <strong>${reports.length}</strong>
+          </div>
+          <div class="reports-stat-card">
+            <span>ضمن التبويب الحالي</span>
+            <strong>${filteredReports.length}</strong>
+          </div>
+          <div class="reports-stat-card">
+            <span>التقارير الزمنية</span>
+            <strong>${periodicReports.length}</strong>
+          </div>
+          <div class="reports-stat-card">
+            <span>بانتظار المراجعة</span>
+            <strong>${pendingReview.length}</strong>
+          </div>
+          <div class="reports-stat-card">
+            <span>معتمدة أو مؤرشفة</span>
+            <strong>${approvedReports.length}</strong>
+          </div>
+        </div>
+      </article>
+      <article class="reports-hero-side">
+        <div class="section-title">تسلسل العمل</div>
+        <div class="workflow-rail">
+          <div class="workflow-step active">
+            <strong>1. الإنشاء</strong>
+            <span>البعثة تنشئ التقرير</span>
+          </div>
+          <div class="workflow-step active">
+            <strong>2. مراجعة الدائرة</strong>
+            <span>فحص أولي وملاحظات</span>
+          </div>
+          <div class="workflow-step active">
+            <strong>3. اعتماد التخطيط</strong>
+            <span>تقييم الجودة والاعتماد</span>
+          </div>
+          <div class="workflow-step active">
+            <strong>4. السجل المؤسسي</strong>
+            <span>أرشفة التقرير ضمن ملف البعثة</span>
+          </div>
+        </div>
+      </article>
+    </section>
+  `;
+}
+
+function renderReportRecordCard(report, selected) {
+  const quality = getReportQualitySummary(report);
+  return `
+    <article class="report-record-card ${selected && selected.id === report.id ? "selected" : ""}" data-report-id="${report.id}">
+      <div class="record-top">
+        <div>
+          <strong class="record-title">${report.title}</strong>
+          <div class="record-meta">${getMissionName(report.missionId)} | ${report.type} | ${getReportFamilyLabel(report)}</div>
+        </div>
+        <span class="tag ${stageTone(report.workflowStage)}">${report.workflowStage}</span>
+      </div>
+      <p class="record-desc">${report.summary}</p>
+      <div class="report-record-footer">
+        <span class="tag info">${getReportOriginLabel(report)}</span>
+        <span class="mini">${report.submittedOn ? `رفع في ${formatDate(report.submittedOn)}` : "لم يسجل تاريخ رفع"}</span>
+        <span class="mini">${quality.average ? `جودة ${quality.average}/5` : "بانتظار التقييم"}</span>
+      </div>
+    </article>
+  `;
+}
+
 function renderPeriodicDetailContent(report, tabKey) {
   if (tabKey === "bilateral") {
     return `
@@ -1056,40 +1146,27 @@ function renderReportsPage(user) {
   const filteredReports = getReportsByFamily(reports, state.reportRegistryTab);
   const selected = filteredReports.find((item) => item.id === state.selectedReportId) || filteredReports[0] || null;
   return `
-    <section class="panel">
-      <div class="topbar">
-        <div>
-          <span class="tag info">وحدة التقارير</span>
-          <h1 class="page-title">التقارير</h1>
-          <p class="muted">${user.role === "mission" ? "يمكنك رفع تقرير نشاط من حساب البعثة." : user.role === "leadership" ? "يمكنك الاطلاع والمتابعة على التقارير ضمن نطاق القيادة العليا دون تنفيذ إجراءات الاعتماد التشغيلي." : "يمكنك مراجعة التقارير التي تقع ضمن صلاحياتك."}</p>
-        </div>
-      </div>
-    </section>
-    <section class="content-grid">
-      <div class="panel">
+    ${renderReportsHero(reports, filteredReports, user)}
+    <section class="reports-layout">
+      <div class="panel reports-left-pane">
         ${user.role === "mission" ? renderMissionReportForm(user) : ""}
-        <div class="detail-card">
-          <div class="section-title">سجل التقارير</div>
+        <div class="report-registry-card">
+          <div class="report-registry-head">
+            <div>
+              <div class="section-title">سجل التقارير</div>
+              <p class="muted">اعرض التقارير بحسب العائلة الوظيفية ثم اختر التقرير المطلوب لاستعراض ملفه الكامل.</p>
+            </div>
+            <span class="tag info">${filteredReports.length} تقرير</span>
+          </div>
           <div class="tab-strip">
             ${REPORT_FAMILY_TABS.map((tab) => `<button class="tab-chip ${state.reportRegistryTab === tab.key ? "active" : ""}" type="button" data-report-family-tab="${tab.key}">${tab.label}</button>`).join("")}
           </div>
-          <div class="record-list">
-            ${filteredReports.map((report) => `
-              <article class="record-card ${selected && selected.id === report.id ? "selected" : ""}" data-report-id="${report.id}">
-                <div class="record-top">
-                  <div>
-                    <strong class="record-title">${report.title}</strong>
-                    <div class="record-meta">${getMissionName(report.missionId)} | ${report.type} | ${inferReportFamily(report) === "periodic" ? "زمني" : inferReportFamily(report) === "thematic" ? "موضوعي" : "نشاط"}</div>
-                  </div>
-                  <span class="tag ${stageTone(report.workflowStage)}">${report.workflowStage}</span>
-                </div>
-                <p class="record-desc">${report.summary}</p>
-              </article>
-            `).join("") || `<div class="empty">لا توجد تقارير ضمن هذا التبويب.</div>`}
+          <div class="report-record-grid">
+            ${filteredReports.map((report) => renderReportRecordCard(report, selected)).join("") || `<div class="empty">لا توجد تقارير ضمن هذا التبويب.</div>`}
           </div>
         </div>
       </div>
-      <div class="panel">
+      <div class="panel reports-right-pane">
         ${selected ? renderReportDetails(selected, user) : `<div class="empty">اختر تقريرًا لعرض التفاصيل.</div>`}
       </div>
     </section>
@@ -1290,35 +1367,63 @@ function renderReportDetails(report, user) {
   const quality = getReportQualitySummary(report);
   const periodicTab = state.periodicReportTab || "bilateral";
   return `
-    <div class="detail-list">
-      <div class="detail-card">
-        <div class="section-title">${report.title}</div>
-        <div class="detail-row"><span>البعثة</span><span>${getMissionName(report.missionId)}</span></div>
-        <div class="detail-row"><span>الدائرة</span><span>${getDepartmentName(report.departmentId)}</span></div>
-        <div class="detail-row"><span>منشأ التقرير</span><span>${getReportOriginLabel(report)}</span></div>
-        <div class="detail-row"><span>مرحلة الاعتماد</span><span class="tag ${stageTone(report.workflowStage)}">${report.workflowStage}</span></div>
-        <div class="detail-row"><span>الطلب المرتبط</span><span>${request ? request.title : "لا يوجد"}</span></div>
-        ${report.submittedOn ? `<div class="detail-row"><span>تاريخ الرفع</span><span>${formatDate(report.submittedOn)}</span></div>` : ""}
-        ${canEditReport(report, user) ? `<div class="inline-actions"><button class="btn secondary report-edit" data-report-id="${report.id}">تعديل التقرير</button></div>` : ""}
+    <div class="detail-list report-detail-stack">
+      <div class="report-detail-hero">
+        <div class="report-detail-hero-main">
+          <span class="tag info">${getReportFamilyLabel(report)}</span>
+          <div class="section-title">${report.title}</div>
+          <p class="detail-note">${report.summary}</p>
+        </div>
+        <div class="report-detail-kpis">
+          <div class="report-mini-kpi">
+            <span>المرحلة</span>
+            <strong class="tag ${stageTone(report.workflowStage)}">${report.workflowStage}</strong>
+          </div>
+          <div class="report-mini-kpi">
+            <span>الجودة</span>
+            <strong>${quality.average ? `${quality.average}/5` : "قيد التقييم"}</strong>
+          </div>
+          <div class="report-mini-kpi">
+            <span>منشأ التقرير</span>
+            <strong>${getReportOriginLabel(report)}</strong>
+          </div>
+        </div>
       </div>
-      <div class="detail-card">
-        <div class="section-title">قبل الفعالية</div>
-        <p class="detail-note"><strong>الأهداف:</strong> ${report.beforeGoals}</p>
-        <p class="detail-note"><strong>المتوقع:</strong> ${report.beforeExpected}</p>
+      <div class="report-summary-grid">
+        <div class="detail-card">
+          <div class="section-title">البيانات المرجعية</div>
+          <div class="detail-row"><span>البعثة</span><span>${getMissionName(report.missionId)}</span></div>
+          <div class="detail-row"><span>الدائرة</span><span>${getDepartmentName(report.departmentId)}</span></div>
+          <div class="detail-row"><span>نوع التقرير</span><span>${report.type}</span></div>
+          <div class="detail-row"><span>الطلب المرتبط</span><span>${request ? request.title : "لا يوجد"}</span></div>
+          ${report.submittedOn ? `<div class="detail-row"><span>تاريخ الرفع</span><span>${formatDate(report.submittedOn)}</span></div>` : ""}
+        </div>
+        <div class="detail-card">
+          <div class="section-title">مؤشرات الجودة</div>
+          <div class="detail-row"><span>الالتزام بالموعد</span><span>${quality.scores.timeliness ? `${quality.scores.timeliness}/5` : "بانتظار التقييم"}</span></div>
+          <div class="detail-row"><span>شمولية المحتوى</span><span>${quality.scores.completeness ? `${quality.scores.completeness}/5` : "بانتظار التقييم"}</span></div>
+          <div class="detail-row"><span>جودة التحليل</span><span>${quality.scores.analysis ? `${quality.scores.analysis}/5` : "بانتظار التقييم"}</span></div>
+          <p class="detail-note"><strong>ملاحظات المراجعة:</strong> ${report.reviewNotes || "لا توجد ملاحظات مراجعة حتى الآن."}</p>
+        </div>
       </div>
-      <div class="detail-card">
-        <div class="section-title">بعد الفعالية</div>
-        <p class="detail-note"><strong>النتائج:</strong> ${report.afterResults}</p>
-        <p class="detail-note"><strong>التوصيات:</strong> ${report.afterRecommendations}</p>
+      <div class="report-story-grid">
+        <div class="detail-card">
+          <div class="section-title">قبل الفعالية</div>
+          <p class="detail-note"><strong>الأهداف:</strong> ${report.beforeGoals}</p>
+          <p class="detail-note"><strong>المتوقع:</strong> ${report.beforeExpected}</p>
+        </div>
+        <div class="detail-card">
+          <div class="section-title">بعد الفعالية</div>
+          <p class="detail-note"><strong>النتائج:</strong> ${report.afterResults}</p>
+          <p class="detail-note"><strong>التوصيات:</strong> ${report.afterRecommendations}</p>
+        </div>
       </div>
-      <div class="detail-card">
-        <div class="section-title">تقييم الجودة</div>
-        <div class="detail-row"><span>الالتزام بالموعد</span><span>${quality.scores.timeliness ? `${quality.scores.timeliness}/5` : "بانتظار التقييم"}</span></div>
-        <div class="detail-row"><span>شمولية المحتوى</span><span>${quality.scores.completeness ? `${quality.scores.completeness}/5` : "بانتظار التقييم"}</span></div>
-        <div class="detail-row"><span>جودة التحليل</span><span>${quality.scores.analysis ? `${quality.scores.analysis}/5` : "بانتظار التقييم"}</span></div>
-        <div class="detail-row"><span>المتوسط العام</span><span>${quality.average ? `${quality.average}/5` : "بانتظار التقييم"}</span></div>
-        <p class="detail-note"><strong>ملاحظات المراجعة:</strong> ${report.reviewNotes || "لا توجد ملاحظات مراجعة حتى الآن."}</p>
-      </div>
+      ${canEditReport(report, user) ? `
+        <div class="detail-card">
+          <div class="section-title">إجراءات سريعة</div>
+          <div class="inline-actions"><button class="btn secondary report-edit" data-report-id="${report.id}">تعديل التقرير</button></div>
+        </div>
+      ` : ""}
       ${inferReportFamily(report) === "periodic" ? `
         <div class="detail-card">
           <div class="section-title">ملف التقرير الزمني</div>
