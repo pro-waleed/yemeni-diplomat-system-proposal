@@ -1075,6 +1075,31 @@ function getDepartmentReportProfile(departmentId) {
   };
 }
 
+function getReportsExecutiveMetrics(user = getSessionUser()) {
+  const reports = getVisibleReports(user);
+  const missionProfiles = [...new Map(reports.map((report) => [report.missionId, getMissionReportProfile(report.missionId)])).entries()]
+    .map(([missionId, profile]) => ({ missionId, profile }))
+    .filter((item) => item.missionId);
+  const departmentProfiles = [...new Map(reports.map((report) => [report.departmentId, getDepartmentReportProfile(report.departmentId)])).entries()]
+    .map(([departmentId, profile]) => ({ departmentId, profile }))
+    .filter((item) => item.departmentId);
+  const topMission = [...missionProfiles].sort((a, b) => Number(b.profile.averageQuality) - Number(a.profile.averageQuality))[0] || null;
+  const delayedMission = [...missionProfiles].sort((a, b) => b.profile.overdueRequests.length - a.profile.overdueRequests.length)[0] || null;
+  const topDepartment = [...departmentProfiles].sort((a, b) => Number(b.profile.averageQuality) - Number(a.profile.averageQuality))[0] || null;
+  const stageDistribution = [
+    { label: "مرفوع من البعثة", count: reports.filter((report) => report.workflowStage === "مرفوع من البعثة").length },
+    { label: "قيد مراجعة الدائرة", count: reports.filter((report) => report.workflowStage === "قيد مراجعة الدائرة").length },
+    { label: "معتمد من التخطيط", count: reports.filter((report) => report.workflowStage === "معتمد من التخطيط").length },
+    { label: "مغلق ومؤرشف", count: reports.filter((report) => report.workflowStage === "مغلق ومؤرشف").length }
+  ];
+  const familyDistribution = [
+    { label: "زمني", count: reports.filter((report) => inferReportFamily(report) === "periodic").length },
+    { label: "موضوعي", count: reports.filter((report) => inferReportFamily(report) === "thematic").length },
+    { label: "نشاط", count: reports.filter((report) => inferReportFamily(report) === "activity").length }
+  ];
+  return { topMission, delayedMission, topDepartment, stageDistribution, familyDistribution };
+}
+
 function getReportFamilyLabel(report) {
   const family = inferReportFamily(report);
   if (family === "periodic") return "زمني";
@@ -1090,6 +1115,7 @@ function renderReportsHero(reports, filteredReports, user) {
   const periodicReports = reports.filter((report) => inferReportFamily(report) === "periodic");
   const approvedReports = reports.filter((report) => report.workflowStage === "معتمد من التخطيط" || report.workflowStage === "مغلق ومؤرشف");
   const pendingReview = reports.filter((report) => report.workflowStage === "مرفوع من البعثة" || report.workflowStage === "قيد مراجعة الدائرة");
+  const executive = getReportsExecutiveMetrics(user);
   return `
     <section class="reports-hero">
       <article class="reports-hero-main">
@@ -1118,6 +1144,36 @@ function renderReportsHero(reports, filteredReports, user) {
             <strong>${approvedReports.length}</strong>
           </div>
         </div>
+        ${user.role !== "mission" ? `
+          <div class="reports-executive-grid">
+            <div class="detail-card">
+              <div class="section-title">أفضل بعثة</div>
+              <p class="detail-note">${executive.topMission ? `${getMissionName(executive.topMission.missionId)} بجودة ${executive.topMission.profile.averageQuality}/5` : "لا توجد بيانات كافية بعد."}</p>
+            </div>
+            <div class="detail-card">
+              <div class="section-title">البعثة الأكثر تأخرًا</div>
+              <p class="detail-note">${executive.delayedMission && executive.delayedMission.profile.overdueRequests.length ? `${getMissionName(executive.delayedMission.missionId)} بعدد ${executive.delayedMission.profile.overdueRequests.length} طلبات متأخرة` : "لا توجد حالات تأخر مسجلة."}</p>
+            </div>
+            <div class="detail-card">
+              <div class="section-title">أفضل دائرة</div>
+              <p class="detail-note">${executive.topDepartment ? `${getDepartmentName(executive.topDepartment.departmentId)} بمتوسط جودة ${executive.topDepartment.profile.averageQuality}/5` : "لا توجد بيانات كافية بعد."}</p>
+            </div>
+          </div>
+          <div class="reports-executive-grid">
+            <div class="detail-card">
+              <div class="section-title">التوزيع حسب المرحلة</div>
+              <div class="detail-list">
+                ${executive.stageDistribution.map((item) => `<div class="detail-row"><span>${item.label}</span><span>${item.count}</span></div>`).join("")}
+              </div>
+            </div>
+            <div class="detail-card">
+              <div class="section-title">التوزيع حسب النوع</div>
+              <div class="detail-list">
+                ${executive.familyDistribution.map((item) => `<div class="detail-row"><span>${item.label}</span><span>${item.count}</span></div>`).join("")}
+              </div>
+            </div>
+          </div>
+        ` : ""}
       </article>
       <article class="reports-hero-side">
         <div class="section-title">تسلسل العمل</div>
