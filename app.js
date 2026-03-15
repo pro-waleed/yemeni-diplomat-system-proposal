@@ -970,6 +970,7 @@ function getMissionRequestStatus(requestId, missionId) {
 }
 
 function getRequestUrgency(request) {
+  if (request.status === "مغلق") return { label: "مغلق", tone: "success" };
   const today = new Date().toISOString().slice(0, 10);
   const due = request.dueDate || "";
   if (!due) return { label: "بدون موعد", tone: "info" };
@@ -988,12 +989,27 @@ function getRequestPriorityTone(priority) {
 
 function getRequestExecutiveMetrics(user = getSessionUser()) {
   const requests = getVisibleRequests(user);
+  const activeRequests = requests.filter((request) => request.status === "نشط");
   return {
     total: requests.length,
-    overdue: requests.filter((request) => getRequestLifecycle(request).label === "متأخر").length,
-    dueSoon: requests.filter((request) => getRequestUrgency(request).label === "قريب الاستحقاق").length,
-    highPriority: requests.filter((request) => request.priority === "عالية").length
+    overdue: activeRequests.filter((request) => getRequestLifecycle(request).label === "متأخر").length,
+    dueSoon: activeRequests.filter((request) => getRequestUrgency(request).label === "قريب الاستحقاق").length,
+    highPriority: activeRequests.filter((request) => request.priority === "عالية").length
   };
+}
+
+function getSortedRequestsForDisplay(requests) {
+  const priorityWeight = { "عالية": 3, "متوسطة": 2, "عادية": 1 };
+  const lifecycleWeight = { "متأخر": 3, "نشط": 2, "مكتمل": 1, "مغلق": 0 };
+  return [...requests].sort((a, b) => {
+    const lifeA = lifecycleWeight[getRequestLifecycle(a).label] || 0;
+    const lifeB = lifecycleWeight[getRequestLifecycle(b).label] || 0;
+    if (lifeB !== lifeA) return lifeB - lifeA;
+    const prA = priorityWeight[a.priority] || 2;
+    const prB = priorityWeight[b.priority] || 2;
+    if (prB !== prA) return prB - prA;
+    return String(a.dueDate || "").localeCompare(String(b.dueDate || ""));
+  });
 }
 
 function calculateTimelinessScore(report) {
@@ -2834,7 +2850,7 @@ function renderGovernancePage(user) {
 }
 
 function renderRequestsPage(user) {
-  const requests = getVisibleRequests(user);
+  const requests = getSortedRequestsForDisplay(getVisibleRequests(user));
   const canRequest = canIssueReportRequest(user, "activity") || canIssueReportRequest(user, "periodic");
   const metrics = getRequestExecutiveMetrics(user);
   return `
@@ -3742,10 +3758,20 @@ function handleRequestSubmit(event) {
   const user = getSessionUser();
   const form = new FormData(event.currentTarget);
   const requestFamily = String(form.get("requestFamily"));
+  const dueDate = String(form.get("dueDate") || "");
+  const priority = String(form.get("priority") || "متوسطة");
+  const normalizedPriority = ["عالية", "متوسطة", "عادية"].includes(priority) ? priority : "متوسطة";
   const targetMissionIds = form.getAll("missionId");
   if (!targetMissionIds.length) return;
   if (!canIssueReportRequest(user, requestFamily)) {
     addAlert("danger", "تعذر إصدار الطلب", "لا تملك هذه الجهة صلاحية إصدار هذا النوع من طلبات التقارير.");
+    saveState();
+    renderApp();
+    return;
+  }
+  const today = new Date().toISOString().slice(0, 10);
+  if (!dueDate || dueDate < today) {
+    addAlert("danger", "تعذر إصدار الطلب", "يجب أن يكون الموعد النهائي اليوم أو تاريخًا لاحقًا.");
     saveState();
     renderApp();
     return;
@@ -3759,8 +3785,8 @@ function handleRequestSubmit(event) {
     createdBy: user.name,
     createdByRole: user.role,
     requestedByDepartmentId: user.role === "department" ? user.departmentId : "",
-    priority: String(form.get("priority") || "متوسطة"),
-    dueDate: String(form.get("dueDate")),
+    priority: normalizedPriority,
+    dueDate,
     targetMissionIds,
     completedMissionIds: [],
     status: "نشط"
