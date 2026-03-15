@@ -523,6 +523,17 @@ textarea {
   gap: 16px;
 }
 
+.entity-profile-card {
+  display: grid;
+  gap: 16px;
+}
+
+.entity-kpi-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .report-detail-hero {
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(240px, 0.85fr);
@@ -771,7 +782,8 @@ textarea {
   .report-panel-grid,
   .report-indicator-grid,
   .report-periodic-status-grid,
-  .report-filter-bar {
+  .report-filter-bar,
+  .entity-kpi-grid {
     grid-template-columns: 1fr;
   }
 }
