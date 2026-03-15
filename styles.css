@@ -526,6 +526,13 @@ textarea {
   margin-top: 14px;
 }
 
+.request-chip-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 10px 0;
+}
+
 .report-detail-stack {
   gap: 16px;
 }

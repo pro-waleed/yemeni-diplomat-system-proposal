@@ -239,6 +239,7 @@ const seedState = () => ({
       createdBy: "إدارة التخطيط",
       createdByRole: "planning",
       requestedByDepartmentId: "",
+      priority: "عالية",
       dueDate: "2026-06-30",
       targetMissionIds: CANONICAL_MISSIONS.map((mission) => mission.id),
       completedMissionIds: ["mission-cairo", "mission-riyadh", "mission-paris"],
@@ -437,6 +438,7 @@ function loadState() {
     thematicTrack: request.thematicTrack || "",
     createdByRole: request.createdByRole || "planning",
     requestedByDepartmentId: request.requestedByDepartmentId || "",
+    priority: request.priority || "متوسطة",
     targetMissionIds: Array.isArray(request.targetMissionIds) ? request.targetMissionIds : [],
     completedMissionIds: Array.isArray(request.completedMissionIds) ? request.completedMissionIds : [],
     status: request.status || "نشط"
@@ -948,6 +950,8 @@ function getRequestMissionIdsForUser(request, user = getSessionUser()) {
 }
 
 function getMissionRequestStatus(requestId, missionId) {
+  const request = state.reportRequests.find((item) => item.id === requestId);
+  const today = new Date().toISOString().slice(0, 10);
   const approved = state.reports.some((report) => (
     report.requestId === requestId &&
     report.missionId === missionId &&
@@ -958,9 +962,37 @@ function getMissionRequestStatus(requestId, missionId) {
     report.missionId === missionId &&
     report.workflowStage !== "أعيد للبعثة للاستكمال"
   ));
+  const overdue = !approved && !submitted && request?.dueDate && request.dueDate < today;
   return {
-    label: approved ? "معتمد" : submitted ? "مرفوع" : "لم يرفع",
-    tone: approved ? "success" : submitted ? "info" : "warning"
+    label: approved ? "معتمد" : submitted ? "مرفوع" : overdue ? "متأخر" : "لم يرفع",
+    tone: approved ? "success" : submitted ? "info" : overdue ? "danger" : "warning"
+  };
+}
+
+function getRequestUrgency(request) {
+  const today = new Date().toISOString().slice(0, 10);
+  const due = request.dueDate || "";
+  if (!due) return { label: "بدون موعد", tone: "info" };
+  const diffDays = Math.ceil((new Date(due) - new Date(today)) / 86400000);
+  if (diffDays < 0) return { label: "متجاوز الموعد", tone: "danger" };
+  if (diffDays <= 7) return { label: "قريب الاستحقاق", tone: "warning" };
+  if (diffDays <= 21) return { label: "ضمن المتابعة", tone: "info" };
+  return { label: "ضمن الإطار الزمني", tone: "success" };
+}
+
+function getRequestPriorityTone(priority) {
+  if (priority === "عالية") return "danger";
+  if (priority === "متوسطة") return "warning";
+  return "info";
+}
+
+function getRequestExecutiveMetrics(user = getSessionUser()) {
+  const requests = getVisibleRequests(user);
+  return {
+    total: requests.length,
+    overdue: requests.filter((request) => getRequestLifecycle(request).label === "متأخر").length,
+    dueSoon: requests.filter((request) => getRequestUrgency(request).label === "قريب الاستحقاق").length,
+    highPriority: requests.filter((request) => request.priority === "عالية").length
   };
 }
 
@@ -2804,6 +2836,7 @@ function renderGovernancePage(user) {
 function renderRequestsPage(user) {
   const requests = getVisibleRequests(user);
   const canRequest = canIssueReportRequest(user, "activity") || canIssueReportRequest(user, "periodic");
+  const metrics = getRequestExecutiveMetrics(user);
   return `
     <section class="panel">
       <div class="topbar">
@@ -2811,6 +2844,24 @@ function renderRequestsPage(user) {
           <span class="tag info">متابعة الإنجاز</span>
           <h1 class="page-title">طلبات التقارير</h1>
           <p class="muted">${canRequest ? "يمكنك إصدار طلبات تقارير ومتابعة الإنجاز بحسب صلاحيتك." : "يمكنك متابعة الطلبات الواقعة ضمن نطاقك."}</p>
+        </div>
+      </div>
+      <div class="reports-stat-strip">
+        <div class="reports-stat-card">
+          <span>إجمالي الطلبات</span>
+          <strong>${metrics.total}</strong>
+        </div>
+        <div class="reports-stat-card">
+          <span>عالية الأولوية</span>
+          <strong>${metrics.highPriority}</strong>
+        </div>
+        <div class="reports-stat-card">
+          <span>قريبة الاستحقاق</span>
+          <strong>${metrics.dueSoon}</strong>
+        </div>
+        <div class="reports-stat-card">
+          <span>متأخرة</span>
+          <strong>${metrics.overdue}</strong>
         </div>
       </div>
     </section>
@@ -2822,6 +2873,7 @@ function renderRequestsPage(user) {
           ${requests.map((request) => {
             const c = getCompletion(request);
             const lifecycle = getRequestLifecycle(request);
+            const urgency = getRequestUrgency(request);
             const scopedMissionIds = getRequestMissionIdsForUser(request, user);
             const ownMissionStatus = user.role === "mission" ? getMissionRequestStatus(request.id, user.missionId) : null;
             return `
@@ -2833,8 +2885,13 @@ function renderRequestsPage(user) {
                   </div>
                   <span class="tag ${lifecycle.tone}">${lifecycle.label}</span>
                 </div>
+                <div class="request-chip-row">
+                  <span class="tag ${getRequestPriorityTone(request.priority)}">${request.priority || "متوسطة"} الأولوية</span>
+                  <span class="tag ${urgency.tone}">${urgency.label}</span>
+                </div>
                 <div class="detail-row"><span>الجهة الطالبة</span><span>${request.createdBy}</span></div>
                 ${request.thematicTrack ? `<div class="detail-row"><span>المسار الموضوعي</span><span>${request.thematicTrack}</span></div>` : ""}
+                <div class="detail-row"><span>نسبة الإنجاز</span><span>${c.percent}%</span></div>
                 <div class="progress"><span style="width:${c.percent}%"></span></div>
                 ${user.role === "mission" ? `
                   <p class="record-desc">هذا الطلب موجّه إلى ${getMissionName(user.missionId)}، وحالة الإنجاز الحالية للبعثة هي ${ownMissionStatus.label}.</p>
@@ -2907,6 +2964,14 @@ function renderRequestForm(user) {
         <label class="field full">
           <span>الموعد النهائي</span>
           <input type="date" name="dueDate" required>
+        </label>
+        <label class="field">
+          <span>الأولوية</span>
+          <select name="priority">
+            <option value="عالية">عالية</option>
+            <option value="متوسطة" selected>متوسطة</option>
+            <option value="عادية">عادية</option>
+          </select>
         </label>
         <label class="field full">
           <span>البعثات المستهدفة</span>
@@ -3694,6 +3759,7 @@ function handleRequestSubmit(event) {
     createdBy: user.name,
     createdByRole: user.role,
     requestedByDepartmentId: user.role === "department" ? user.departmentId : "",
+    priority: String(form.get("priority") || "متوسطة"),
     dueDate: String(form.get("dueDate")),
     targetMissionIds,
     completedMissionIds: [],
