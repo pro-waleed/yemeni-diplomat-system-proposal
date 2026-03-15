@@ -116,12 +116,20 @@ const PERIODIC_REPORT_TABS = [
   { key: "community", label: "الجالية والإحصاءات" }
 ];
 
+const REPORT_FORM_STEPS = [
+  { key: "basics", label: "البيانات الأساسية" },
+  { key: "content", label: "محتوى التقرير" },
+  { key: "review", label: "المراجعة النهائية" }
+];
+
 const seedState = () => ({
   sessionUserId: null,
   activeView: "dashboard",
   selectedReportId: "report-1",
   reportRegistryTab: "all",
   periodicReportTab: "bilateral",
+  reportFormStep: "basics",
+  periodicFormTab: "bilateral",
   editingReportId: null,
   editingCircularId: null,
   editingMeetingId: null,
@@ -318,6 +326,8 @@ function loadState() {
   parsed.editingReportId = parsed.editingReportId || null;
   parsed.reportRegistryTab = parsed.reportRegistryTab || "all";
   parsed.periodicReportTab = parsed.periodicReportTab || "bilateral";
+  parsed.reportFormStep = parsed.reportFormStep || "basics";
+  parsed.periodicFormTab = parsed.periodicFormTab || "bilateral";
   parsed.editingCircularId = parsed.editingCircularId || null;
   parsed.editingMeetingId = parsed.editingMeetingId || null;
   parsed.editingPlanId = parsed.editingPlanId || null;
@@ -1178,12 +1188,20 @@ function renderMissionReportForm(user) {
   const editingReport = state.reports.find((item) => item.id === state.editingReportId && item.missionId === user.missionId) || null;
   const indicatorSource = normalizeBilateralIndicators(editingReport?.bilateralIndicators);
   const currentFamily = editingReport ? inferReportFamily(editingReport) : "activity";
+  const activeStep = state.reportFormStep || "basics";
+  const periodicFormTab = state.periodicFormTab || "bilateral";
   return `
-    <div class="detail-card">
-      <div class="section-title">${editingReport ? "تعديل التقرير" : "رفع تقرير نشاط"}</div>
+    <div class="report-form-shell">
+      <div class="report-form-header">
+        <div>
+          <div class="section-title">${editingReport ? "تعديل التقرير" : "إعداد تقرير جديد"}</div>
+          <p class="muted">صُمم نموذج الإدخال ليقودك خطوة بخطوة بحسب عائلة التقرير، مع إبراز الفروق بين النشاط والموضوعي والزمني.</p>
+        </div>
+        <span class="tag info">${editingReport ? "وضع التعديل" : "وضع الإنشاء"}</span>
+      </div>
       ${requests.length ? `
-        <div class="detail-card">
-          <div class="section-title">طلبات التقارير النشطة</div>
+        <div class="report-incoming-card">
+          <div class="section-title">الطلبات الواردة للبعثة</div>
           <div class="detail-list">
             ${requests.map((request) => `
               <div class="detail-row">
@@ -1197,165 +1215,231 @@ function renderMissionReportForm(user) {
         <div class="detail-note">لا توجد حاليًا طلبات تقارير نشطة موجّهة إلى هذه البعثة.</div>
       `}
       <div class="detail-note">التقارير الزمنية تُرفع استجابة لطلب رسمي فقط، بينما يمكن للبعثة إنشاء تقارير الأنشطة والتقارير الموضوعية مباشرة أو استجابة لطلب من الدائرة أو الجهات القيادية. التسلسل المعتمد هنا هو: إنشاء من البعثة، ثم مراجعة الدائرة، ثم اعتماد التخطيط، ثم الإضافة إلى سجل تقارير البعثة.</div>
-      <form id="report-form" class="form-grid">
-        <label class="field">
-          <span>عائلة القالب</span>
-          <select name="reportFamily" id="report-family">
-            <option value="activity" ${!editingReport || inferReportFamily(editingReport) === "activity" ? "selected" : ""}>تقرير نشاط</option>
-            <option value="periodic" ${editingReport && inferReportFamily(editingReport) === "periodic" ? "selected" : ""}>تقرير زمني</option>
-            <option value="thematic" ${editingReport && inferReportFamily(editingReport) === "thematic" ? "selected" : ""}>تقرير موضوعي</option>
-          </select>
-        </label>
-        <label class="field">
-          <span>عنوان التقرير</span>
-          <input name="title" value="${editingReport ? editingReport.title : ""}" required>
-        </label>
-        <label class="field">
-          <span>نوع التقرير</span>
-          <select name="type" data-current-type="${editingReport ? editingReport.type : "نشاط"}">
-            ${[...REPORT_TYPE_OPTIONS.activity, ...REPORT_TYPE_OPTIONS.periodic, ...REPORT_TYPE_OPTIONS.thematic].map((item) => `<option ${editingReport && editingReport.type === item ? "selected" : ""}>${item}</option>`).join("")}
-          </select>
-        </label>
-        <label class="field">
-          <span>المسار الموضوعي</span>
-          <select name="thematicTrack">
-            ${THEMATIC_TRACK_OPTIONS.map((item) => `<option ${editingReport && editingReport.thematicTrack === item ? "selected" : ""}>${item}</option>`).join("")}
-          </select>
-        </label>
-        <label class="field">
-          <span>الطلب المرتبط</span>
-          <select name="requestId" id="report-request-id" data-current-request-id="${editingReport ? editingReport.requestId || "" : ""}">
-            <option value="">بدون ربط</option>
-            ${requests.map((request) => `<option value="${request.id}" data-request-family="${request.requestFamily}" ${editingReport && editingReport.requestId === request.id ? "selected" : ""}>${request.title}</option>`).join("")}
-          </select>
-        </label>
-        <div class="field full">
-          <div class="detail-note" id="report-request-guidance">${currentFamily === "periodic" ? "في التقارير الزمنية يجب اختيار الطلب الرسمي الوارد للبعثة قبل الرفع." : "في تقارير النشاط والتقارير الموضوعية يمكن ترك الطلب المرتبط فارغًا إذا كان التقرير مبادرة من البعثة."}</div>
+      <form id="report-form" class="report-form-workspace">
+        <div class="report-step-strip">
+          ${REPORT_FORM_STEPS.map((step) => `<button class="report-step-chip ${activeStep === step.key ? "active" : ""}" type="button" data-report-form-step="${step.key}">${step.label}</button>`).join("")}
         </div>
-        <label class="field">
-          <span>تاريخ النشاط</span>
-          <input type="date" name="activityDate" value="${editingReport ? editingReport.activityDate : ""}" required>
-        </label>
-        <label class="field">
-          <span>اسم المرفق</span>
-          <input name="attachmentName" value="${editingReport ? editingReport.attachmentName : ""}" required>
-        </label>
-        <label class="field full">
-          <span>الأهداف قبل الفعالية</span>
-          <textarea name="beforeGoals" required>${editingReport ? editingReport.beforeGoals : ""}</textarea>
-        </label>
-        <label class="field full">
-          <span>المتوقع قبل الفعالية</span>
-          <textarea name="beforeExpected" required>${editingReport ? editingReport.beforeExpected : ""}</textarea>
-        </label>
-        <label class="field full">
-          <span>النتائج بعد الفعالية</span>
-          <textarea name="afterResults" required>${editingReport ? editingReport.afterResults : ""}</textarea>
-        </label>
-        <label class="field full">
-          <span>التوصيات بعد الفعالية</span>
-          <textarea name="afterRecommendations" required>${editingReport ? editingReport.afterRecommendations : ""}</textarea>
-        </label>
-        <label class="field full">
-          <span>الملخص التنفيذي</span>
-          <textarea name="summary" required>${editingReport ? editingReport.summary : ""}</textarea>
-        </label>
-        <div class="field full report-template-section" data-template="periodic">
-          <div class="detail-card">
-            <div class="section-title">محاور التقرير الزمني</div>
-            <p class="muted">يعتمد هذا القالب على النموذج السنوي ويصلح للسنوي والنصف سنوي والربع سنوي.</p>
-          </div>
-        </div>
-        <label class="field full report-template-section" data-template="periodic">
-          <span>تقييم العلاقات الثنائية ومؤشراتها</span>
-          <textarea name="bilateralAssessment">${editingReport ? editingReport.bilateralAssessment : ""}</textarea>
-        </label>
-        <label class="field full report-template-section" data-template="periodic">
-          <span>أوجه الدعم والتعاون المحققة</span>
-          <textarea name="supportCooperation">${editingReport ? editingReport.supportCooperation : ""}</textarea>
-        </label>
-        <label class="field full report-template-section" data-template="periodic">
-          <span>الاتفاقيات والبروتكولات ومذكرات التفاهم السارية المفعول</span>
-          <textarea name="activeAgreements">${editingReport ? (editingReport.activeAgreements || editingReport.agreementsStatus || "") : ""}</textarea>
-        </label>
-        <label class="field full report-template-section" data-template="periodic">
-          <span>الاتفاقيات والبروتكولات ومذكرات التفاهم التي تحتاج إلى تفعيل ومتابعة</span>
-          <textarea name="agreementsNeedingActivation">${editingReport ? editingReport.agreementsNeedingActivation : ""}</textarea>
-        </label>
-        <label class="field full report-template-section" data-template="periodic">
-          <span>أهم الأنشطة المنجزة خلال الفترة</span>
-          <textarea name="completedActivities">${editingReport ? editingReport.completedActivities : ""}</textarea>
-        </label>
-        <label class="field full report-template-section" data-template="periodic">
-          <span>الأنشطة أو الملفات غير المنجزة</span>
-          <textarea name="pendingActivities">${editingReport ? editingReport.pendingActivities : ""}</textarea>
-        </label>
-        <label class="field full report-template-section" data-template="periodic">
-          <span>تقييم العلاقة والرؤية المستقبلية</span>
-          <textarea name="relationshipOutlook">${editingReport ? editingReport.relationshipOutlook : ""}</textarea>
-        </label>
-        <label class="field full report-template-section" data-template="periodic">
-          <span>أهم الزيارات المتبادلة - جانب بلادنا</span>
-          <textarea name="visitsFromYemen">${editingReport ? (editingReport.visitsFromYemen || editingReport.visitsSummary || "") : ""}</textarea>
-        </label>
-        <label class="field full report-template-section" data-template="periodic">
-          <span>أهم الزيارات المتبادلة - جانب بلد الاعتماد</span>
-          <textarea name="visitsFromHostCountry">${editingReport ? editingReport.visitsFromHostCountry : ""}</textarea>
-        </label>
-        <label class="field full report-template-section" data-template="periodic">
-          <span>أوضاع الجالية اليمنية في بلد الاعتماد</span>
-          <textarea name="communityUpdate">${editingReport ? editingReport.communityUpdate : ""}</textarea>
-        </label>
-        <label class="field full report-template-section" data-template="periodic">
-          <span>إحصاءات عامة عن الجالية</span>
-          <textarea name="communityStats">${editingReport ? editingReport.communityStats : ""}</textarea>
-        </label>
-        <div class="field full report-template-section" data-template="periodic">
-          <div class="detail-card">
-            <div class="section-title">مؤشر العلاقات الثنائية</div>
-            <div class="detail-list">
-              ${BILATERAL_INDICATOR_FIELDS.map((field) => `
-                <div class="detail-card">
-                  <strong>${field.label}</strong>
-                  <div class="record-meta">${field.hint}</div>
-                  <label class="field">
-                    <span>اتجاه المؤشر</span>
-                    <select name="indicator_trend_${field.key}">
-                      <option value="">غير محدد</option>
-                      ${["تنامي", "استقرار", "تراجع"].map((item) => `<option value="${item}" ${indicatorSource[field.key].trend === item ? "selected" : ""}>${item}</option>`).join("")}
-                    </select>
-                  </label>
-                  <label class="field">
-                    <span>العوامل والمؤشرات المعبّرة</span>
-                    <textarea name="indicator_note_${field.key}">${indicatorSource[field.key].note}</textarea>
-                  </label>
-                </div>
-              `).join("")}
+
+        <section class="report-form-panel ${activeStep === "basics" ? "active" : ""}" data-report-form-panel="basics">
+          <div class="report-panel-grid">
+            <label class="field report-core-field">
+              <span>عائلة القالب</span>
+              <select name="reportFamily" id="report-family">
+                <option value="activity" ${!editingReport || inferReportFamily(editingReport) === "activity" ? "selected" : ""}>تقرير نشاط</option>
+                <option value="periodic" ${editingReport && inferReportFamily(editingReport) === "periodic" ? "selected" : ""}>تقرير زمني</option>
+                <option value="thematic" ${editingReport && inferReportFamily(editingReport) === "thematic" ? "selected" : ""}>تقرير موضوعي</option>
+              </select>
+            </label>
+            <label class="field report-core-field">
+              <span>عنوان التقرير</span>
+              <input name="title" value="${editingReport ? editingReport.title : ""}" required>
+            </label>
+            <label class="field report-core-field">
+              <span>نوع التقرير</span>
+              <select name="type" data-current-type="${editingReport ? editingReport.type : "نشاط"}">
+                ${[...REPORT_TYPE_OPTIONS.activity, ...REPORT_TYPE_OPTIONS.periodic, ...REPORT_TYPE_OPTIONS.thematic].map((item) => `<option ${editingReport && editingReport.type === item ? "selected" : ""}>${item}</option>`).join("")}
+              </select>
+            </label>
+            <label class="field report-core-field report-family-section" data-family="thematic">
+              <span>المسار الموضوعي</span>
+              <select name="thematicTrack">
+                ${THEMATIC_TRACK_OPTIONS.map((item) => `<option ${editingReport && editingReport.thematicTrack === item ? "selected" : ""}>${item}</option>`).join("")}
+              </select>
+            </label>
+            <label class="field report-core-field">
+              <span>الطلب المرتبط</span>
+              <select name="requestId" id="report-request-id" data-current-request-id="${editingReport ? editingReport.requestId || "" : ""}">
+                <option value="">بدون ربط</option>
+                ${requests.map((request) => `<option value="${request.id}" data-request-family="${request.requestFamily}" ${editingReport && editingReport.requestId === request.id ? "selected" : ""}>${request.title}</option>`).join("")}
+              </select>
+            </label>
+            <label class="field report-core-field">
+              <span>تاريخ التقرير/النشاط</span>
+              <input type="date" name="activityDate" value="${editingReport ? editingReport.activityDate : ""}" required>
+            </label>
+            <label class="field full report-core-field">
+              <span>اسم المرفق</span>
+              <input name="attachmentName" value="${editingReport ? editingReport.attachmentName : ""}" required>
+            </label>
+            <div class="field full">
+              <div class="detail-note" id="report-request-guidance">${currentFamily === "periodic" ? "في التقارير الزمنية يجب اختيار الطلب الرسمي الوارد للبعثة قبل الرفع." : "في تقارير النشاط والتقارير الموضوعية يمكن ترك الطلب المرتبط فارغًا إذا كان التقرير مبادرة من البعثة."}</div>
             </div>
           </div>
-        </div>
-        <div class="field full report-template-section" data-template="thematic">
-          <div class="detail-card">
-            <div class="section-title">محاور التقرير الموضوعي</div>
-            <p class="muted">يصلح للتقارير السياسية والاقتصادية والإعلامية والثقافية والقنصلية المتخصصة.</p>
+        </section>
+
+        <section class="report-form-panel ${activeStep === "content" ? "active" : ""}" data-report-form-panel="content">
+          <div class="report-family-section" data-family="activity">
+            <div class="report-form-intro-card">
+              <div class="section-title">قالب تقرير النشاط</div>
+              <p class="muted">نموذج قصير ومنظم يركّز على الهدف، المتوقع، النتائج، والتوصيات العملية اللاحقة.</p>
+            </div>
+            <div class="report-panel-grid">
+              <label class="field full" data-required-families="activity">
+                <span>الأهداف قبل الفعالية</span>
+                <textarea name="beforeGoals">${editingReport ? editingReport.beforeGoals : ""}</textarea>
+              </label>
+              <label class="field full" data-required-families="activity">
+                <span>المتوقع قبل الفعالية</span>
+                <textarea name="beforeExpected">${editingReport ? editingReport.beforeExpected : ""}</textarea>
+              </label>
+              <label class="field full" data-required-families="activity">
+                <span>النتائج بعد الفعالية</span>
+                <textarea name="afterResults">${editingReport ? editingReport.afterResults : ""}</textarea>
+              </label>
+              <label class="field full" data-required-families="activity">
+                <span>التوصيات بعد الفعالية</span>
+                <textarea name="afterRecommendations">${editingReport ? editingReport.afterRecommendations : ""}</textarea>
+              </label>
+            </div>
           </div>
-        </div>
-        <label class="field full report-template-section" data-template="thematic">
-          <span>الوضع القائم وتحليل الموضوع</span>
-          <textarea name="thematicSituation">${editingReport ? editingReport.thematicSituation : ""}</textarea>
-        </label>
-        <label class="field full report-template-section" data-template="thematic">
-          <span>الانعكاسات على مصالح اليمن</span>
-          <textarea name="thematicImplications">${editingReport ? editingReport.thematicImplications : ""}</textarea>
-        </label>
-        <label class="field full report-template-section" data-template="thematic">
-          <span>التوصيات الموضوعية</span>
-          <textarea name="thematicRecommendations">${editingReport ? editingReport.thematicRecommendations : ""}</textarea>
-        </label>
-        <div class="field full">
-          <button class="btn primary" type="submit">${editingReport ? "حفظ التعديلات" : "رفع التقرير"}</button>
-          ${editingReport ? `<button class="btn secondary cancel-edit" type="button" data-kind="report">إلغاء التعديل</button>` : ""}
-        </div>
+
+          <div class="report-family-section" data-family="thematic">
+            <div class="report-form-intro-card">
+              <div class="section-title">قالب التقرير الموضوعي</div>
+              <p class="muted">يبنى على تحليل الموضوع وآثاره على مصالح اليمن ثم يختتم بتوصيات قابلة للتنفيذ والمتابعة.</p>
+            </div>
+            <div class="report-panel-grid">
+              <label class="field full" data-required-families="thematic">
+                <span>الوضع القائم وتحليل الموضوع</span>
+                <textarea name="thematicSituation">${editingReport ? editingReport.thematicSituation : ""}</textarea>
+              </label>
+              <label class="field full" data-required-families="thematic">
+                <span>الانعكاسات على مصالح اليمن</span>
+                <textarea name="thematicImplications">${editingReport ? editingReport.thematicImplications : ""}</textarea>
+              </label>
+              <label class="field full" data-required-families="thematic">
+                <span>التوصيات الموضوعية</span>
+                <textarea name="thematicRecommendations">${editingReport ? editingReport.thematicRecommendations : ""}</textarea>
+              </label>
+            </div>
+          </div>
+
+          <div class="report-family-section" data-family="periodic">
+            <div class="report-form-intro-card">
+              <div class="section-title">قالب التقرير الزمني</div>
+              <p class="muted">مساحة إدخال مبوبة لملء التقرير السنوي أو النصف سنوي بصورة تدريجية ومنظمة وفق محاور النموذج المعتمد.</p>
+            </div>
+            <div class="tab-strip report-inner-tabs">
+              ${PERIODIC_REPORT_TABS.map((tab) => `<button class="tab-chip ${periodicFormTab === tab.key ? "active" : ""}" type="button" data-periodic-form-tab="${tab.key}">${tab.label}</button>`).join("")}
+            </div>
+            <div class="periodic-form-panels">
+              <div class="report-form-subpanel ${periodicFormTab === "bilateral" ? "active" : ""}" data-periodic-form-panel="bilateral">
+                <div class="report-panel-grid">
+                  <label class="field full" data-required-families="periodic">
+                    <span>التقييم العام للعلاقات الثنائية</span>
+                    <textarea name="bilateralAssessment">${editingReport ? editingReport.bilateralAssessment : ""}</textarea>
+                  </label>
+                  <div class="field full">
+                    <div class="report-indicator-grid">
+                      ${BILATERAL_INDICATOR_FIELDS.map((field) => `
+                        <div class="report-indicator-card">
+                          <strong>${field.label}</strong>
+                          <div class="record-meta">${field.hint}</div>
+                          <label class="field">
+                            <span>اتجاه المؤشر</span>
+                            <select name="indicator_trend_${field.key}">
+                              <option value="">غير محدد</option>
+                              ${["تنامي", "استقرار", "تراجع"].map((item) => `<option value="${item}" ${indicatorSource[field.key].trend === item ? "selected" : ""}>${item}</option>`).join("")}
+                            </select>
+                          </label>
+                          <label class="field">
+                            <span>العوامل والمؤشرات المعبّرة</span>
+                            <textarea name="indicator_note_${field.key}">${indicatorSource[field.key].note}</textarea>
+                          </label>
+                        </div>
+                      `).join("")}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="report-form-subpanel ${periodicFormTab === "cooperation" ? "active" : ""}" data-periodic-form-panel="cooperation">
+                <div class="report-panel-grid">
+                  <label class="field full" data-required-families="periodic">
+                    <span>أوجه الدعم والتعاون الثنائي المحقق خلال الفترة</span>
+                    <textarea name="supportCooperation">${editingReport ? editingReport.supportCooperation : ""}</textarea>
+                  </label>
+                </div>
+              </div>
+              <div class="report-form-subpanel ${periodicFormTab === "agreements" ? "active" : ""}" data-periodic-form-panel="agreements">
+                <div class="report-panel-grid">
+                  <label class="field full" data-required-families="periodic">
+                    <span>الاتفاقيات والبروتكولات ومذكرات التفاهم السارية المفعول</span>
+                    <textarea name="activeAgreements">${editingReport ? (editingReport.activeAgreements || editingReport.agreementsStatus || "") : ""}</textarea>
+                  </label>
+                  <label class="field full" data-required-families="periodic">
+                    <span>الاتفاقيات والبروتكولات ومذكرات التفاهم التي تحتاج إلى تفعيل ومتابعة</span>
+                    <textarea name="agreementsNeedingActivation">${editingReport ? editingReport.agreementsNeedingActivation : ""}</textarea>
+                  </label>
+                </div>
+              </div>
+              <div class="report-form-subpanel ${periodicFormTab === "achievements" ? "active" : ""}" data-periodic-form-panel="achievements">
+                <div class="report-panel-grid">
+                  <label class="field full" data-required-families="periodic">
+                    <span>أهم المواضيع والأنشطة التي أنجزتها البعثة خلال الفترة</span>
+                    <textarea name="completedActivities">${editingReport ? editingReport.completedActivities : ""}</textarea>
+                  </label>
+                </div>
+              </div>
+              <div class="report-form-subpanel ${periodicFormTab === "followup" ? "active" : ""}" data-periodic-form-panel="followup">
+                <div class="report-panel-grid">
+                  <label class="field full" data-required-families="periodic">
+                    <span>الموضوعات والأنشطة التي لم تُنجز وتحتاج إلى مواصلة المتابعة</span>
+                    <textarea name="pendingActivities">${editingReport ? editingReport.pendingActivities : ""}</textarea>
+                  </label>
+                </div>
+              </div>
+              <div class="report-form-subpanel ${periodicFormTab === "outlook" ? "active" : ""}" data-periodic-form-panel="outlook">
+                <div class="report-panel-grid">
+                  <label class="field full" data-required-families="periodic">
+                    <span>تقييم البعثة للعلاقات الثنائية ورؤيتها المستقبلية والتوصيات</span>
+                    <textarea name="relationshipOutlook">${editingReport ? editingReport.relationshipOutlook : ""}</textarea>
+                  </label>
+                </div>
+              </div>
+              <div class="report-form-subpanel ${periodicFormTab === "visits" ? "active" : ""}" data-periodic-form-panel="visits">
+                <div class="report-panel-grid">
+                  <label class="field full" data-required-families="periodic">
+                    <span>أهم الزيارات المتبادلة - جانب بلادنا</span>
+                    <textarea name="visitsFromYemen">${editingReport ? (editingReport.visitsFromYemen || editingReport.visitsSummary || "") : ""}</textarea>
+                  </label>
+                  <label class="field full" data-required-families="periodic">
+                    <span>أهم الزيارات المتبادلة - جانب بلد الاعتماد</span>
+                    <textarea name="visitsFromHostCountry">${editingReport ? editingReport.visitsFromHostCountry : ""}</textarea>
+                  </label>
+                </div>
+              </div>
+              <div class="report-form-subpanel ${periodicFormTab === "community" ? "active" : ""}" data-periodic-form-panel="community">
+                <div class="report-panel-grid">
+                  <label class="field full" data-required-families="periodic">
+                    <span>الجالية اليمنية في بلد الاعتماد</span>
+                    <textarea name="communityUpdate">${editingReport ? editingReport.communityUpdate : ""}</textarea>
+                  </label>
+                  <label class="field full" data-required-families="periodic">
+                    <span>إحصاءات عامة عن الجالية</span>
+                    <textarea name="communityStats">${editingReport ? editingReport.communityStats : ""}</textarea>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="report-form-panel ${activeStep === "review" ? "active" : ""}" data-report-form-panel="review">
+          <div class="report-form-intro-card">
+            <div class="section-title">المراجعة النهائية</div>
+            <p class="muted">راجع الملخص التنفيذي وتأكد من اكتمال البيانات الأساسية والمرفقات قبل رفع التقرير إلى الدائرة المعنية.</p>
+          </div>
+          <div class="report-panel-grid">
+            <label class="field full">
+              <span>الملخص التنفيذي</span>
+              <textarea name="summary" required>${editingReport ? editingReport.summary : ""}</textarea>
+            </label>
+            <div class="field full report-submit-row">
+              <button class="btn primary" type="submit">${editingReport ? "حفظ التعديلات" : "رفع التقرير"}</button>
+              ${editingReport ? `<button class="btn secondary cancel-edit" type="button" data-kind="report">إلغاء التعديل</button>` : ""}
+            </div>
+          </div>
+        </section>
       </form>
     </div>
   `;
@@ -2103,6 +2187,9 @@ function bindEvents() {
   const thematicTrack = document.querySelector('#report-form select[name="thematicTrack"]');
   const reportRequestId = document.getElementById("report-request-id");
   const reportRequestGuidance = document.getElementById("report-request-guidance");
+  const reportFormPanels = document.querySelectorAll("[data-report-form-panel]");
+  const reportFormStepButtons = document.querySelectorAll("[data-report-form-step]");
+  const periodicFormTabButtons = document.querySelectorAll("[data-periodic-form-tab]");
   if (reportFamily && reportType && thematicTrack) {
     const updateReportSections = () => {
       const value = reportFamily.value;
@@ -2143,13 +2230,49 @@ function bindEvents() {
           ? "في التقارير الزمنية يجب اختيار الطلب الرسمي الوارد للبعثة قبل الرفع."
           : "في تقارير النشاط والتقارير الموضوعية يمكن ترك الطلب المرتبط فارغًا إذا كان التقرير مبادرة من البعثة.";
       }
-      document.querySelectorAll(".report-template-section").forEach((section) => {
-        section.style.display = section.dataset.template === value ? "" : "none";
+      document.querySelectorAll(".report-family-section").forEach((section) => {
+        const matches = section.dataset.family === value;
+        section.style.display = matches ? "" : "none";
+        section.querySelectorAll("input, select, textarea").forEach((field) => {
+          if (field === thematicTrack) return;
+          field.disabled = !matches && !field.closest(".report-core-field");
+          const requiredFamilies = (field.dataset.requiredFamilies || field.closest("[data-required-families]")?.dataset.requiredFamilies || "").split(",").map((item) => item.trim()).filter(Boolean);
+          if (requiredFamilies.length) {
+            field.required = matches && requiredFamilies.includes(value);
+          }
+        });
+      });
+      document.querySelectorAll("[data-required-families]").forEach((wrapper) => {
+        const field = wrapper.querySelector("input, select, textarea");
+        if (!field) return;
+        const requiredFamilies = wrapper.dataset.requiredFamilies.split(",").map((item) => item.trim());
+        field.required = requiredFamilies.includes(value);
+      });
+      document.querySelectorAll("[data-periodic-form-panel]").forEach((panel) => {
+        const active = panel.dataset.periodicFormPanel === state.periodicFormTab;
+        panel.classList.toggle("active", active);
+      });
+      reportFormPanels.forEach((panel) => {
+        panel.classList.toggle("active", panel.dataset.reportFormPanel === state.reportFormStep);
       });
     };
     reportFamily.addEventListener("change", updateReportSections);
     reportType.addEventListener("change", () => {
       reportType.dataset.currentType = reportType.value;
+    });
+    reportFormStepButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        state.reportFormStep = button.dataset.reportFormStep;
+        saveState();
+        renderApp();
+      });
+    });
+    periodicFormTabButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        state.periodicFormTab = button.dataset.periodicFormTab;
+        saveState();
+        renderApp();
+      });
     });
     updateReportSections();
   }

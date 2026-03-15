@@ -531,6 +531,92 @@ textarea {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.report-form-shell {
+  display: grid;
+  gap: 16px;
+  padding: 22px;
+  border-radius: 28px;
+  border: 1px solid var(--line);
+  background:
+    linear-gradient(135deg, rgba(15, 118, 110, 0.06), rgba(255, 255, 255, 0.88)),
+    var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.report-form-header,
+.report-submit-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 14px;
+}
+
+.report-incoming-card,
+.report-form-intro-card,
+.report-indicator-card {
+  padding: 18px;
+  border-radius: 22px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.report-form-workspace {
+  display: grid;
+  gap: 16px;
+}
+
+.report-step-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.report-step-chip {
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.76);
+  cursor: pointer;
+  color: var(--text);
+}
+
+.report-step-chip.active {
+  color: #fff;
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--teal), var(--teal-strong));
+}
+
+.report-form-panel,
+.report-form-subpanel {
+  display: none;
+}
+
+.report-form-panel.active,
+.report-form-subpanel.active {
+  display: block;
+}
+
+.report-panel-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.report-inner-tabs {
+  margin-bottom: 10px;
+}
+
+.periodic-form-panels {
+  display: grid;
+  gap: 14px;
+}
+
+.report-indicator-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .tag {
   display: inline-flex;
   width: fit-content;
@@ -634,7 +720,9 @@ textarea {
   .reports-stat-strip,
   .report-summary-grid,
   .report-story-grid,
-  .report-detail-hero {
+  .report-detail-hero,
+  .report-panel-grid,
+  .report-indicator-grid {
     grid-template-columns: 1fr;
   }
 }
@@ -655,12 +743,18 @@ textarea {
   .record-bottom,
   .detail-row,
   .report-registry-head,
+  .report-form-header,
+  .report-submit-row,
   .inline-actions {
     flex-direction: column;
   }
 
   .reports-stat-strip {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .report-step-strip {
+    grid-template-columns: 1fr;
   }
 
   .detail-row.triple {
