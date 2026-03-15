@@ -115,6 +115,29 @@ textarea {
   gap: 12px;
 }
 
+.tab-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 12px 0 16px;
+}
+
+.tab-chip {
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.74);
+  color: var(--text);
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.tab-chip.active {
+  color: #fff;
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--teal), var(--teal-strong));
+}
+
 .cred-card,
 .nav-item,
 .metric-card,
@@ -196,6 +219,11 @@ textarea {
 .field textarea {
   min-height: 108px;
   resize: vertical;
+}
+
+.detail-row.triple {
+  grid-template-columns: minmax(120px, 0.8fr) minmax(90px, 0.35fr) minmax(0, 1.8fr);
+  align-items: start;
 }
 
 .btn,

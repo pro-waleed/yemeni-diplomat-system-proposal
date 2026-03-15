@@ -98,10 +98,30 @@ const REPORT_QUALITY_FIELDS = [
   { key: "analysis", label: "جودة التحليل" }
 ];
 
+const REPORT_FAMILY_TABS = [
+  { key: "all", label: "جميع التقارير" },
+  { key: "periodic", label: "التقارير الزمنية" },
+  { key: "activity", label: "تقارير الأنشطة" },
+  { key: "thematic", label: "التقارير الموضوعية" }
+];
+
+const PERIODIC_REPORT_TABS = [
+  { key: "bilateral", label: "العلاقات الثنائية" },
+  { key: "cooperation", label: "الدعم والتعاون" },
+  { key: "agreements", label: "الاتفاقيات" },
+  { key: "achievements", label: "الأنشطة المنجزة" },
+  { key: "followup", label: "الموضوعات قيد المتابعة" },
+  { key: "outlook", label: "التقييم والرؤية المستقبلية" },
+  { key: "visits", label: "الزيارات المتبادلة" },
+  { key: "community", label: "الجالية والإحصاءات" }
+];
+
 const seedState = () => ({
   sessionUserId: null,
   activeView: "dashboard",
   selectedReportId: "report-1",
+  reportRegistryTab: "all",
+  periodicReportTab: "bilateral",
   editingReportId: null,
   editingCircularId: null,
   editingMeetingId: null,
@@ -150,12 +170,15 @@ const seedState = () => ({
       countrySnapshot: "ملف موجز عن بلد الاعتماد وأهم المتغيرات السياسية والاقتصادية ذات الصلة بالعلاقات الثنائية.",
       bilateralAssessment: "قراءة تقييمية لمؤشرات العلاقات الثنائية واتجاهها العام خلال الفترة محل التقرير.",
       supportCooperation: "عرض لأوجه الدعم والتعاون السياسي والاقتصادي والإنساني والتدريبي وما تحقق منها.",
-      agreementsStatus: "موقف الاتفاقيات ومذكرات التفاهم النافذة وما يحتاج إلى تفعيل أو متابعة.",
+      activeAgreements: "الاتفاقيات والبروتكولات ومذكرات التفاهم النافذة وسارية المفعول.",
+      agreementsNeedingActivation: "الاتفاقيات والبروتكولات ومذكرات التفاهم التي تحتاج إلى تفعيل ومتابعة.",
       completedActivities: "أبرز الأنشطة والملفات التي أنجزتها البعثة خلال الفترة.",
       pendingActivities: "الملفات والأنشطة التي لم تستكمل وتحتاج إلى متابعة لاحقة.",
       relationshipOutlook: "تقدير البعثة لمستقبل العلاقات وأهم الفرص والمعوقات.",
-      visitsSummary: "خلاصة الزيارات المتبادلة والاتصالات الرسمية خلال الفترة.",
+      visitsFromYemen: "أهم الزيارات المتبادلة من جانب بلادنا خلال الفترة.",
+      visitsFromHostCountry: "أهم الزيارات المتبادلة من جانب بلد الاعتماد خلال الفترة.",
       communityUpdate: "تحديث موجز عن شؤون الجالية اليمنية ذات الصلة ببلد الاعتماد.",
+      communityStats: "إحصاءات عامة عن الجالية اليمنية في بلد الاعتماد.",
       bilateralIndicators: {
         political: { trend: "تنامي", note: "نشاط اتصالات رسمية منتظم وتنسيق في المواقف الدولية." },
         economic: { trend: "استقرار", note: "حراك اقتصادي محدود مع فرص توسع قائمة." },
@@ -293,6 +316,8 @@ function loadState() {
   parsed.missions = [...canonicalMissions, ...customMissions];
   parsed.reportRequests = Array.isArray(parsed.reportRequests) ? parsed.reportRequests : seeded.reportRequests;
   parsed.editingReportId = parsed.editingReportId || null;
+  parsed.reportRegistryTab = parsed.reportRegistryTab || "all";
+  parsed.periodicReportTab = parsed.periodicReportTab || "bilateral";
   parsed.editingCircularId = parsed.editingCircularId || null;
   parsed.editingMeetingId = parsed.editingMeetingId || null;
   parsed.editingPlanId = parsed.editingPlanId || null;
@@ -337,11 +362,16 @@ function loadState() {
     bilateralAssessment: report.bilateralAssessment || "",
     supportCooperation: report.supportCooperation || "",
     agreementsStatus: report.agreementsStatus || "",
+    activeAgreements: report.activeAgreements || report.agreementsStatus || "",
+    agreementsNeedingActivation: report.agreementsNeedingActivation || "",
     completedActivities: report.completedActivities || "",
     pendingActivities: report.pendingActivities || "",
     relationshipOutlook: report.relationshipOutlook || "",
     visitsSummary: report.visitsSummary || "",
+    visitsFromYemen: report.visitsFromYemen || report.visitsSummary || "",
+    visitsFromHostCountry: report.visitsFromHostCountry || "",
     communityUpdate: report.communityUpdate || "",
+    communityStats: report.communityStats || "",
     bilateralIndicators: normalizeBilateralIndicators(report.bilateralIndicators),
     reviewNotes: report.reviewNotes || "",
     qualityScores: normalizeQualityScores(report.qualityScores),
@@ -656,6 +686,91 @@ function getReportQualitySummary(report) {
   return { scores, average };
 }
 
+function getReportsByFamily(reports, familyTab) {
+  if (!familyTab || familyTab === "all") return reports;
+  return reports.filter((report) => inferReportFamily(report) === familyTab);
+}
+
+function renderPeriodicDetailContent(report, tabKey) {
+  if (tabKey === "bilateral") {
+    return `
+      <div class="detail-card">
+        <div class="section-title">أولًا: العلاقات الثنائية</div>
+        <p class="detail-note"><strong>أ. مؤشر العلاقات الثنائية بين بلادنا وبلد الاعتماد في المجالات المختلفة</strong></p>
+        <div class="detail-list">
+          ${BILATERAL_INDICATOR_FIELDS.map((field) => `
+            <div class="detail-row triple">
+              <span>${field.label}</span>
+              <span class="tag ${report.bilateralIndicators?.[field.key]?.trend === "تنامي" ? "success" : report.bilateralIndicators?.[field.key]?.trend === "تراجع" ? "danger" : "warning"}">${report.bilateralIndicators?.[field.key]?.trend || "غير محدد"}</span>
+              <span>${report.bilateralIndicators?.[field.key]?.note || "لا توجد ملاحظات"}</span>
+            </div>
+          `).join("")}
+        </div>
+        <p class="detail-note"><strong>ب.</strong> ${report.bilateralAssessment || "لا توجد قراءة تحليلية مدخلة حتى الآن."}</p>
+      </div>
+    `;
+  }
+  if (tabKey === "cooperation") {
+    return `
+      <div class="detail-card">
+        <div class="section-title">أوجه الدعم والتعاون الثنائي</div>
+        <p class="detail-note">${report.supportCooperation || "لا توجد بيانات مدخلة حتى الآن."}</p>
+      </div>
+    `;
+  }
+  if (tabKey === "agreements") {
+    return `
+      <div class="detail-card">
+        <div class="section-title">الاتفاقيات والبروتكولات ومذكرات التفاهم</div>
+        <p class="detail-note"><strong>السارية المفعول:</strong> ${report.activeAgreements || "لا توجد بيانات مدخلة حتى الآن."}</p>
+        <p class="detail-note"><strong>التي تحتاج إلى تفعيل ومتابعة:</strong> ${report.agreementsNeedingActivation || "لا توجد بيانات مدخلة حتى الآن."}</p>
+      </div>
+    `;
+  }
+  if (tabKey === "achievements") {
+    return `
+      <div class="detail-card">
+        <div class="section-title">أهم المواضيع والأنشطة التي أنجزتها البعثة</div>
+        <p class="detail-note">${report.completedActivities || "لا توجد بيانات مدخلة حتى الآن."}</p>
+      </div>
+    `;
+  }
+  if (tabKey === "followup") {
+    return `
+      <div class="detail-card">
+        <div class="section-title">المواضيع والأنشطة التي لم تُنجز وتحتاج إلى متابعة</div>
+        <p class="detail-note">${report.pendingActivities || "لا توجد بيانات مدخلة حتى الآن."}</p>
+      </div>
+    `;
+  }
+  if (tabKey === "outlook") {
+    return `
+      <div class="detail-card">
+        <div class="section-title">تقييم البعثة للعلاقات الثنائية ورؤيتها المستقبلية</div>
+        <p class="detail-note">${report.relationshipOutlook || "لا توجد بيانات مدخلة حتى الآن."}</p>
+      </div>
+    `;
+  }
+  if (tabKey === "visits") {
+    return `
+      <div class="detail-card">
+        <div class="section-title">أهم الزيارات المتبادلة بين البلدين</div>
+        <p class="detail-note"><strong>أولًا: جانب بلادنا</strong></p>
+        <p class="detail-note">${report.visitsFromYemen || "لا توجد بيانات مدخلة حتى الآن."}</p>
+        <p class="detail-note"><strong>ثانيًا: جانب بلد الاعتماد</strong></p>
+        <p class="detail-note">${report.visitsFromHostCountry || "لا توجد بيانات مدخلة حتى الآن."}</p>
+      </div>
+    `;
+  }
+  return `
+    <div class="detail-card">
+      <div class="section-title">الجالية اليمنية في بلد الاعتماد</div>
+      <p class="detail-note"><strong>ملاحظات عامة:</strong> ${report.communityUpdate || "لا توجد بيانات مدخلة حتى الآن."}</p>
+      <p class="detail-note"><strong>إحصاءات عامة:</strong> ${report.communityStats || "لا توجد بيانات إحصائية مدخلة حتى الآن."}</p>
+    </div>
+  `;
+}
+
 function canIssueReportRequest(user = getSessionUser(), requestFamily = "activity") {
   if (!user) return false;
   if (requestFamily === "periodic") {
@@ -938,7 +1053,8 @@ function renderDashboard(user) {
 
 function renderReportsPage(user) {
   const reports = getVisibleReports(user);
-  const selected = reports.find((item) => item.id === state.selectedReportId) || reports[0] || null;
+  const filteredReports = getReportsByFamily(reports, state.reportRegistryTab);
+  const selected = filteredReports.find((item) => item.id === state.selectedReportId) || filteredReports[0] || null;
   return `
     <section class="panel">
       <div class="topbar">
@@ -954,19 +1070,22 @@ function renderReportsPage(user) {
         ${user.role === "mission" ? renderMissionReportForm(user) : ""}
         <div class="detail-card">
           <div class="section-title">سجل التقارير</div>
+          <div class="tab-strip">
+            ${REPORT_FAMILY_TABS.map((tab) => `<button class="tab-chip ${state.reportRegistryTab === tab.key ? "active" : ""}" type="button" data-report-family-tab="${tab.key}">${tab.label}</button>`).join("")}
+          </div>
           <div class="record-list">
-            ${reports.map((report) => `
+            ${filteredReports.map((report) => `
               <article class="record-card ${selected && selected.id === report.id ? "selected" : ""}" data-report-id="${report.id}">
                 <div class="record-top">
                   <div>
                     <strong class="record-title">${report.title}</strong>
-                    <div class="record-meta">${getMissionName(report.missionId)} | ${report.type}</div>
+                    <div class="record-meta">${getMissionName(report.missionId)} | ${report.type} | ${inferReportFamily(report) === "periodic" ? "زمني" : inferReportFamily(report) === "thematic" ? "موضوعي" : "نشاط"}</div>
                   </div>
                   <span class="tag ${stageTone(report.workflowStage)}">${report.workflowStage}</span>
                 </div>
                 <p class="record-desc">${report.summary}</p>
               </article>
-            `).join("") || `<div class="empty">لا توجد تقارير بعد.</div>`}
+            `).join("") || `<div class="empty">لا توجد تقارير ضمن هذا التبويب.</div>`}
           </div>
         </div>
       </div>
@@ -1071,10 +1190,6 @@ function renderMissionReportForm(user) {
           </div>
         </div>
         <label class="field full report-template-section" data-template="periodic">
-          <span>بيانات أساسية عن بلد الاعتماد</span>
-          <textarea name="countrySnapshot">${editingReport ? editingReport.countrySnapshot : ""}</textarea>
-        </label>
-        <label class="field full report-template-section" data-template="periodic">
           <span>تقييم العلاقات الثنائية ومؤشراتها</span>
           <textarea name="bilateralAssessment">${editingReport ? editingReport.bilateralAssessment : ""}</textarea>
         </label>
@@ -1083,8 +1198,12 @@ function renderMissionReportForm(user) {
           <textarea name="supportCooperation">${editingReport ? editingReport.supportCooperation : ""}</textarea>
         </label>
         <label class="field full report-template-section" data-template="periodic">
-          <span>وضع الاتفاقيات ومذكرات التفاهم</span>
-          <textarea name="agreementsStatus">${editingReport ? editingReport.agreementsStatus : ""}</textarea>
+          <span>الاتفاقيات والبروتكولات ومذكرات التفاهم السارية المفعول</span>
+          <textarea name="activeAgreements">${editingReport ? (editingReport.activeAgreements || editingReport.agreementsStatus || "") : ""}</textarea>
+        </label>
+        <label class="field full report-template-section" data-template="periodic">
+          <span>الاتفاقيات والبروتكولات ومذكرات التفاهم التي تحتاج إلى تفعيل ومتابعة</span>
+          <textarea name="agreementsNeedingActivation">${editingReport ? editingReport.agreementsNeedingActivation : ""}</textarea>
         </label>
         <label class="field full report-template-section" data-template="periodic">
           <span>أهم الأنشطة المنجزة خلال الفترة</span>
@@ -1099,12 +1218,20 @@ function renderMissionReportForm(user) {
           <textarea name="relationshipOutlook">${editingReport ? editingReport.relationshipOutlook : ""}</textarea>
         </label>
         <label class="field full report-template-section" data-template="periodic">
-          <span>الزيارات والاتصالات الرسمية</span>
-          <textarea name="visitsSummary">${editingReport ? editingReport.visitsSummary : ""}</textarea>
+          <span>أهم الزيارات المتبادلة - جانب بلادنا</span>
+          <textarea name="visitsFromYemen">${editingReport ? (editingReport.visitsFromYemen || editingReport.visitsSummary || "") : ""}</textarea>
         </label>
         <label class="field full report-template-section" data-template="periodic">
-          <span>أوضاع الجالية أو الملاحظات المجتمعية</span>
+          <span>أهم الزيارات المتبادلة - جانب بلد الاعتماد</span>
+          <textarea name="visitsFromHostCountry">${editingReport ? editingReport.visitsFromHostCountry : ""}</textarea>
+        </label>
+        <label class="field full report-template-section" data-template="periodic">
+          <span>أوضاع الجالية اليمنية في بلد الاعتماد</span>
           <textarea name="communityUpdate">${editingReport ? editingReport.communityUpdate : ""}</textarea>
+        </label>
+        <label class="field full report-template-section" data-template="periodic">
+          <span>إحصاءات عامة عن الجالية</span>
+          <textarea name="communityStats">${editingReport ? editingReport.communityStats : ""}</textarea>
         </label>
         <div class="field full report-template-section" data-template="periodic">
           <div class="detail-card">
@@ -1161,6 +1288,7 @@ function renderReportDetails(report, user) {
   const request = state.reportRequests.find((item) => item.id === report.requestId);
   const actions = getAllowedReportActions(report, user);
   const quality = getReportQualitySummary(report);
+  const periodicTab = state.periodicReportTab || "bilateral";
   return `
     <div class="detail-list">
       <div class="detail-card">
@@ -1193,28 +1321,11 @@ function renderReportDetails(report, user) {
       </div>
       ${inferReportFamily(report) === "periodic" ? `
         <div class="detail-card">
-          <div class="section-title">محاور التقرير الزمني</div>
-          <p class="detail-note"><strong>بلد الاعتماد:</strong> ${report.countrySnapshot || "لا يوجد"}</p>
-          <p class="detail-note"><strong>العلاقات الثنائية:</strong> ${report.bilateralAssessment || "لا يوجد"}</p>
-          <p class="detail-note"><strong>الدعم والتعاون:</strong> ${report.supportCooperation || "لا يوجد"}</p>
-          <p class="detail-note"><strong>الاتفاقيات:</strong> ${report.agreementsStatus || "لا يوجد"}</p>
-          <p class="detail-note"><strong>الأنشطة المنجزة:</strong> ${report.completedActivities || "لا يوجد"}</p>
-          <p class="detail-note"><strong>الأنشطة غير المنجزة:</strong> ${report.pendingActivities || "لا يوجد"}</p>
-          <p class="detail-note"><strong>الرؤية المستقبلية:</strong> ${report.relationshipOutlook || "لا يوجد"}</p>
-          <p class="detail-note"><strong>الزيارات والاتصالات:</strong> ${report.visitsSummary || "لا يوجد"}</p>
-          <p class="detail-note"><strong>الجالية والملاحظات:</strong> ${report.communityUpdate || "لا يوجد"}</p>
-        </div>
-        <div class="detail-card">
-          <div class="section-title">مؤشر العلاقات الثنائية</div>
-          <div class="detail-list">
-            ${BILATERAL_INDICATOR_FIELDS.map((field) => `
-              <div class="detail-row">
-                <span>${field.label}</span>
-                <span class="tag ${report.bilateralIndicators?.[field.key]?.trend === "تنامي" ? "success" : report.bilateralIndicators?.[field.key]?.trend === "تراجع" ? "danger" : "warning"}">${report.bilateralIndicators?.[field.key]?.trend || "غير محدد"}</span>
-                <span>${report.bilateralIndicators?.[field.key]?.note || "لا توجد ملاحظات"}</span>
-              </div>
-            `).join("")}
+          <div class="section-title">ملف التقرير الزمني</div>
+          <div class="tab-strip">
+            ${PERIODIC_REPORT_TABS.map((tab) => `<button class="tab-chip ${periodicTab === tab.key ? "active" : ""}" type="button" data-periodic-tab="${tab.key}">${tab.label}</button>`).join("")}
           </div>
+          ${renderPeriodicDetailContent(report, periodicTab)}
         </div>
       ` : ""}
       ${inferReportFamily(report) === "thematic" ? `
@@ -1978,6 +2089,24 @@ function bindEvents() {
     });
   });
 
+  document.querySelectorAll("[data-report-family-tab]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.reportRegistryTab = button.dataset.reportFamilyTab;
+      const visibleReports = getReportsByFamily(getVisibleReports(getSessionUser()), state.reportRegistryTab);
+      state.selectedReportId = visibleReports[0]?.id || null;
+      saveState();
+      renderApp();
+    });
+  });
+
+  document.querySelectorAll("[data-periodic-tab]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.periodicReportTab = button.dataset.periodicTab;
+      saveState();
+      renderApp();
+    });
+  });
+
   document.querySelectorAll(".report-action").forEach((button) => {
     button.addEventListener("click", () => {
       handleReportAction(button.dataset.reportId, button.dataset.action, button.dataset.stage);
@@ -2149,12 +2278,17 @@ function handleReportSubmit(event) {
     countrySnapshot: String(form.get("countrySnapshot") || ""),
     bilateralAssessment: String(form.get("bilateralAssessment") || ""),
     supportCooperation: String(form.get("supportCooperation") || ""),
-    agreementsStatus: String(form.get("agreementsStatus") || ""),
+    agreementsStatus: String(form.get("activeAgreements") || form.get("agreementsStatus") || ""),
+    activeAgreements: String(form.get("activeAgreements") || ""),
+    agreementsNeedingActivation: String(form.get("agreementsNeedingActivation") || ""),
     completedActivities: String(form.get("completedActivities") || ""),
     pendingActivities: String(form.get("pendingActivities") || ""),
     relationshipOutlook: String(form.get("relationshipOutlook") || ""),
-    visitsSummary: String(form.get("visitsSummary") || ""),
+    visitsSummary: String(form.get("visitsFromYemen") || form.get("visitsSummary") || ""),
+    visitsFromYemen: String(form.get("visitsFromYemen") || ""),
+    visitsFromHostCountry: String(form.get("visitsFromHostCountry") || ""),
     communityUpdate: String(form.get("communityUpdate") || ""),
+    communityStats: String(form.get("communityStats") || ""),
     bilateralIndicators,
     submittedOn: new Date().toISOString().slice(0, 10),
     reviewNotes: editingReport && editingReport.workflowStage !== "أعيد للبعثة للاستكمال" ? editingReport.reviewNotes || "" : "",
