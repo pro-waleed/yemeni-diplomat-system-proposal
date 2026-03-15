@@ -981,6 +981,7 @@ function renderMissionReportForm(user) {
   const requests = getVisibleRequests(user).filter((item) => item.status === "نشط");
   const editingReport = state.reports.find((item) => item.id === state.editingReportId && item.missionId === user.missionId) || null;
   const indicatorSource = normalizeBilateralIndicators(editingReport?.bilateralIndicators);
+  const currentFamily = editingReport ? inferReportFamily(editingReport) : "activity";
   return `
     <div class="detail-card">
       <div class="section-title">${editingReport ? "تعديل التقرير" : "رفع تقرير نشاط"}</div>
@@ -999,7 +1000,7 @@ function renderMissionReportForm(user) {
       ` : `
         <div class="detail-note">لا توجد حاليًا طلبات تقارير نشطة موجّهة إلى هذه البعثة.</div>
       `}
-      <div class="detail-note">التقارير الزمنية تُرفع استجابة لطلب رسمي فقط، بينما يمكن للبعثة إنشاء تقارير الأنشطة والتقارير الموضوعية مباشرة أو استجابة لطلب من الدائرة أو الجهات القيادية.</div>
+      <div class="detail-note">التقارير الزمنية تُرفع استجابة لطلب رسمي فقط، بينما يمكن للبعثة إنشاء تقارير الأنشطة والتقارير الموضوعية مباشرة أو استجابة لطلب من الدائرة أو الجهات القيادية. التسلسل المعتمد هنا هو: إنشاء من البعثة، ثم مراجعة الدائرة، ثم اعتماد التخطيط، ثم الإضافة إلى سجل تقارير البعثة.</div>
       <form id="report-form" class="form-grid">
         <label class="field">
           <span>عائلة القالب</span>
@@ -1027,11 +1028,14 @@ function renderMissionReportForm(user) {
         </label>
         <label class="field">
           <span>الطلب المرتبط</span>
-          <select name="requestId">
+          <select name="requestId" id="report-request-id" data-current-request-id="${editingReport ? editingReport.requestId || "" : ""}">
             <option value="">بدون ربط</option>
-            ${requests.map((request) => `<option value="${request.id}" ${editingReport && editingReport.requestId === request.id ? "selected" : ""}>${request.title}</option>`).join("")}
+            ${requests.map((request) => `<option value="${request.id}" data-request-family="${request.requestFamily}" ${editingReport && editingReport.requestId === request.id ? "selected" : ""}>${request.title}</option>`).join("")}
           </select>
         </label>
+        <div class="field full">
+          <div class="detail-note" id="report-request-guidance">${currentFamily === "periodic" ? "في التقارير الزمنية يجب اختيار الطلب الرسمي الوارد للبعثة قبل الرفع." : "في تقارير النشاط والتقارير الموضوعية يمكن ترك الطلب المرتبط فارغًا إذا كان التقرير مبادرة من البعثة."}</div>
+        </div>
         <label class="field">
           <span>تاريخ النشاط</span>
           <input type="date" name="activityDate" value="${editingReport ? editingReport.activityDate : ""}" required>
@@ -1881,6 +1885,8 @@ function bindEvents() {
   const reportFamily = document.getElementById("report-family");
   const reportType = document.querySelector('#report-form select[name="type"]');
   const thematicTrack = document.querySelector('#report-form select[name="thematicTrack"]');
+  const reportRequestId = document.getElementById("report-request-id");
+  const reportRequestGuidance = document.getElementById("report-request-guidance");
   if (reportFamily && reportType && thematicTrack) {
     const updateReportSections = () => {
       const value = reportFamily.value;
@@ -1889,6 +1895,38 @@ function bindEvents() {
       reportType.dataset.currentType = reportType.value;
       thematicTrack.disabled = value !== "thematic";
       if (value !== "thematic") thematicTrack.value = "";
+      if (reportRequestId) {
+        const currentRequestId = reportRequestId.value || reportRequestId.dataset.currentRequestId || "";
+        let selectedStillVisible = false;
+        Array.from(reportRequestId.options).forEach((option) => {
+          if (!option.value) {
+            option.hidden = false;
+            option.disabled = false;
+            return;
+          }
+          const matchesFamily = option.dataset.requestFamily === value;
+          option.hidden = !matchesFamily;
+          option.disabled = !matchesFamily;
+          if (matchesFamily && option.value === currentRequestId) {
+            selectedStillVisible = true;
+          }
+        });
+        if (value === "periodic") {
+          if (selectedStillVisible) {
+            reportRequestId.value = currentRequestId;
+          } else {
+            const firstMatching = Array.from(reportRequestId.options).find((option) => option.value && option.dataset.requestFamily === value);
+            reportRequestId.value = firstMatching ? firstMatching.value : "";
+          }
+        } else if (!selectedStillVisible && reportRequestId.value && reportRequestId.selectedOptions[0]?.dataset.requestFamily !== value) {
+          reportRequestId.value = "";
+        }
+      }
+      if (reportRequestGuidance) {
+        reportRequestGuidance.textContent = value === "periodic"
+          ? "في التقارير الزمنية يجب اختيار الطلب الرسمي الوارد للبعثة قبل الرفع."
+          : "في تقارير النشاط والتقارير الموضوعية يمكن ترك الطلب المرتبط فارغًا إذا كان التقرير مبادرة من البعثة.";
+      }
       document.querySelectorAll(".report-template-section").forEach((section) => {
         section.style.display = section.dataset.template === value ? "" : "none";
       });
@@ -2058,6 +2096,12 @@ function handleReportSubmit(event) {
   const isPeriodicSubmission = resolvedFamily === "periodic" || currentFamily === "periodic";
   if (!linkedRequest && requestId) {
     addAlert("danger", "تعذر رفع التقرير", "الطلب المرتبط غير صحيح أو لم يعد ظاهرًا ضمن نطاق هذه البعثة.");
+    saveState();
+    renderApp();
+    return;
+  }
+  if (linkedRequest && linkedRequest.requestFamily !== proposedFamily) {
+    addAlert("danger", "تعذر رفع التقرير", "لا يمكن ربط التقرير بطلب يخص عائلة مختلفة من التقارير.");
     saveState();
     renderApp();
     return;
