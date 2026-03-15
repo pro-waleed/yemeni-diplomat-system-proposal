@@ -92,6 +92,12 @@ const BILATERAL_INDICATOR_FIELDS = [
   { key: "other", label: "أخرى", hint: "الرياضة والسياحة والإعلام وغيرها" }
 ];
 
+const REPORT_QUALITY_FIELDS = [
+  { key: "timeliness", label: "الالتزام بالموعد" },
+  { key: "completeness", label: "شمولية المحتوى" },
+  { key: "analysis", label: "جودة التحليل" }
+];
+
 const seedState = () => ({
   sessionUserId: null,
   activeView: "dashboard",
@@ -163,6 +169,9 @@ const seedState = () => ({
         international: { trend: "تنامي", note: "تنسيق أفضل في بعض ملفات المنظمات الدولية." },
         other: { trend: "استقرار", note: "لا توجد متغيرات كبيرة في المجالات الأخرى." }
       },
+      reviewNotes: "",
+      qualityScores: { timeliness: 5, completeness: 4, analysis: 4 },
+      submittedOn: "2026-03-10",
       thematicSituation: "",
       thematicImplications: "",
       thematicRecommendations: "",
@@ -334,6 +343,9 @@ function loadState() {
     visitsSummary: report.visitsSummary || "",
     communityUpdate: report.communityUpdate || "",
     bilateralIndicators: normalizeBilateralIndicators(report.bilateralIndicators),
+    reviewNotes: report.reviewNotes || "",
+    qualityScores: normalizeQualityScores(report.qualityScores),
+    submittedOn: report.submittedOn || "",
     thematicSituation: report.thematicSituation || "",
     thematicImplications: report.thematicImplications || "",
     thematicRecommendations: report.thematicRecommendations || "",
@@ -570,6 +582,52 @@ function normalizeBilateralIndicators(indicators = {}) {
     };
     return acc;
   }, {});
+}
+
+function normalizeQualityScores(scores = {}) {
+  return REPORT_QUALITY_FIELDS.reduce((acc, field) => {
+    const value = Number(scores[field.key] || 0);
+    acc[field.key] = Number.isFinite(value) && value >= 1 && value <= 5 ? value : 0;
+    return acc;
+  }, {});
+}
+
+function getRequestLifecycle(request) {
+  const completion = getCompletion(request);
+  const today = new Date().toISOString().slice(0, 10);
+  if (request.status === "مغلق" || (completion.total > 0 && completion.approved === completion.total)) {
+    return { label: "مكتمل", tone: "success" };
+  }
+  if (request.status === "نشط" && request.dueDate && request.dueDate < today && completion.pending > 0) {
+    return { label: "متأخر", tone: "danger" };
+  }
+  return { label: request.status || "نشط", tone: request.status === "نشط" ? "warning" : "info" };
+}
+
+function getReportOriginLabel(report) {
+  return report.requestId ? "استجابة لطلب رسمي" : "مبادرة من البعثة";
+}
+
+function calculateTimelinessScore(report) {
+  if (!report?.requestId || !report.submittedOn) return 0;
+  const request = state.reportRequests.find((item) => item.id === report.requestId);
+  if (!request?.dueDate) return 0;
+  if (report.submittedOn <= request.dueDate) return 5;
+  const diffDays = Math.ceil((new Date(report.submittedOn) - new Date(request.dueDate)) / 86400000);
+  if (diffDays <= 7) return 3;
+  return 1;
+}
+
+function getReportQualitySummary(report) {
+  const baseScores = normalizeQualityScores(report.qualityScores);
+  const scores = {
+    timeliness: calculateTimelinessScore(report) || baseScores.timeliness,
+    completeness: baseScores.completeness,
+    analysis: baseScores.analysis
+  };
+  const values = Object.values(scores).filter((value) => value > 0);
+  const average = values.length ? (values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(1) : "";
+  return { scores, average };
 }
 
 function canIssueReportRequest(user = getSessionUser(), requestFamily = "activity") {
@@ -907,7 +965,7 @@ function renderMissionReportForm(user) {
             ${requests.map((request) => `
               <div class="detail-row">
                 <span>${request.title}</span>
-                <span>الموعد ${formatDate(request.dueDate)}</span>
+                <span>${request.requestFamily === "periodic" ? "زمني" : request.requestFamily === "thematic" ? "موضوعي" : "نشاط"} | الموعد ${formatDate(request.dueDate)} | ${getRequestLifecycle(request).label}</span>
               </div>
             `).join("")}
           </div>
@@ -1072,14 +1130,17 @@ function renderMissionReportForm(user) {
 function renderReportDetails(report, user) {
   const request = state.reportRequests.find((item) => item.id === report.requestId);
   const actions = getAllowedReportActions(report, user);
+  const quality = getReportQualitySummary(report);
   return `
     <div class="detail-list">
       <div class="detail-card">
         <div class="section-title">${report.title}</div>
         <div class="detail-row"><span>البعثة</span><span>${getMissionName(report.missionId)}</span></div>
         <div class="detail-row"><span>الدائرة</span><span>${getDepartmentName(report.departmentId)}</span></div>
+        <div class="detail-row"><span>منشأ التقرير</span><span>${getReportOriginLabel(report)}</span></div>
         <div class="detail-row"><span>مرحلة الاعتماد</span><span class="tag ${stageTone(report.workflowStage)}">${report.workflowStage}</span></div>
         <div class="detail-row"><span>الطلب المرتبط</span><span>${request ? request.title : "لا يوجد"}</span></div>
+        ${report.submittedOn ? `<div class="detail-row"><span>تاريخ الرفع</span><span>${formatDate(report.submittedOn)}</span></div>` : ""}
         ${canEditReport(report, user) ? `<div class="inline-actions"><button class="btn secondary report-edit" data-report-id="${report.id}">تعديل التقرير</button></div>` : ""}
       </div>
       <div class="detail-card">
@@ -1091,6 +1152,14 @@ function renderReportDetails(report, user) {
         <div class="section-title">بعد الفعالية</div>
         <p class="detail-note"><strong>النتائج:</strong> ${report.afterResults}</p>
         <p class="detail-note"><strong>التوصيات:</strong> ${report.afterRecommendations}</p>
+      </div>
+      <div class="detail-card">
+        <div class="section-title">تقييم الجودة</div>
+        <div class="detail-row"><span>الالتزام بالموعد</span><span>${quality.scores.timeliness ? `${quality.scores.timeliness}/5` : "بانتظار التقييم"}</span></div>
+        <div class="detail-row"><span>شمولية المحتوى</span><span>${quality.scores.completeness ? `${quality.scores.completeness}/5` : "بانتظار التقييم"}</span></div>
+        <div class="detail-row"><span>جودة التحليل</span><span>${quality.scores.analysis ? `${quality.scores.analysis}/5` : "بانتظار التقييم"}</span></div>
+        <div class="detail-row"><span>المتوسط العام</span><span>${quality.average ? `${quality.average}/5` : "بانتظار التقييم"}</span></div>
+        <p class="detail-note"><strong>ملاحظات المراجعة:</strong> ${report.reviewNotes || "لا توجد ملاحظات مراجعة حتى الآن."}</p>
       </div>
       ${inferReportFamily(report) === "periodic" ? `
         <div class="detail-card">
@@ -1548,6 +1617,7 @@ function renderRequestsPage(user) {
         <div class="detail-list">
           ${requests.map((request) => {
             const c = getCompletion(request);
+            const lifecycle = getRequestLifecycle(request);
             return `
               <div class="detail-card">
                 <div class="record-top">
@@ -1555,7 +1625,7 @@ function renderRequestsPage(user) {
                     <strong>${request.title}</strong>
                     <div class="record-meta">${request.requestFamily === "periodic" ? "طلب زمني" : request.requestFamily === "thematic" ? "طلب موضوعي" : "طلب نشاط"} | ${request.type} | الموعد ${formatDate(request.dueDate)}</div>
                   </div>
-                  <span class="tag ${request.status === "نشط" ? "warning" : "success"}">${request.status}</span>
+                  <span class="tag ${lifecycle.tone}">${lifecycle.label}</span>
                 </div>
                 <div class="detail-row"><span>الجهة الطالبة</span><span>${request.createdBy}</span></div>
                 ${request.thematicTrack ? `<div class="detail-row"><span>المسار الموضوعي</span><span>${request.thematicTrack}</span></div>` : ""}
@@ -1986,6 +2056,9 @@ function handleReportSubmit(event) {
     visitsSummary: String(form.get("visitsSummary") || ""),
     communityUpdate: String(form.get("communityUpdate") || ""),
     bilateralIndicators,
+    submittedOn: new Date().toISOString().slice(0, 10),
+    reviewNotes: editingReport && editingReport.workflowStage !== "أعيد للبعثة للاستكمال" ? editingReport.reviewNotes || "" : "",
+    qualityScores: editingReport ? normalizeQualityScores(editingReport.qualityScores) : normalizeQualityScores({}),
     thematicSituation: String(form.get("thematicSituation") || ""),
     thematicImplications: String(form.get("thematicImplications") || ""),
     thematicRecommendations: String(form.get("thematicRecommendations") || "")
@@ -2280,6 +2353,33 @@ function handleReportAction(reportId, actionKey, nextStage) {
     archive: "أرشفة التقرير",
     resubmit: "إعادة رفع التقرير"
   };
+  if (actionKey === "return") {
+    const note = window.prompt("أدخل ملاحظات المراجعة المطلوبة لاستكمال التقرير:", report.reviewNotes || "");
+    if (note === null) return;
+    report.reviewNotes = note.trim();
+  }
+  if (actionKey === "approve") {
+    const completenessInput = window.prompt("قيّم شمولية المحتوى من 1 إلى 5:", String(report.qualityScores?.completeness || 4));
+    if (completenessInput === null) return;
+    const analysisInput = window.prompt("قيّم جودة التحليل من 1 إلى 5:", String(report.qualityScores?.analysis || 4));
+    if (analysisInput === null) return;
+    const completeness = Math.min(5, Math.max(1, Number(completenessInput)));
+    const analysis = Math.min(5, Math.max(1, Number(analysisInput)));
+    if (!Number.isFinite(completeness) || !Number.isFinite(analysis)) {
+      addAlert("danger", "تعذر اعتماد التقرير", "يجب إدخال درجات صحيحة بين 1 و5 لتقييم الجودة.");
+      saveState();
+      renderApp();
+      return;
+    }
+    report.qualityScores = {
+      timeliness: calculateTimelinessScore(report),
+      completeness,
+      analysis
+    };
+    if (!report.reviewNotes) {
+      report.reviewNotes = "تمت المراجعة والاعتماد بعد استكمال المتطلبات.";
+    }
+  }
   report.workflowStage = nextStage;
   if (report.requestId) {
     syncRequestCompletion(report.requestId, report.missionId);
