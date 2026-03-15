@@ -1046,6 +1046,35 @@ function getMissionReportProfile(missionId) {
   };
 }
 
+function getDepartmentReportProfile(departmentId) {
+  const missions = state.missions.filter((mission) => mission.departmentId === departmentId);
+  const missionProfiles = missions.map((mission) => ({
+    mission,
+    profile: getMissionReportProfile(mission.id)
+  }));
+  const approvedCount = missionProfiles.reduce((sum, item) => sum + item.profile.approvedCount, 0);
+  const pendingDepartmentCount = missionProfiles.reduce((sum, item) => sum + item.profile.pendingDepartmentCount, 0);
+  const returnedCount = missionProfiles.reduce((sum, item) => sum + item.profile.returnedCount, 0);
+  const overdueCount = missionProfiles.reduce((sum, item) => sum + item.profile.overdueRequests.length, 0);
+  const qualityValues = missionProfiles.map((item) => Number(item.profile.averageQuality)).filter((value) => value > 0);
+  const averageQuality = qualityValues.length ? (qualityValues.reduce((sum, value) => sum + value, 0) / qualityValues.length).toFixed(1) : "0.0";
+  const weakestMission = [...missionProfiles]
+    .filter((item) => item.profile.reports.length)
+    .sort((a, b) => Number(a.profile.averageQuality) - Number(b.profile.averageQuality))[0] || null;
+  const mostDelayedMission = [...missionProfiles]
+    .sort((a, b) => b.profile.overdueRequests.length - a.profile.overdueRequests.length)[0] || null;
+  return {
+    missions: missionProfiles,
+    approvedCount,
+    pendingDepartmentCount,
+    returnedCount,
+    overdueCount,
+    averageQuality,
+    weakestMission,
+    mostDelayedMission
+  };
+}
+
 function getReportFamilyLabel(report) {
   const family = inferReportFamily(report);
   if (family === "periodic") return "زمني";
@@ -2434,6 +2463,9 @@ function renderEntitiesPage(user) {
   const missions = user.role === "department"
     ? state.missions.filter((mission) => mission.departmentId === user.departmentId)
     : state.missions;
+  const departments = user.role === "department"
+    ? state.departments.filter((department) => department.id === user.departmentId)
+    : state.departments;
   return `
     <section class="panel">
       <div class="topbar">
@@ -2443,6 +2475,59 @@ function renderEntitiesPage(user) {
           <p class="muted">ملف موحد لكل بعثة أو دائرة يشمل الخطط والتقارير والتعاميم والاجتماعات والتدريب.</p>
         </div>
       </div>
+    </section>
+    <section class="two-col">
+      ${departments.map((department) => {
+        const profile = getDepartmentReportProfile(department.id);
+        return `
+          <div class="panel entity-profile-card">
+            <div class="record-top">
+              <div>
+                <div class="section-title">${department.name}</div>
+                <div class="record-meta">${profile.missions.length} بعثة ضمن النطاق</div>
+              </div>
+              <span class="tag ${Number(profile.averageQuality) >= 4 ? "success" : Number(profile.averageQuality) >= 3 ? "warning" : "danger"}">جودة ${profile.averageQuality}/5</span>
+            </div>
+            <div class="entity-kpi-grid">
+              <div class="report-mini-kpi">
+                <span>المعتمد</span>
+                <strong>${profile.approvedCount}</strong>
+              </div>
+              <div class="report-mini-kpi">
+                <span>قيد المراجعة</span>
+                <strong>${profile.pendingDepartmentCount}</strong>
+              </div>
+              <div class="report-mini-kpi">
+                <span>المعاد للاستكمال</span>
+                <strong>${profile.returnedCount}</strong>
+              </div>
+              <div class="report-mini-kpi">
+                <span>الطلبات المتأخرة</span>
+                <strong>${profile.overdueCount}</strong>
+              </div>
+            </div>
+            <div class="detail-card">
+              <div class="section-title">مقارنة البعثات</div>
+              <div class="detail-list">
+                ${profile.missions.map((item) => `
+                  <div class="detail-row">
+                    <span>${item.mission.name}</span>
+                    <span>جودة ${item.profile.averageQuality}/5 | متأخر ${item.profile.overdueRequests.length}</span>
+                  </div>
+                `).join("") || `<div class="empty">لا توجد بعثات ضمن هذه الدائرة.</div>`}
+              </div>
+            </div>
+            <div class="detail-card">
+              <div class="section-title">نقاط انتباه الدائرة</div>
+              <div class="detail-list">
+                <div class="detail-row"><span>الأقل جودة</span><span>${profile.weakestMission ? `${profile.weakestMission.mission.name} (${profile.weakestMission.profile.averageQuality}/5)` : "لا توجد بيانات كافية"}</span></div>
+                <div class="detail-row"><span>الأكثر تأخرًا</span><span>${profile.mostDelayedMission && profile.mostDelayedMission.profile.overdueRequests.length ? `${profile.mostDelayedMission.mission.name} (${profile.mostDelayedMission.profile.overdueRequests.length})` : "لا توجد طلبات متأخرة"}</span></div>
+                <div class="detail-row"><span>التقييم العام</span><span>${Number(profile.averageQuality) >= 4 ? "أداء قوي" : Number(profile.averageQuality) >= 3 ? "أداء متوسط" : "يحتاج متابعة مركزة"}</span></div>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join("")}
     </section>
     <section class="two-col">
       ${missions.map((mission) => `
