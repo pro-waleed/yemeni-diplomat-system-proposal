@@ -608,6 +608,32 @@ function getReportOriginLabel(report) {
   return report.requestId ? "استجابة لطلب رسمي" : "مبادرة من البعثة";
 }
 
+function getRequestMissionIdsForUser(request, user = getSessionUser()) {
+  if (!user) return [];
+  if (user.role === "mission") return request.targetMissionIds.filter((missionId) => missionId === user.missionId);
+  if (user.role === "department") {
+    return request.targetMissionIds.filter((missionId) => getMissionById(missionId)?.departmentId === user.departmentId);
+  }
+  return request.targetMissionIds;
+}
+
+function getMissionRequestStatus(requestId, missionId) {
+  const approved = state.reports.some((report) => (
+    report.requestId === requestId &&
+    report.missionId === missionId &&
+    (report.workflowStage === "معتمد من التخطيط" || report.workflowStage === "مغلق ومؤرشف")
+  ));
+  const submitted = state.reports.some((report) => (
+    report.requestId === requestId &&
+    report.missionId === missionId &&
+    report.workflowStage !== "أعيد للبعثة للاستكمال"
+  ));
+  return {
+    label: approved ? "معتمد" : submitted ? "مرفوع" : "لم يرفع",
+    tone: approved ? "success" : submitted ? "info" : "warning"
+  };
+}
+
 function calculateTimelinessScore(report) {
   if (!report?.requestId || !report.submittedOn) return 0;
   const request = state.reportRequests.find((item) => item.id === report.requestId);
@@ -919,7 +945,7 @@ function renderReportsPage(user) {
         <div>
           <span class="tag info">وحدة التقارير</span>
           <h1 class="page-title">التقارير</h1>
-          <p class="muted">${user.role === "mission" ? "يمكنك رفع تقرير نشاط من حساب البعثة." : "يمكنك مراجعة التقارير التي تقع ضمن صلاحياتك."}</p>
+          <p class="muted">${user.role === "mission" ? "يمكنك رفع تقرير نشاط من حساب البعثة." : user.role === "leadership" ? "يمكنك الاطلاع والمتابعة على التقارير ضمن نطاق القيادة العليا دون تنفيذ إجراءات الاعتماد التشغيلي." : "يمكنك مراجعة التقارير التي تقع ضمن صلاحياتك."}</p>
         </div>
       </div>
     </section>
@@ -1618,18 +1644,8 @@ function renderRequestsPage(user) {
           ${requests.map((request) => {
             const c = getCompletion(request);
             const lifecycle = getRequestLifecycle(request);
-            const missionApproved = user.role === "mission" && state.reports.some((report) => (
-              report.requestId === request.id &&
-              report.missionId === user.missionId &&
-              (report.workflowStage === "معتمد من التخطيط" || report.workflowStage === "مغلق ومؤرشف")
-            ));
-            const missionSubmitted = user.role === "mission" && state.reports.some((report) => (
-              report.requestId === request.id &&
-              report.missionId === user.missionId &&
-              report.workflowStage !== "أعيد للبعثة للاستكمال"
-            ));
-            const missionStatusLabel = missionApproved ? "معتمد" : missionSubmitted ? "مرفوع" : "لم يرفع";
-            const missionStatusTone = missionApproved ? "success" : missionSubmitted ? "info" : "warning";
+            const scopedMissionIds = getRequestMissionIdsForUser(request, user);
+            const ownMissionStatus = user.role === "mission" ? getMissionRequestStatus(request.id, user.missionId) : null;
             return `
               <div class="detail-card">
                 <div class="record-top">
@@ -1643,22 +1659,25 @@ function renderRequestsPage(user) {
                 ${request.thematicTrack ? `<div class="detail-row"><span>المسار الموضوعي</span><span>${request.thematicTrack}</span></div>` : ""}
                 <div class="progress"><span style="width:${c.percent}%"></span></div>
                 ${user.role === "mission" ? `
-                  <p class="record-desc">هذا الطلب موجّه إلى ${getMissionName(user.missionId)}، وحالة الإنجاز الحالية للبعثة هي ${missionStatusLabel}.</p>
+                  <p class="record-desc">هذا الطلب موجّه إلى ${getMissionName(user.missionId)}، وحالة الإنجاز الحالية للبعثة هي ${ownMissionStatus.label}.</p>
                   <div class="detail-list">
                     <div class="detail-row">
                       <span>${getMissionName(user.missionId)}</span>
-                      <span class="tag ${missionStatusTone}">${missionStatusLabel}</span>
+                      <span class="tag ${ownMissionStatus.tone}">${ownMissionStatus.label}</span>
                     </div>
                   </div>
                 ` : `
-                  <p class="record-desc">رفعت ${c.done} بعثة تقاريرها، واعتمد ${c.approved} تقريرًا، وما يزال ${c.pending} بعثة دون رفع من أصل ${c.total}.</p>
+                  <p class="record-desc">${user.role === "department" ? `ضمن نطاق دائرتك: ${scopedMissionIds.length} بعثة مستهدفة في هذا الطلب.` : `رفعت ${c.done} بعثة تقاريرها، واعتمد ${c.approved} تقريرًا، وما يزال ${c.pending} بعثة دون رفع من أصل ${c.total}.`}</p>
                   <div class="detail-list">
-                    ${request.targetMissionIds.map((missionId) => `
+                    ${scopedMissionIds.map((missionId) => {
+                      const missionStatus = getMissionRequestStatus(request.id, missionId);
+                      return `
                       <div class="detail-row">
                         <span>${getMissionName(missionId)}</span>
-                        <span class="tag ${state.reports.some((report) => report.requestId === request.id && report.missionId === missionId && (report.workflowStage === "معتمد من التخطيط" || report.workflowStage === "مغلق ومؤرشف")) ? "success" : state.reports.some((report) => report.requestId === request.id && report.missionId === missionId && report.workflowStage !== "أعيد للبعثة للاستكمال") ? "info" : "warning"}">${state.reports.some((report) => report.requestId === request.id && report.missionId === missionId && (report.workflowStage === "معتمد من التخطيط" || report.workflowStage === "مغلق ومؤرشف")) ? "معتمد" : state.reports.some((report) => report.requestId === request.id && report.missionId === missionId && report.workflowStage !== "أعيد للبعثة للاستكمال") ? "مرفوع" : "لم يرفع"}</span>
+                        <span class="tag ${missionStatus.tone}">${missionStatus.label}</span>
                       </div>
-                    `).join("")}
+                    `;
+                    }).join("") || `<div class="empty">لا توجد بعثات واقعة ضمن نطاق هذا الحساب داخل هذا الطلب.</div>`}
                   </div>
                 `}
               </div>
@@ -2031,9 +2050,25 @@ function handleReportSubmit(event) {
   const form = new FormData(event.currentTarget);
   const editingReport = state.reports.find((item) => item.id === state.editingReportId && item.missionId === user.missionId);
   const previousRequestId = editingReport?.requestId || "";
-  const linkedRequest = state.reportRequests.find((item) => item.id === String(form.get("requestId") || ""));
+  const requestId = String(form.get("requestId") || "");
+  const linkedRequest = state.reportRequests.find((item) => item.id === requestId);
   const proposedFamily = String(form.get("reportFamily") || "activity");
-  if (proposedFamily === "periodic" && !linkedRequest && !editingReport) {
+  const currentFamily = editingReport ? inferReportFamily(editingReport) : "";
+  const resolvedFamily = linkedRequest ? linkedRequest.requestFamily : proposedFamily;
+  const isPeriodicSubmission = resolvedFamily === "periodic" || currentFamily === "periodic";
+  if (!linkedRequest && requestId) {
+    addAlert("danger", "تعذر رفع التقرير", "الطلب المرتبط غير صحيح أو لم يعد ظاهرًا ضمن نطاق هذه البعثة.");
+    saveState();
+    renderApp();
+    return;
+  }
+  if (linkedRequest && !linkedRequest.targetMissionIds.includes(user.missionId)) {
+    addAlert("danger", "تعذر رفع التقرير", "لا يمكن ربط التقرير بطلب لا يستهدف هذه البعثة.");
+    saveState();
+    renderApp();
+    return;
+  }
+  if (isPeriodicSubmission && !linkedRequest) {
     addAlert("danger", "تعذر رفع التقرير", "التقارير الزمنية لا تُرفع إلا استجابة لطلب رسمي صادر من الجهات القيادية.");
     saveState();
     renderApp();
@@ -2054,13 +2089,12 @@ function handleReportSubmit(event) {
     };
     return acc;
   }, {});
-  const resolvedFamily = linkedRequest ? linkedRequest.requestFamily : proposedFamily;
   Object.assign(report, {
     reportFamily: resolvedFamily,
     title: String(form.get("title")),
     type: linkedRequest ? linkedRequest.type : String(form.get("type")),
     thematicTrack: linkedRequest && linkedRequest.requestFamily === "thematic" ? linkedRequest.thematicTrack : String(form.get("thematicTrack")),
-    requestId: String(form.get("requestId")) || "",
+    requestId,
     activityDate: String(form.get("activityDate")),
     summary: String(form.get("summary")),
     beforeGoals: String(form.get("beforeGoals")),
@@ -2368,6 +2402,13 @@ function handleReportAction(reportId, actionKey, nextStage) {
   const report = state.reports.find((item) => item.id === reportId);
   const user = getSessionUser();
   if (!report || !user) return;
+  const allowedAction = getAllowedReportActions(report, user).find((action) => action.key === actionKey && action.nextStage === nextStage);
+  if (!allowedAction) {
+    addAlert("danger", "تعذر تنفيذ الإجراء", "هذا الإجراء غير مسموح به من هذا الحساب أو لا يتوافق مع المرحلة الحالية للتقرير.");
+    saveState();
+    renderApp();
+    return;
+  }
   const labels = {
     review: "بدء مراجعة الدائرة",
     return: "إعادة التقرير للبعثة",
@@ -2402,12 +2443,12 @@ function handleReportAction(reportId, actionKey, nextStage) {
       report.reviewNotes = "تمت المراجعة والاعتماد بعد استكمال المتطلبات.";
     }
   }
-  report.workflowStage = nextStage;
+  report.workflowStage = allowedAction.nextStage;
   if (report.requestId) {
     syncRequestCompletion(report.requestId, report.missionId);
   }
-  addWorkflowEntry(report, user.name, labels[actionKey] || "تحديث المسار", nextStage);
-  addAlert(nextStage === "أعيد للبعثة للاستكمال" ? "warning" : "info", "تحديث مسار التقرير", `انتقل التقرير "${report.title}" إلى مرحلة "${nextStage}".`);
+  addWorkflowEntry(report, user.name, labels[actionKey] || "تحديث المسار", allowedAction.nextStage);
+  addAlert(allowedAction.nextStage === "أعيد للبعثة للاستكمال" ? "warning" : "info", "تحديث مسار التقرير", `انتقل التقرير "${report.title}" إلى مرحلة "${allowedAction.nextStage}".`);
   logAudit(user.name, labels[actionKey] || "تحديث المسار", report.title, getMissionName(report.missionId));
   saveState();
   renderApp();
