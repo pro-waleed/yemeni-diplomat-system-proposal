@@ -450,6 +450,10 @@ function loadState() {
     ...circular,
     summary: circular.summary || "",
     body: circular.body || "",
+    issuedAt: circular.issuedAt || "",
+    targetMissionIds: Array.isArray(circular.targetMissionIds) ? circular.targetMissionIds.map(String) : [],
+    readMissionIds: Array.isArray(circular.readMissionIds) ? circular.readMissionIds.map(String) : [],
+    completedMissionIds: Array.isArray(circular.completedMissionIds) ? circular.completedMissionIds.map(String) : [],
     workflowHistory: Array.isArray(circular.workflowHistory) ? circular.workflowHistory : [],
     processingLog: Array.isArray(circular.processingLog) ? circular.processingLog : []
   }));
@@ -2437,6 +2441,10 @@ function renderCircularsPage(user) {
                 </div>
                 <span class="tag ${circular.status === "نشط" ? "warning" : "success"}">${circular.status}</span>
               </div>
+              <div class="request-chip-row">
+                <span class="tag info">موجّه إلى ${circular.targetMissionIds.length} بعثات</span>
+                ${user.role === "mission" ? `<span class="tag success">وارد إلى ${getMissionName(user.missionId)}</span>` : ""}
+              </div>
               ${circular.summary ? `<p class="record-desc">${circular.summary}</p>` : ""}
               ${circular.body ? `
                 <div class="detail-card circular-body-card">
@@ -2444,6 +2452,7 @@ function renderCircularsPage(user) {
                   <p class="detail-note">${circular.body}</p>
                 </div>
               ` : ""}
+              <div class="detail-row"><span>تاريخ الإصدار</span><span>${formatDate(circular.issuedAt || circular.dueDate)}</span></div>
               <div class="detail-row"><span>قرأ التعميم</span><span>${stats.read}/${stats.total}</span></div>
               <div class="detail-row"><span>أنجز التعميم</span><span>${stats.completed}/${stats.total}</span></div>
               <div class="progress"><span style="width:${stats.completePercent}%"></span></div>
@@ -3820,10 +3829,15 @@ function handleCircularSubmit(event) {
   event.preventDefault();
   const user = getSessionUser();
   const form = new FormData(event.currentTarget);
-  const targetMissionIds = form.getAll("missionId");
+  const targetMissionIds = [...new Set(form.getAll("missionId").map(String))];
   const summary = String(form.get("summary") || "").trim();
   const body = String(form.get("body") || "").trim();
-  if (!targetMissionIds.length) return;
+  if (!targetMissionIds.length) {
+    addAlert("danger", "تعذر إصدار التعميم", "يجب اختيار بعثة واحدة على الأقل ضمن الجهات المستهدفة.");
+    saveState();
+    renderApp();
+    return;
+  }
   if (!summary && !body) {
     addAlert("danger", "تعذر إصدار التعميم", "يجب إدخال ملخص أو نص التعميم قبل الإصدار.");
     saveState();
@@ -3835,6 +3849,7 @@ function handleCircularSubmit(event) {
   const circular = editingCircular || {
     id: `circ-${Date.now()}`,
     issuedBy: user.name,
+    issuedAt: new Date().toISOString().slice(0, 10),
     status: "نشط",
     readMissionIds: [],
     completedMissionIds: [],
