@@ -441,8 +441,8 @@ function loadState() {
     createdByRole: request.createdByRole || "planning",
     requestedByDepartmentId: request.requestedByDepartmentId || "",
     priority: request.priority || "متوسطة",
-    targetMissionIds: Array.isArray(request.targetMissionIds) ? request.targetMissionIds : [],
-    completedMissionIds: Array.isArray(request.completedMissionIds) ? request.completedMissionIds : [],
+    targetMissionIds: normalizeMissionIdList(request.targetMissionIds),
+    completedMissionIds: normalizeMissionIdList(request.completedMissionIds),
     status: request.status || "نشط"
   }));
   parsed.circulars = Array.isArray(parsed.circulars) ? parsed.circulars : seedState().circulars;
@@ -451,9 +451,9 @@ function loadState() {
     summary: circular.summary || "",
     body: circular.body || "",
     issuedAt: circular.issuedAt || "",
-    targetMissionIds: Array.isArray(circular.targetMissionIds) ? circular.targetMissionIds.map(String) : [],
-    readMissionIds: Array.isArray(circular.readMissionIds) ? circular.readMissionIds.map(String) : [],
-    completedMissionIds: Array.isArray(circular.completedMissionIds) ? circular.completedMissionIds.map(String) : [],
+    targetMissionIds: normalizeMissionIdList(circular.targetMissionIds),
+    readMissionIds: normalizeMissionIdList(circular.readMissionIds),
+    completedMissionIds: normalizeMissionIdList(circular.completedMissionIds),
     workflowHistory: Array.isArray(circular.workflowHistory) ? circular.workflowHistory : [],
     processingLog: Array.isArray(circular.processingLog) ? circular.processingLog : []
   }));
@@ -550,6 +550,27 @@ function getAllUsers() {
   return [...core, ...departments, ...missions];
 }
 
+function resolveMissionId(reference) {
+  const value = String(reference || "").trim();
+  if (!value) return "";
+  const directMission = state.missions.find((mission) => mission.id === value);
+  if (directMission) return directMission.id;
+  const byUsername = state.missions.find((mission) => mission.username === value);
+  if (byUsername) return byUsername.id;
+  const byName = state.missions.find((mission) => mission.name === value);
+  if (byName) return byName.id;
+  if (value.startsWith("user-")) {
+    const missionId = value.slice(5);
+    if (state.missions.some((mission) => mission.id === missionId)) return missionId;
+  }
+  return "";
+}
+
+function normalizeMissionIdList(values) {
+  if (!Array.isArray(values)) return [];
+  return [...new Set(values.map(resolveMissionId).filter(Boolean))];
+}
+
 function getSessionUser() {
   return getAllUsers().find((user) => user.id === state.sessionUserId) || null;
 }
@@ -603,12 +624,19 @@ function getVisibleRequests(user = getSessionUser()) {
 
 function getVisibleCirculars(user = getSessionUser()) {
   if (!user) return [];
-  if (user.role === "admin" || user.role === "planning" || user.role === "leadership") return state.circulars;
+  if (user.role === "admin" || user.role === "planning" || user.role === "leadership") {
+    return state.circulars.map((circular) => ({
+      ...circular,
+      targetMissionIds: normalizeMissionIdList(circular.targetMissionIds),
+      readMissionIds: normalizeMissionIdList(circular.readMissionIds),
+      completedMissionIds: normalizeMissionIdList(circular.completedMissionIds)
+    }));
+  }
   if (user.role === "department") {
     const missionIds = state.missions.filter((mission) => mission.departmentId === user.departmentId).map((mission) => mission.id);
-    return state.circulars.filter((circular) => circular.targetMissionIds.some((id) => missionIds.includes(id)));
+    return state.circulars.filter((circular) => normalizeMissionIdList(circular.targetMissionIds).some((id) => missionIds.includes(id)));
   }
-  return state.circulars.filter((circular) => circular.targetMissionIds.includes(user.missionId));
+  return state.circulars.filter((circular) => normalizeMissionIdList(circular.targetMissionIds).includes(user.missionId));
 }
 
 function getVisibleMeetings(user = getSessionUser()) {
@@ -666,9 +694,12 @@ function getMeetingActions(meeting, task, user = getSessionUser()) {
 }
 
 function getCircularCompletion(circular) {
-  const total = circular.targetMissionIds.length;
-  const read = circular.readMissionIds.length;
-  const completed = circular.completedMissionIds.length;
+  const targetMissionIds = normalizeMissionIdList(circular.targetMissionIds);
+  const readMissionIds = normalizeMissionIdList(circular.readMissionIds).filter((id) => targetMissionIds.includes(id));
+  const completedMissionIds = normalizeMissionIdList(circular.completedMissionIds).filter((id) => targetMissionIds.includes(id));
+  const total = targetMissionIds.length;
+  const read = readMissionIds.length;
+  const completed = completedMissionIds.length;
   return {
     total,
     read,
@@ -3829,7 +3860,7 @@ function handleCircularSubmit(event) {
   event.preventDefault();
   const user = getSessionUser();
   const form = new FormData(event.currentTarget);
-  const targetMissionIds = [...new Set(form.getAll("missionId").map(String))];
+  const targetMissionIds = normalizeMissionIdList(form.getAll("missionId"));
   const summary = String(form.get("summary") || "").trim();
   const body = String(form.get("body") || "").trim();
   if (!targetMissionIds.length) {
@@ -4133,8 +4164,11 @@ function handleCircularAction(circularId, actionKey) {
   const circular = state.circulars.find((item) => item.id === circularId);
   const user = getSessionUser();
   if (!circular || !user) return;
+  circular.targetMissionIds = normalizeMissionIdList(circular.targetMissionIds);
+  circular.readMissionIds = normalizeMissionIdList(circular.readMissionIds);
+  circular.completedMissionIds = normalizeMissionIdList(circular.completedMissionIds);
 
-  if (actionKey === "mark-read" && user.role === "mission" && !circular.readMissionIds.includes(user.missionId)) {
+  if (actionKey === "mark-read" && user.role === "mission" && circular.targetMissionIds.includes(user.missionId) && !circular.readMissionIds.includes(user.missionId)) {
     circular.readMissionIds.push(user.missionId);
     circular.workflowHistory.unshift({
       actor: user.name,
@@ -4146,7 +4180,7 @@ function handleCircularAction(circularId, actionKey) {
     logAudit(user.name, "قراءة تعميم", circular.title, getMissionName(user.missionId));
   }
 
-  if (actionKey === "mark-complete" && user.role === "mission" && !circular.completedMissionIds.includes(user.missionId)) {
+  if (actionKey === "mark-complete" && user.role === "mission" && circular.targetMissionIds.includes(user.missionId) && !circular.completedMissionIds.includes(user.missionId)) {
     if (!circular.readMissionIds.includes(user.missionId)) {
       circular.readMissionIds.push(user.missionId);
     }
