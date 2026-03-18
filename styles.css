@@ -533,6 +533,11 @@ textarea {
   margin: 10px 0;
 }
 
+.circular-body-card {
+  margin: 12px 0;
+  background: rgba(255, 255, 255, 0.7);
+}
+
 .report-detail-stack {
   gap: 16px;
 }

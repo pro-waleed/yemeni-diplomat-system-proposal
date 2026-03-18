@@ -316,6 +316,8 @@ const seedState = () => ({
     {
       id: "circ-1",
       title: "تحديث قاعدة بيانات التواصل الرسمي",
+      summary: "توجيه للبعثات بمراجعة بيانات التواصل الرسمية وتحديث القوائم المعتمدة خلال المهلة المحددة.",
+      body: "يرجى من جميع البعثات المستهدفة مراجعة بيانات التواصل الرسمية للجهات الحكومية والشركاء الرئيسيين، وتحديث أي تغييرات طرأت على الأسماء أو المناصب أو وسائل الاتصال، ثم تأكيد الإنجاز ضمن النظام خلال الفترة المحددة.",
       issuedBy: "إدارة التخطيط",
       targetMissionIds: CANONICAL_MISSIONS.map((mission) => mission.id),
       dueDate: "2026-03-28",
@@ -446,6 +448,8 @@ function loadState() {
   parsed.circulars = Array.isArray(parsed.circulars) ? parsed.circulars : seedState().circulars;
   parsed.circulars = parsed.circulars.map((circular) => ({
     ...circular,
+    summary: circular.summary || "",
+    body: circular.body || "",
     workflowHistory: Array.isArray(circular.workflowHistory) ? circular.workflowHistory : [],
     processingLog: Array.isArray(circular.processingLog) ? circular.processingLog : []
   }));
@@ -2394,6 +2398,14 @@ function renderCircularsPage(user) {
                 <input type="date" name="dueDate" value="${editingCircular ? editingCircular.dueDate : ""}" required>
               </label>
               <label class="field full">
+                <span>ملخص التعميم</span>
+                <textarea name="summary" placeholder="موجز يوضح الغرض من التعميم وما هو المطلوب من البعثات.">${editingCircular ? (editingCircular.summary || "") : ""}</textarea>
+              </label>
+              <label class="field full">
+                <span>نص التعميم / المطلوب التنفيذي</span>
+                <textarea name="body" placeholder="اكتب هنا متن التعميم أو التعليمات المطلوب تنفيذها بصورة واضحة ومباشرة.">${editingCircular ? (editingCircular.body || "") : ""}</textarea>
+              </label>
+              <label class="field full">
                 <span>البعثات المستهدفة</span>
                 <div class="checkbox-grid">
                   ${state.missions.map((mission) => `
@@ -2425,6 +2437,13 @@ function renderCircularsPage(user) {
                 </div>
                 <span class="tag ${circular.status === "نشط" ? "warning" : "success"}">${circular.status}</span>
               </div>
+              ${circular.summary ? `<p class="record-desc">${circular.summary}</p>` : ""}
+              ${circular.body ? `
+                <div class="detail-card circular-body-card">
+                  <div class="section-title">نص التعميم</div>
+                  <p class="detail-note">${circular.body}</p>
+                </div>
+              ` : ""}
               <div class="detail-row"><span>قرأ التعميم</span><span>${stats.read}/${stats.total}</span></div>
               <div class="detail-row"><span>أنجز التعميم</span><span>${stats.completed}/${stats.total}</span></div>
               <div class="progress"><span style="width:${stats.completePercent}%"></span></div>
@@ -3802,7 +3821,15 @@ function handleCircularSubmit(event) {
   const user = getSessionUser();
   const form = new FormData(event.currentTarget);
   const targetMissionIds = form.getAll("missionId");
+  const summary = String(form.get("summary") || "").trim();
+  const body = String(form.get("body") || "").trim();
   if (!targetMissionIds.length) return;
+  if (!summary && !body) {
+    addAlert("danger", "تعذر إصدار التعميم", "يجب إدخال ملخص أو نص التعميم قبل الإصدار.");
+    saveState();
+    renderApp();
+    return;
+  }
 
   const editingCircular = state.circulars.find((item) => item.id === state.editingCircularId);
   const circular = editingCircular || {
@@ -3815,6 +3842,8 @@ function handleCircularSubmit(event) {
     processingLog: []
   };
   circular.title = String(form.get("title"));
+  circular.summary = summary;
+  circular.body = body;
   circular.targetMissionIds = targetMissionIds;
   circular.dueDate = String(form.get("dueDate"));
   circular.workflowHistory.unshift({
