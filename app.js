@@ -441,8 +441,8 @@ function loadState() {
     createdByRole: request.createdByRole || "planning",
     requestedByDepartmentId: request.requestedByDepartmentId || "",
     priority: request.priority || "متوسطة",
-    targetMissionIds: normalizeMissionIdList(request.targetMissionIds),
-    completedMissionIds: normalizeMissionIdList(request.completedMissionIds),
+    targetMissionIds: normalizeMissionIdList(request.targetMissionIds, parsed.missions),
+    completedMissionIds: normalizeMissionIdList(request.completedMissionIds, parsed.missions),
     status: request.status || "نشط"
   }));
   parsed.circulars = Array.isArray(parsed.circulars) ? parsed.circulars : seedState().circulars;
@@ -451,9 +451,9 @@ function loadState() {
     summary: circular.summary || "",
     body: circular.body || "",
     issuedAt: circular.issuedAt || "",
-    targetMissionIds: normalizeMissionIdList(circular.targetMissionIds),
-    readMissionIds: normalizeMissionIdList(circular.readMissionIds),
-    completedMissionIds: normalizeMissionIdList(circular.completedMissionIds),
+    targetMissionIds: normalizeMissionIdList(circular.targetMissionIds, parsed.missions),
+    readMissionIds: normalizeMissionIdList(circular.readMissionIds, parsed.missions),
+    completedMissionIds: normalizeMissionIdList(circular.completedMissionIds, parsed.missions),
     workflowHistory: Array.isArray(circular.workflowHistory) ? circular.workflowHistory : [],
     processingLog: Array.isArray(circular.processingLog) ? circular.processingLog : []
   }));
@@ -550,25 +550,30 @@ function getAllUsers() {
   return [...core, ...departments, ...missions];
 }
 
-function resolveMissionId(reference) {
+function resolveMissionId(reference, sourceMissions = null) {
   const value = String(reference || "").trim();
   if (!value) return "";
-  const directMission = state.missions.find((mission) => mission.id === value);
+  const missions = Array.isArray(sourceMissions)
+    ? sourceMissions
+    : Array.isArray(globalThis.state?.missions)
+      ? globalThis.state.missions
+      : CANONICAL_MISSIONS;
+  const directMission = missions.find((mission) => mission.id === value);
   if (directMission) return directMission.id;
-  const byUsername = state.missions.find((mission) => mission.username === value);
+  const byUsername = missions.find((mission) => mission.username === value);
   if (byUsername) return byUsername.id;
-  const byName = state.missions.find((mission) => mission.name === value);
+  const byName = missions.find((mission) => mission.name === value);
   if (byName) return byName.id;
   if (value.startsWith("user-")) {
     const missionId = value.slice(5);
-    if (state.missions.some((mission) => mission.id === missionId)) return missionId;
+    if (missions.some((mission) => mission.id === missionId)) return missionId;
   }
   return "";
 }
 
-function normalizeMissionIdList(values) {
+function normalizeMissionIdList(values, sourceMissions = null) {
   if (!Array.isArray(values)) return [];
-  return [...new Set(values.map(resolveMissionId).filter(Boolean))];
+  return [...new Set(values.map((value) => resolveMissionId(value, sourceMissions)).filter(Boolean))];
 }
 
 function getSessionUser() {
