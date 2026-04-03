@@ -157,6 +157,11 @@ textarea {
   margin-bottom: 6px;
 }
 
+.cred-card {
+  display: grid;
+  gap: 12px;
+}
+
 .login-form-wrap {
   display: flex;
   align-items: center;
@@ -168,6 +173,13 @@ textarea {
   padding: 26px;
   background: rgba(255, 255, 255, 0.78);
   border: 1px solid var(--line);
+}
+
+.password-field {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
 }
 
 .form-grid,
@@ -416,6 +428,13 @@ textarea {
   color: var(--muted);
 }
 
+.sidebar-section-card {
+  padding: 16px;
+  border-radius: 20px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.74);
+}
+
 .runtime-chip {
   margin-top: 12px;
   width: fit-content;
@@ -428,12 +447,25 @@ textarea {
 .nav-item {
   text-align: right;
   transition: transform 0.18s ease, background 0.18s ease;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .nav-item.active,
 .nav-item:hover {
   transform: translateX(-4px);
   background: linear-gradient(135deg, rgba(15, 118, 110, 0.14), rgba(255, 255, 255, 0.82));
+}
+
+.nav-badge {
+  min-width: 36px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(15, 118, 110, 0.1);
+  color: var(--teal-strong);
+  text-align: center;
+  font-size: 0.88rem;
 }
 
 .sidebar-footer {
@@ -857,6 +889,15 @@ textarea {
 .workspace-task-card {
   display: grid;
   gap: 12px;
+}
+
+.audit-entry-card {
+  display: grid;
+  gap: 12px;
+}
+
+.login-highlight-grid {
+  margin: 18px 0;
 }
 
 .workspace-subrecord {

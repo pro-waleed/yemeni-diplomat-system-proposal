@@ -287,6 +287,8 @@ const seedState = () => ({
   planSearch: "",
   planStatusFilter: "all",
   planOwnerFilter: "all",
+  auditSearch: "",
+  auditActionFilter: "all",
   editingCircularId: null,
   editingMeetingId: null,
   editingPlanId: null,
@@ -505,6 +507,8 @@ function extractRuntimeState(source = seedState()) {
     planSearch: source.planSearch || "",
     planStatusFilter: source.planStatusFilter || "all",
     planOwnerFilter: source.planOwnerFilter || "all",
+    auditSearch: source.auditSearch || "",
+    auditActionFilter: source.auditActionFilter || "all",
     editingCircularId: source.editingCircularId || null,
     editingMeetingId: source.editingMeetingId || null,
     editingPlanId: source.editingPlanId || null,
@@ -934,6 +938,88 @@ function getQualityLabel(score) {
   if (numericScore >= 4) return "مرتفع";
   if (numericScore >= 3) return "متوسط";
   return "بحاجة إلى تحسين";
+}
+
+function getDemoAccounts() {
+  return [
+    { roleLabel: "مدير النظام", scope: "وزارة", username: "admin", password: "Admin@2026" },
+    { roleLabel: "إدارة التخطيط", scope: "وزارة", username: "planning", password: "Planning@2026" },
+    { roleLabel: "القيادة العليا", scope: "وزارة", username: "leadership", password: "Leadership@2026" },
+    { roleLabel: "دائرة الجزيرة والخليج", scope: "دائرة", username: "gulf_dept", password: "Gulf@2026" },
+    { roleLabel: "بعثة الرياض", scope: "بعثة", username: "riyadh", password: "Riyadh@2026" }
+  ];
+}
+
+function getViewBadge(view, user = getSessionUser()) {
+  if (!user) return "";
+  if (view === "reports") return String(getVisibleReports(user).length);
+  if (view === "circulars") return String(getVisibleCirculars(user).length);
+  if (view === "meetings") return String(getVisibleMeetings(user).length);
+  if (view === "plans") return String(getVisiblePlans(user).length);
+  if (view === "training") return String(getVisibleTrainings(user).length);
+  if (view === "requests") return String(getVisibleRequests(user).length);
+  if (view === "entities") return String(user.role === "department"
+    ? state.missions.filter((mission) => mission.departmentId === user.departmentId).length
+    : state.missions.length);
+  if (view === "management") return String(state.missions.length);
+  if (view === "governance") return String(state.auditLog.length);
+  return "";
+}
+
+function getAuditCategory(action = "") {
+  if (action.includes("تسجيل الدخول") || action.includes("تسجيل الخروج")) return "session";
+  if (action.includes("تقرير") || action.includes("طلب")) return "reports";
+  if (action.includes("تعميم")) return "circulars";
+  if (action.includes("اجتماع") || action.includes("مهمة")) return "meetings";
+  if (action.includes("خطة")) return "plans";
+  if (action.includes("إضافة دائرة") || action.includes("إضافة بعثة") || action.includes("إدارة")) return "entities";
+  return "other";
+}
+
+function getAuditCategoryLabel(category = "other") {
+  if (category === "session") return "الدخول والجلسات";
+  if (category === "reports") return "التقارير والطلبات";
+  if (category === "circulars") return "التعاميم";
+  if (category === "meetings") return "الاجتماعات";
+  if (category === "plans") return "الخطط";
+  if (category === "entities") return "إدارة الكيانات";
+  return "أخرى";
+}
+
+function getAuditCategoryTone(category = "other") {
+  if (category === "session") return "info";
+  if (category === "reports") return "warning";
+  if (category === "circulars") return "danger";
+  if (category === "meetings") return "info";
+  if (category === "plans") return "success";
+  if (category === "entities") return "warning";
+  return "info";
+}
+
+function getFilteredAuditLog() {
+  return (state.auditLog || []).filter((entry) => {
+    const category = getAuditCategory(entry.action);
+    if (state.auditActionFilter !== "all" && category !== state.auditActionFilter) return false;
+    return matchesSearchText([entry.actor, entry.action, entry.target, entry.scope, entry.at], state.auditSearch);
+  });
+}
+
+function getGovernanceMetrics() {
+  const entries = state.auditLog || [];
+  const filtered = getFilteredAuditLog();
+  const byCategory = entries.reduce((acc, entry) => {
+    const category = getAuditCategory(entry.action);
+    acc[category] = (acc[category] || 0) + 1;
+    return acc;
+  }, {});
+  return {
+    total: entries.length,
+    filtered: filtered.length,
+    sessions: byCategory.session || 0,
+    reports: byCategory.reports || 0,
+    circulars: byCategory.circulars || 0,
+    entities: byCategory.entities || 0
+  };
 }
 
 function renderMissionPicker({
@@ -2504,40 +2590,44 @@ function renderIntellectualFooter() {
 }
 
 function renderLogin() {
+  const demoAccounts = getDemoAccounts();
   return `
     <div class="page-shell">
       <div class="login-shell">
       <section class="login-brand">
         <div class="badge">YD</div>
         <h1 class="title">النظام الدبلوماسي المتكامل</h1>
-        <p class="muted">ابدأ من شاشة الدخول كما في الأنظمة المؤسسية الحقيقية، ثم ستظهر لكل مستخدم الشاشات والصلاحيات المناسبة لدوره فقط.</p>
+        <p class="muted">ابدأ من شاشة دخول مؤسسية مبسطة، ثم ستظهر لكل مستخدم الشاشات والصلاحيات المناسبة لدوره فقط مع مؤشرات واضحة وسهلة الوصول.</p>
+        <div class="workspace-note-grid login-highlight-grid">
+          <div class="detail-card">
+            <strong>رحلة دخول أسرع</strong>
+            <p class="detail-note">اختر أحد الحسابات التجريبية بضغطة واحدة لملء بيانات الدخول تلقائيًا.</p>
+          </div>
+          <div class="detail-card">
+            <strong>صلاحيات حسب الدور</strong>
+            <p class="detail-note">الواجهة لا تعرض إلا الوحدات المناسبة للحساب النشط، مع نطاق رؤية منضبط.</p>
+          </div>
+        </div>
         <div class="credentials-list">
-          <div class="cred-card">
-            <strong>مدير النظام</strong>
-            <span class="muted">اسم المستخدم: admin | كلمة المرور: Admin@2026</span>
-          </div>
-          <div class="cred-card">
-            <strong>إدارة التخطيط</strong>
-            <span class="muted">اسم المستخدم: planning | كلمة المرور: Planning@2026</span>
-          </div>
-          <div class="cred-card">
-            <strong>القيادة العليا</strong>
-            <span class="muted">اسم المستخدم: leadership | كلمة المرور: Leadership@2026</span>
-          </div>
-          <div class="cred-card">
-            <strong>دائرة الجزيرة والخليج</strong>
-            <span class="muted">اسم المستخدم: gulf_dept | كلمة المرور: Gulf@2026</span>
-          </div>
-          <div class="cred-card">
-            <strong>بعثة الرياض</strong>
-            <span class="muted">اسم المستخدم: riyadh | كلمة المرور: Riyadh@2026</span>
-          </div>
+          ${demoAccounts.map((account) => `
+            <div class="cred-card">
+              <div class="record-top">
+                <div>
+                  <strong>${account.roleLabel}</strong>
+                  <span class="muted">${account.scope}</span>
+                </div>
+                <span class="tag info">${account.scope}</span>
+              </div>
+              <span class="muted">اسم المستخدم: ${account.username} | كلمة المرور: ${account.password}</span>
+              <button class="btn secondary demo-login-btn" type="button" data-demo-username="${account.username}" data-demo-password="${account.password}">تجهيز هذا الحساب</button>
+            </div>
+          `).join("")}
         </div>
       </section>
       <section class="login-form-wrap">
         <div class="form-card">
           <h2 class="section-title">تسجيل الدخول</h2>
-          <p class="muted">سجّل الدخول بأحد الحسابات الافتراضية أو بالحسابات التي ينشئها مدير النظام.</p>
+          <p class="muted">سجّل الدخول بأحد الحسابات الافتراضية أو بالحسابات التي ينشئها مدير النظام. يمكنك استخدام أزرار التجهيز السريع من اللوحة المقابلة.</p>
           <form id="login-form" class="form-grid">
             <label class="field full">
               <span>اسم المستخدم</span>
@@ -2545,7 +2635,10 @@ function renderLogin() {
             </label>
             <label class="field full">
               <span>كلمة المرور</span>
-              <input type="password" name="password" required>
+              <div class="password-field">
+                <input id="login-password" type="password" name="password" required>
+                <button class="btn secondary password-toggle" type="button" id="toggle-login-password">إظهار</button>
+              </div>
             </label>
             <div class="field full">
               <button class="btn primary" type="submit">دخول إلى النظام</button>
@@ -2573,6 +2666,11 @@ function renderSystem(user) {
     governance: "الحوكمة",
     management: "إدارة الكيانات"
   };
+  const navItems = visibleViews(user).map((view) => ({
+    key: view,
+    label: labels[view],
+    badge: getViewBadge(view, user)
+  }));
   return `
     <div class="page-shell">
       ${renderAlerts()}
@@ -2585,8 +2683,18 @@ function renderSystem(user) {
             <p>${roleLabel(user)}</p>
             <span class="tag ${getRuntimeModeTone()} runtime-chip">${getRuntimeModeLabel()}</span>
           </div>
+          <div class="sidebar-section-card">
+            <span class="mini">المسار الحالي</span>
+            <strong>${labels[state.activeView] || "لوحة القيادة"}</strong>
+            <p class="detail-note">اختر الوحدة المناسبة من القائمة، وستظل الصلاحيات ونطاق البيانات منضبطين بحسب الدور الحالي.</p>
+          </div>
           <div class="menu-list">
-            ${visibleViews(user).map((view) => `<button class="nav-item ${state.activeView === view ? "active" : ""}" data-view="${view}">${labels[view]}</button>`).join("")}
+            ${navItems.map((item) => `
+              <button class="nav-item ${state.activeView === item.key ? "active" : ""}" data-view="${item.key}">
+                <span>${item.label}</span>
+                ${item.badge ? `<span class="nav-badge">${item.badge}</span>` : ""}
+              </button>
+            `).join("")}
           </div>
         </div>
         <div class="sidebar-footer">
@@ -4333,15 +4441,14 @@ function renderGovernancePage(user) {
     ["مدير دائرة", "دائرة", "متابعة البعثات التابعة ومراجعة التقارير والاجتماعات والخطط"],
     ["بعثة", "بعثة", "رفع التقارير واستلام التعاميم وتنفيذ الخطط والمتطلبات التشغيلية"]
   ];
-
-  const auditRows = state.auditLog.slice(0, 12).map((entry) => `
-    <div class="detail-row">
-      <span>${entry.at}</span>
-      <span>${entry.actor}</span>
-      <span>${entry.action}</span>
-      <span>${entry.target}</span>
-    </div>
-  `).join("");
+  const metrics = getGovernanceMetrics();
+  const filteredAuditEntries = getFilteredAuditLog();
+  const scopedRoles = roleRows.reduce((acc, row) => {
+    const scope = row[1];
+    if (!acc[scope]) acc[scope] = [];
+    acc[scope].push(row);
+    return acc;
+  }, {});
 
   return `
     <section class="panel">
@@ -4352,24 +4459,117 @@ function renderGovernancePage(user) {
           <p class="muted">تمت إضافة مصفوفة أدوار عملية وسجل تدقيق يعكس متطلبات الوثيقة بشأن الحوكمة والتتبع.</p>
         </div>
       </div>
+      <div class="entity-overview-strip workspace-overview-strip">
+        <div class="report-mini-kpi">
+          <span>إجمالي الأحداث</span>
+          <strong>${metrics.total}</strong>
+        </div>
+        <div class="report-mini-kpi">
+          <span>الجلسات</span>
+          <strong>${metrics.sessions}</strong>
+        </div>
+        <div class="report-mini-kpi">
+          <span>أحداث التقارير</span>
+          <strong>${metrics.reports}</strong>
+        </div>
+        <div class="report-mini-kpi">
+          <span>إدارة الكيانات</span>
+          <strong>${metrics.entities}</strong>
+        </div>
+      </div>
     </section>
     <section class="two-col">
       <div class="panel">
-        <div class="section-title">مصفوفة الأدوار والصلاحيات</div>
-        <div class="detail-list">
-          ${roleRows.map((row) => `
-            <div class="detail-card">
-              <strong>${row[0]}</strong>
-              <div class="detail-row"><span>النطاق</span><span>${row[1]}</span></div>
-              <div class="detail-row"><span>أبرز الصلاحيات</span><span>${row[2]}</span></div>
-            </div>
+        <div class="entity-section-head">
+          <div>
+            <div class="section-title">مصفوفة الأدوار والصلاحيات</div>
+            <p class="mini">تم تجميع الأدوار حسب النطاق لتسهيل القراءة السريعة أثناء العرض أو المراجعة الإدارية.</p>
+          </div>
+        </div>
+        <div class="entity-record-stack">
+          ${Object.entries(scopedRoles).map(([scope, rows]) => `
+            <details class="compact-disclosure management-record-card" ${scope === "وزارة" ? "open" : ""}>
+              <summary>
+                <div>
+                  <strong>${scope}</strong>
+                  <div class="entity-summary-meta">
+                    <span>${rows.length} أدوار ضمن هذا النطاق</span>
+                  </div>
+                </div>
+                <div class="entity-tag-stack">
+                  <span class="tag info">${rows.length} دور</span>
+                </div>
+              </summary>
+              <div class="entity-group-grid">
+                ${rows.map((row) => `
+                  <div class="detail-card">
+                    <strong>${row[0]}</strong>
+                    <div class="detail-list">
+                      <div class="detail-row"><span>النطاق</span><span>${row[1]}</span></div>
+                      <div class="detail-row"><span>أبرز الصلاحيات</span><span>${row[2]}</span></div>
+                    </div>
+                  </div>
+                `).join("")}
+              </div>
+            </details>
           `).join("")}
         </div>
       </div>
       <div class="panel">
-        <div class="section-title">سجل التدقيق الأخير</div>
-        <div class="detail-list">
-          ${auditRows || '<div class="empty">لا توجد أحداث تدقيق بعد.</div>'}
+        <div class="entity-section-head">
+          <div>
+            <div class="section-title">سجل التدقيق</div>
+            <p class="mini">ابحث في السجل أو صفّه حسب نوع الحدث للوصول إلى الأثر التشغيلي المطلوب بسرعة.</p>
+          </div>
+          <span class="tag info">${metrics.filtered} نتيجة</span>
+        </div>
+        <div class="report-filter-bar workspace-filter-bar">
+          <label class="field">
+            <span>البحث</span>
+            <input id="audit-search" type="search" value="${state.auditSearch || ""}" placeholder="ابحث بالفاعل أو الإجراء أو الهدف أو النطاق">
+          </label>
+          <label class="field">
+            <span>نوع الحدث</span>
+            <select id="audit-action-filter">
+              <option value="all" ${state.auditActionFilter === "all" ? "selected" : ""}>جميع الأحداث</option>
+              ${["session", "reports", "circulars", "meetings", "plans", "entities", "other"].map((category) => `<option value="${category}" ${state.auditActionFilter === category ? "selected" : ""}>${getAuditCategoryLabel(category)}</option>`).join("")}
+            </select>
+          </label>
+          <div class="report-mini-kpi">
+            <span>آخر تحديث</span>
+            <strong>${filteredAuditEntries[0]?.at || "-"}</strong>
+          </div>
+          <div class="report-mini-kpi">
+            <span>المعروض</span>
+            <strong>${filteredAuditEntries.length}</strong>
+          </div>
+        </div>
+        <div class="workspace-record-stack">
+          ${filteredAuditEntries.slice(0, 20).map((entry) => {
+            const category = getAuditCategory(entry.action);
+            return `
+              <div class="detail-card audit-entry-card">
+                <div class="record-top">
+                  <div>
+                    <strong>${entry.action}</strong>
+                    <div class="workspace-summary-meta">
+                      <span>${entry.actor}</span>
+                      <span>${entry.target}</span>
+                    </div>
+                  </div>
+                  <div class="entity-tag-stack">
+                    <span class="tag ${getAuditCategoryTone(category)}">${getAuditCategoryLabel(category)}</span>
+                    <span class="tag info">${entry.at}</span>
+                  </div>
+                </div>
+                <div class="detail-list">
+                  <div class="detail-row"><span>الفاعل</span><span>${entry.actor}</span></div>
+                  <div class="detail-row"><span>الهدف</span><span>${entry.target}</span></div>
+                  <div class="detail-row"><span>النطاق</span><span>${entry.scope || "-"}</span></div>
+                </div>
+              </div>
+            `;
+          }).join("") || '<div class="empty">لا توجد أحداث مطابقة للفلاتر الحالية.</div>'}
         </div>
       </div>
     </section>
@@ -4743,6 +4943,27 @@ function roleLabel(user) {
 function bindEvents() {
   const loginForm = document.getElementById("login-form");
   if (loginForm) loginForm.addEventListener("submit", handleLogin);
+
+  document.querySelectorAll(".demo-login-btn").forEach((button) => {
+    button.addEventListener("click", () => {
+      const usernameField = document.querySelector('#login-form input[name="username"]');
+      const passwordField = document.querySelector('#login-form input[name="password"]');
+      if (!usernameField || !passwordField) return;
+      usernameField.value = button.dataset.demoUsername || "";
+      passwordField.value = button.dataset.demoPassword || "";
+      usernameField.focus();
+    });
+  });
+
+  const toggleLoginPassword = document.getElementById("toggle-login-password");
+  const loginPasswordField = document.getElementById("login-password");
+  if (toggleLoginPassword && loginPasswordField) {
+    toggleLoginPassword.addEventListener("click", () => {
+      const isHidden = loginPasswordField.type === "password";
+      loginPasswordField.type = isHidden ? "text" : "password";
+      toggleLoginPassword.textContent = isHidden ? "إخفاء" : "إظهار";
+    });
+  }
 
   document.querySelectorAll("[data-view]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -5345,6 +5566,31 @@ function bindEvents() {
   if (planOwnerFilter) {
     planOwnerFilter.addEventListener("change", () => {
       state.planOwnerFilter = planOwnerFilter.value;
+      saveState();
+      renderApp();
+    });
+  }
+
+  const auditSearch = document.getElementById("audit-search");
+  if (auditSearch) {
+    const applyAuditSearch = () => {
+      state.auditSearch = auditSearch.value;
+      saveState();
+      renderApp();
+    };
+    auditSearch.addEventListener("change", applyAuditSearch);
+    auditSearch.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        applyAuditSearch();
+      }
+    });
+  }
+
+  const auditActionFilter = document.getElementById("audit-action-filter");
+  if (auditActionFilter) {
+    auditActionFilter.addEventListener("change", () => {
+      state.auditActionFilter = auditActionFilter.value;
       saveState();
       renderApp();
     });
