@@ -281,6 +281,12 @@ const seedState = () => ({
   entityDepartmentFilter: "all",
   managementSearch: "",
   managementDepartmentFilter: "all",
+  meetingSearch: "",
+  meetingDepartmentFilter: "all",
+  meetingStatusFilter: "all",
+  planSearch: "",
+  planStatusFilter: "all",
+  planOwnerFilter: "all",
   editingCircularId: null,
   editingMeetingId: null,
   editingPlanId: null,
@@ -493,6 +499,12 @@ function extractRuntimeState(source = seedState()) {
     entityDepartmentFilter: source.entityDepartmentFilter || "all",
     managementSearch: source.managementSearch || "",
     managementDepartmentFilter: source.managementDepartmentFilter || "all",
+    meetingSearch: source.meetingSearch || "",
+    meetingDepartmentFilter: source.meetingDepartmentFilter || "all",
+    meetingStatusFilter: source.meetingStatusFilter || "all",
+    planSearch: source.planSearch || "",
+    planStatusFilter: source.planStatusFilter || "all",
+    planOwnerFilter: source.planOwnerFilter || "all",
     editingCircularId: source.editingCircularId || null,
     editingMeetingId: source.editingMeetingId || null,
     editingPlanId: source.editingPlanId || null,
@@ -1077,6 +1089,96 @@ function getMeetingActions(meeting, task, user = getSessionUser()) {
     actions.push({ key: "delay-task", label: "وضع كمُتأخر", nextStatus: "متأخر" });
   }
   return actions;
+}
+
+function getMeetingTaskTone(status) {
+  if (status === "منجز") return "success";
+  if (status === "متأخر") return "danger";
+  if (status === "قيد التنفيذ") return "warning";
+  return "info";
+}
+
+function getMeetingSummary(meeting) {
+  const tasks = Array.isArray(meeting?.tasks) ? meeting.tasks : [];
+  const completed = tasks.filter((task) => task.status === "منجز").length;
+  const delayed = tasks.filter((task) => task.status === "متأخر").length;
+  const inProgress = tasks.filter((task) => task.status === "قيد التنفيذ").length;
+  const pending = Math.max(tasks.length - completed - delayed - inProgress, 0);
+  let statusKey = "pending";
+  let label = "جديد";
+  let tone = "info";
+  if (tasks.length && completed === tasks.length) {
+    statusKey = "completed";
+    label = "مكتمل";
+    tone = "success";
+  } else if (delayed > 0) {
+    statusKey = "delayed";
+    label = "متأخر";
+    tone = "danger";
+  } else if (inProgress > 0) {
+    statusKey = "in-progress";
+    label = "قيد التنفيذ";
+    tone = "warning";
+  }
+  return {
+    total: tasks.length,
+    completed,
+    delayed,
+    inProgress,
+    pending,
+    percent: tasks.length ? Math.round((completed / tasks.length) * 100) : 0,
+    statusKey,
+    label,
+    tone
+  };
+}
+
+function getFilteredMeetings(user = getSessionUser()) {
+  const meetings = getVisibleMeetings(user);
+  const effectiveDepartmentFilter = user?.role === "department"
+    ? user.departmentId
+    : (state.meetingDepartmentFilter !== "all" ? state.meetingDepartmentFilter : "all");
+  return meetings.filter((meeting) => {
+    const summary = getMeetingSummary(meeting);
+    if (effectiveDepartmentFilter !== "all" && meeting.departmentId !== effectiveDepartmentFilter) return false;
+    if (state.meetingStatusFilter !== "all" && summary.statusKey !== state.meetingStatusFilter) return false;
+    return matchesSearchText([
+      meeting.title,
+      meeting.summary,
+      getDepartmentName(meeting.departmentId),
+      ...(meeting.tasks || []).flatMap((task) => [task.title, task.assignee, task.status, task.priority])
+    ], state.meetingSearch);
+  }).sort((a, b) => {
+    const summaryDiff = getMeetingSummary(b).delayed - getMeetingSummary(a).delayed;
+    if (summaryDiff) return summaryDiff;
+    return String((b.workflowHistory || [])[0]?.at || "").localeCompare(String((a.workflowHistory || [])[0]?.at || ""));
+  });
+}
+
+function getPlanOwnerLabel(plan) {
+  return plan.ownerType === "mission" ? getMissionName(plan.ownerId) : getDepartmentName(plan.ownerId);
+}
+
+function getFilteredPlans(user = getSessionUser()) {
+  const plans = getVisiblePlans(user);
+  const effectiveOwnerFilter = (user?.role === "planning" || user?.role === "admin") ? state.planOwnerFilter : "all";
+  return plans.filter((plan) => {
+    if (state.planStatusFilter !== "all" && plan.status !== state.planStatusFilter) return false;
+    if (effectiveOwnerFilter !== "all" && plan.ownerType !== effectiveOwnerFilter) return false;
+    return matchesSearchText([
+      plan.title,
+      plan.kpi,
+      plan.period,
+      plan.status,
+      getPlanOwnerLabel(plan)
+    ], state.planSearch);
+  }).sort((a, b) => {
+    if (a.status !== b.status) {
+      const weight = { "متأخرة": 3, "قيد التنفيذ": 2, "منجز": 1 };
+      return (weight[b.status] || 0) - (weight[a.status] || 0);
+    }
+    return Number(b.progress || 0) - Number(a.progress || 0);
+  });
 }
 
 function getCircularCompletion(circular) {
@@ -2525,6 +2627,38 @@ function renderDashboard(user) {
   const visibleCirculars = getVisibleCirculars(user);
   const visiblePlans = getVisiblePlans(user);
   const visibleMeetings = getVisibleMeetings(user);
+  const delayedCirculars = visibleCirculars.filter((circular) => getCircularUrgency(circular).label === "متأخر");
+  const delayedPlans = visiblePlans.filter((plan) => plan.status === "متأخرة");
+  const delayedMeetingTasks = visibleMeetings.reduce((sum, meeting) => sum + getMeetingSummary(meeting).delayed, 0);
+  const averagePlanProgress = visiblePlans.length ? Math.round(visiblePlans.reduce((sum, plan) => sum + Number(plan.progress || 0), 0) / visiblePlans.length) : 0;
+  const focusRows = [
+    {
+      label: "طلبات تقارير بحاجة إلى تدخل",
+      value: activeRequests.length ? `${pending} بعثة غير منجزة` : "لا توجد طلبات نشطة",
+      tone: pending ? "warning" : "success"
+    },
+    {
+      label: "تعاميم متأخرة",
+      value: delayedCirculars.length ? `${delayedCirculars.length} تعميمًا يحتاج المتابعة` : "لا توجد تعاميم متأخرة",
+      tone: delayedCirculars.length ? "danger" : "success"
+    },
+    {
+      label: "مهام اجتماعات متأخرة",
+      value: delayedMeetingTasks ? `${delayedMeetingTasks} مهمة متأخرة` : "لا توجد مهام متأخرة",
+      tone: delayedMeetingTasks ? "danger" : "success"
+    },
+    {
+      label: "خطط بحاجة إلى إنعاش",
+      value: delayedPlans.length ? `${delayedPlans.length} خطة متأخرة` : "لا توجد خطط متأخرة",
+      tone: delayedPlans.length ? "warning" : "success"
+    }
+  ];
+  const workflowRows = [
+    { title: "التقارير", value: reports.length, note: activeRequests.length ? `${activeRequests.length} طلبات نشطة` : "لا توجد طلبات نشطة" },
+    { title: "التعاميم", value: visibleCirculars.length, note: delayedCirculars.length ? `${delayedCirculars.length} متأخر` : "ضمن المتابعة" },
+    { title: "الاجتماعات", value: visibleMeetings.length, note: delayedMeetingTasks ? `${delayedMeetingTasks} مهمة متأخرة` : "محاضر ومهام مستقرة" },
+    { title: "الخطط", value: `${averagePlanProgress}%`, note: visiblePlans.length ? `${visiblePlans.length} خطة في النطاق` : "لا توجد خطط بعد" }
+  ];
   return `
     <section class="panel">
       <div class="topbar">
@@ -2533,25 +2667,35 @@ function renderDashboard(user) {
           <h1 class="page-title">لوحة القيادة</h1>
           <p class="muted">تظهر هنا المؤشرات الأساسية المناسبة لحساب ${user.name}.</p>
         </div>
+        <span class="tag ${getRuntimeModeTone()}">${getRuntimeModeLabel()}</span>
       </div>
     </section>
     <section class="hero-strip">
-      <div class="panel">
-        <span class="tag info">موجز</span>
-        <h2 class="section-title">بيئة دخول وصلاحيات متدرجة</h2>
-        <p class="muted">مدير النظام يمكنه إنشاء دوائر وبعثات مع بيانات دخول خاصة بها، ثم تظهر لكل جهة الشاشات المسموح بها فقط.</p>
+      <div class="panel workspace-hero-card">
+        <span class="tag info">موجز تنفيذي</span>
+        <h2 class="section-title">سطح عمل مركّز على الأولويات</h2>
+        <p class="muted">تعرض هذه اللوحة المخاطر العاجلة، ومؤشرات الإنجاز، وحالة الوحدات الأربع الأكثر استخدامًا حتى تصل سريعًا إلى ما يحتاج القرار أو المتابعة.</p>
+        <div class="workspace-note-grid">
+          ${focusRows.map((item) => `
+            <div class="detail-card">
+              <strong>${item.label}</strong>
+              <p class="detail-note">${item.value}</p>
+              <span class="tag ${item.tone}">${item.tone === "danger" ? "يتطلب تدخلًا" : item.tone === "warning" ? "يحتاج متابعة" : "مستقر"}</span>
+            </div>
+          `).join("")}
+        </div>
       </div>
       <div class="stats-grid">
         <div class="metric-card"><span>التقارير الظاهرة</span><strong>${reports.length}</strong></div>
-        <div class="metric-card"><span>التعاميم النشطة</span><strong>${visibleCirculars.length}</strong></div>
+        <div class="metric-card"><span>التعاميم في النطاق</span><strong>${visibleCirculars.length}</strong></div>
         <div class="metric-card"><span>الخطط في النطاق</span><strong>${visiblePlans.length}</strong></div>
       </div>
     </section>
-    <section class="metrics-grid">
+    <section class="metrics-grid workspace-metric-grid">
       ${[
         { title: "طلبات التقارير النشطة", value: activeRequests.length, note: `${pending} بعثة غير منجزة` },
-        { title: "الاجتماعات المرئية", value: visibleMeetings.length, note: "محاضر ومهام متابعة" },
-        { title: "نسبة إنجاز الخطط", value: visiblePlans.length ? `${Math.round(visiblePlans.reduce((s, p) => s + p.progress, 0) / visiblePlans.length)}%` : "0%", note: "معدل تقريبي" }
+        { title: "الاجتماعات المرئية", value: visibleMeetings.length, note: delayedMeetingTasks ? `${delayedMeetingTasks} مهمة متأخرة` : "محاضر ومهام متابعة" },
+        { title: "نسبة إنجاز الخطط", value: `${averagePlanProgress}%`, note: "معدل تقريبي" }
       ].map((item) => `
         <article class="metric-card">
           <span>${item.title}</span>
@@ -2569,6 +2713,25 @@ function renderDashboard(user) {
           </article>
         `;
       }).join("") || `<div class="panel empty">لا توجد طلبات نشطة في نطاق هذا الحساب.</div>`}
+    </section>
+    <section class="panel">
+      <div class="entity-section-head">
+        <div>
+          <div class="section-title">مسارات العمل</div>
+          <p class="mini">تلخيص سريع لحالة الوحدات الأساسية من دون الحاجة لفتح كل شاشة على حدة.</p>
+        </div>
+      </div>
+      <div class="workspace-note-grid">
+        ${workflowRows.map((item) => `
+          <div class="detail-card">
+            <strong>${item.title}</strong>
+            <div class="reports-stat-card">
+              <strong>${item.value}</strong>
+            </div>
+            <p class="detail-note">${item.note}</p>
+          </div>
+        `).join("")}
+      </div>
     </section>
   `;
 }
@@ -3458,12 +3621,20 @@ function renderCircularsPage(user) {
 }
 
 function renderMeetingsPage(user) {
-  const meetings = getVisibleMeetings(user);
-  const editingMeeting = meetings.find((item) => item.id === state.editingMeetingId) || null;
+  const visibleMeetings = getVisibleMeetings(user);
+  const meetings = getFilteredMeetings(user);
+  const editingMeeting = visibleMeetings.find((item) => item.id === state.editingMeetingId) || null;
   const primaryTask = editingMeeting?.tasks?.[0] || null;
   const meetingDepartments = user.role === "department"
     ? state.departments.filter((department) => department.id === user.departmentId)
     : state.departments;
+  const totalTasks = meetings.reduce((sum, meeting) => sum + getMeetingSummary(meeting).total, 0);
+  const delayedTasks = meetings.reduce((sum, meeting) => sum + getMeetingSummary(meeting).delayed, 0);
+  const completedTasks = meetings.reduce((sum, meeting) => sum + getMeetingSummary(meeting).completed, 0);
+  const activeMeetingCount = meetings.filter((meeting) => {
+    const summary = getMeetingSummary(meeting);
+    return summary.statusKey === "in-progress" || summary.statusKey === "delayed";
+  }).length;
   return `
     <section class="panel">
       <div class="topbar">
@@ -3471,6 +3642,24 @@ function renderMeetingsPage(user) {
           <span class="tag info">الاجتماعات</span>
           <h1 class="page-title">محاضر الاجتماعات والمهام</h1>
           <p class="muted">تحويل المحاضر إلى مهام ومتابعة حالات الإنجاز والتأخر وفق ما ورد في الوثيقة.</p>
+        </div>
+      </div>
+      <div class="entity-overview-strip workspace-overview-strip">
+        <div class="report-mini-kpi">
+          <span>الاجتماعات المعروضة</span>
+          <strong>${meetings.length}</strong>
+        </div>
+        <div class="report-mini-kpi">
+          <span>إجمالي المهام</span>
+          <strong>${totalTasks}</strong>
+        </div>
+        <div class="report-mini-kpi">
+          <span>المهام المنجزة</span>
+          <strong>${completedTasks}</strong>
+        </div>
+        <div class="report-mini-kpi">
+          <span>المهام المتأخرة</span>
+          <strong>${delayedTasks}</strong>
         </div>
       </div>
     </section>
@@ -3517,42 +3706,132 @@ function renderMeetingsPage(user) {
           </form>
         </div>
       ` : ""}
-      ${meetings.map((meeting) => `
-        <div class="panel">
-          <div class="section-title">${meeting.title}</div>
-          <p class="muted">${meeting.summary}</p>
-          ${canEditMeeting(meeting, user) ? `<div class="inline-actions"><button class="btn secondary meeting-edit" data-meeting-id="${meeting.id}">تعديل الاجتماع</button></div>` : ""}
-          <div class="detail-list">
-            ${meeting.tasks.map((task) => `
-              <div class="detail-card">
-                <div class="record-top">
-                  <div>
-                    <strong>${task.title}</strong>
-                    <div class="record-meta">${task.assignee} | الأولوية ${task.priority}</div>
-                  </div>
-                  <span class="tag ${task.status === "منجز" ? "success" : task.status === "متأخر" ? "danger" : "warning"}">${task.status}</span>
-                </div>
-                ${getMeetingActions(meeting, task, user).length ? `<div class="inline-actions">${getMeetingActions(meeting, task, user).map((action) => `<button class="btn primary meeting-action" data-meeting-id="${meeting.id}" data-task-id="${task.id}" data-status="${action.nextStatus}">${action.label}</button>`).join("")}</div>` : ""}
-              </div>
-            `).join("")}
-            ${(meeting.workflowHistory || []).length ? `
-              <div class="detail-card">
-                <div class="section-title">سجل الاجتماع</div>
-                <div class="detail-list">
-                  ${meeting.workflowHistory.slice(0, 4).map((item) => `<div class="timeline-entry"><strong>${item.action}</strong><span>${item.actor}</span><span>${item.at}</span></div>`).join("")}
-                </div>
-              </div>
-            ` : ""}
+      <div class="panel workspace-list-panel">
+        <div class="entity-section-head">
+          <div>
+            <div class="section-title">سجل الاجتماعات</div>
+            <p class="mini">ابحث في الاجتماعات أو صفِّها حسب الدائرة أو الحالة للوصول السريع إلى الاجتماعات المتأخرة أو الجارية.</p>
+          </div>
+          <span class="tag ${delayedTasks ? "danger" : "info"}">${delayedTasks ? `${delayedTasks} مهمة متأخرة` : `${activeMeetingCount} اجتماعات نشطة`}</span>
+        </div>
+        <div class="report-filter-bar workspace-filter-bar">
+          <label class="field">
+            <span>البحث</span>
+            <input id="meeting-search" type="search" value="${state.meetingSearch || ""}" placeholder="ابحث بعنوان الاجتماع أو المهمة أو الجهة المكلفة">
+          </label>
+          ${meetingDepartments.length > 1 ? `
+            <label class="field">
+              <span>الدائرة</span>
+              <select id="meeting-department-filter">
+                <option value="all">جميع الدوائر</option>
+                ${meetingDepartments.map((department) => `<option value="${department.id}" ${state.meetingDepartmentFilter === department.id ? "selected" : ""}>${department.name}</option>`).join("")}
+              </select>
+            </label>
+          ` : `
+            <div class="report-mini-kpi">
+              <span>الدائرة</span>
+              <strong>${meetingDepartments[0]?.name || "ضمن النطاق"}</strong>
+            </div>
+          `}
+          <label class="field">
+            <span>الحالة</span>
+            <select id="meeting-status-filter">
+              <option value="all" ${state.meetingStatusFilter === "all" ? "selected" : ""}>جميع الحالات</option>
+              <option value="pending" ${state.meetingStatusFilter === "pending" ? "selected" : ""}>جديد</option>
+              <option value="in-progress" ${state.meetingStatusFilter === "in-progress" ? "selected" : ""}>قيد التنفيذ</option>
+              <option value="delayed" ${state.meetingStatusFilter === "delayed" ? "selected" : ""}>متأخر</option>
+              <option value="completed" ${state.meetingStatusFilter === "completed" ? "selected" : ""}>مكتمل</option>
+            </select>
+          </label>
+          <div class="report-mini-kpi">
+            <span>النتائج</span>
+            <strong>${meetings.length}</strong>
           </div>
         </div>
-      `).join("") || `<div class="panel empty">لا توجد اجتماعات في نطاق هذا الحساب.</div>`}
+        <div class="workspace-record-stack">
+          ${meetings.map((meeting) => {
+            const summary = getMeetingSummary(meeting);
+            return `
+              <details class="compact-disclosure workspace-record-card" ${meetings.length <= 2 ? "open" : ""}>
+                <summary>
+                  <div>
+                    <strong>${meeting.title}</strong>
+                    <div class="workspace-summary-meta">
+                      <span>${getDepartmentName(meeting.departmentId)}</span>
+                      <span>${summary.total} مهام</span>
+                      <span>${summary.completed} منجزة</span>
+                      <span>${summary.delayed} متأخرة</span>
+                    </div>
+                  </div>
+                  <div class="entity-tag-stack">
+                    <span class="tag ${summary.tone}">${summary.label}</span>
+                    <span class="tag info">${summary.percent}% إنجاز</span>
+                  </div>
+                </summary>
+                <div class="workspace-card-shell">
+                  <p class="muted">${meeting.summary}</p>
+                  ${canEditMeeting(meeting, user) ? `<div class="inline-actions"><button class="btn secondary meeting-edit" data-meeting-id="${meeting.id}">تعديل الاجتماع</button></div>` : ""}
+                  <div class="entity-kpi-grid workspace-kpi-grid">
+                    <div class="report-mini-kpi">
+                      <span>إجمالي المهام</span>
+                      <strong>${summary.total}</strong>
+                    </div>
+                    <div class="report-mini-kpi">
+                      <span>قيد التنفيذ</span>
+                      <strong>${summary.inProgress}</strong>
+                    </div>
+                    <div class="report-mini-kpi">
+                      <span>منجزة</span>
+                      <strong>${summary.completed}</strong>
+                    </div>
+                    <div class="report-mini-kpi">
+                      <span>متأخرة</span>
+                      <strong>${summary.delayed}</strong>
+                    </div>
+                  </div>
+                  <div class="progress workspace-progress"><span style="width:${summary.percent}%"></span></div>
+                  <div class="workspace-card-grid">
+                    ${meeting.tasks.map((task) => `
+                      <div class="detail-card workspace-task-card">
+                        <div class="record-top">
+                          <div>
+                            <strong>${task.title}</strong>
+                            <div class="record-meta">${task.assignee} | الأولوية ${task.priority}</div>
+                          </div>
+                          <span class="tag ${getMeetingTaskTone(task.status)}">${task.status}</span>
+                        </div>
+                        ${getMeetingActions(meeting, task, user).length ? `<div class="inline-actions">${getMeetingActions(meeting, task, user).map((action) => `<button class="btn primary meeting-action" data-meeting-id="${meeting.id}" data-task-id="${task.id}" data-status="${action.nextStatus}">${action.label}</button>`).join("")}</div>` : `<div class="detail-note">لا توجد إجراءات إضافية متاحة لهذا الحساب على هذه المهمة.</div>`}
+                      </div>
+                    `).join("")}
+                  </div>
+                  ${(meeting.workflowHistory || []).length ? `
+                    <details class="compact-disclosure workspace-subrecord">
+                      <summary>
+                        <strong>سجل الاجتماع</strong>
+                        <span class="tag info">${Math.min((meeting.workflowHistory || []).length, 4)} آخر حركات</span>
+                      </summary>
+                      <div class="detail-list">
+                        ${meeting.workflowHistory.slice(0, 4).map((item) => `<div class="timeline-entry"><strong>${item.action}</strong><span>${item.actor}</span><span>${item.at}</span></div>`).join("")}
+                      </div>
+                    </details>
+                  ` : ""}
+                </div>
+              </details>
+            `;
+          }).join("") || `<div class="panel empty">لا توجد اجتماعات ضمن هذه الفلاتر.</div>`}
+        </div>
+      </div>
     </section>
   `;
 }
 
 function renderPlansPage(user) {
-  const plans = getVisiblePlans(user);
-  const editingPlan = plans.find((item) => item.id === state.editingPlanId) || null;
+  const visiblePlans = getVisiblePlans(user);
+  const plans = getFilteredPlans(user);
+  const editingPlan = visiblePlans.find((item) => item.id === state.editingPlanId) || null;
+  const completedPlans = plans.filter((plan) => plan.status === "منجز").length;
+  const delayedPlans = plans.filter((plan) => plan.status === "متأخرة").length;
+  const averageProgress = plans.length ? Math.round(plans.reduce((sum, plan) => sum + Number(plan.progress || 0), 0) / plans.length) : 0;
   return `
     <section class="panel">
       <div class="topbar">
@@ -3560,6 +3839,24 @@ function renderPlansPage(user) {
           <span class="tag info">الخطط</span>
           <h1 class="page-title">الخطط التشغيلية ومؤشرات الأداء</h1>
           <p class="muted">ربط الخطط بالمستهدفات والمؤشرات ونسب الإنجاز الفصلية والسنوية.</p>
+        </div>
+      </div>
+      <div class="entity-overview-strip workspace-overview-strip">
+        <div class="report-mini-kpi">
+          <span>الخطط المعروضة</span>
+          <strong>${plans.length}</strong>
+        </div>
+        <div class="report-mini-kpi">
+          <span>متوسط الإنجاز</span>
+          <strong>${averageProgress}%</strong>
+        </div>
+        <div class="report-mini-kpi">
+          <span>الخطط المنجزة</span>
+          <strong>${completedPlans}</strong>
+        </div>
+        <div class="report-mini-kpi">
+          <span>الخطط المتأخرة</span>
+          <strong>${delayedPlans}</strong>
         </div>
       </div>
     </section>
@@ -3609,30 +3906,117 @@ function renderPlansPage(user) {
           </form>
         </div>
       ` : ""}
-      ${plans.map((plan) => `
-        <div class="panel">
-          <div class="record-top">
-            <div>
-              <strong>${plan.title}</strong>
-              <div class="record-meta">${plan.period} | ${plan.kpi}</div>
-            </div>
-            <span class="tag ${getPlanStatusTone(plan.status)}">${plan.status}</span>
+      <div class="panel workspace-list-panel">
+        <div class="entity-section-head">
+          <div>
+            <div class="section-title">سجل الخطط</div>
+            <p class="mini">فرز سريع للخطط حسب الحالة أو نوع المالك، مع إبقاء التفاصيل وسجل المتابعة داخل البطاقة.</p>
           </div>
-          <div class="progress"><span style="width:${plan.progress}%"></span></div>
-          <p class="muted">نسبة الإنجاز الحالية: ${plan.progress}%</p>
-          <div class="detail-row"><span>المالك</span><span>${plan.ownerType === "mission" ? getMissionName(plan.ownerId) : getDepartmentName(plan.ownerId)}</span></div>
-          ${canEditPlan(plan, user) ? `<div class="inline-actions"><button class="btn secondary plan-edit" data-plan-id="${plan.id}">تعديل الخطة</button></div>` : ""}
-          ${getPlanActions(plan, user).length ? `<div class="inline-actions">${getPlanActions(plan, user).map((action) => `<button class="btn primary plan-action" data-plan-id="${plan.id}" data-action="${action.key}" data-delta="${action.delta || ""}" data-status="${action.status || ""}" data-progress="${action.progress || ""}">${action.label}</button>`).join("")}</div>` : ""}
-          ${(plan.workflowHistory || []).length ? `
-            <div class="detail-card">
-              <div class="section-title">سجل الخطة</div>
-              <div class="detail-list">
-                ${plan.workflowHistory.slice(0, 4).map((item) => `<div class="timeline-entry"><strong>${item.action}</strong><span>${item.actor}</span><span>${item.at}</span></div>`).join("")}
-              </div>
-            </div>
-          ` : ""}
+          <span class="tag ${delayedPlans ? "danger" : "info"}">${delayedPlans ? `${delayedPlans} خطط متأخرة` : `${completedPlans} خطط منجزة`}</span>
         </div>
-      `).join("") || `<div class="panel empty">لا توجد خطط في نطاق هذا الحساب.</div>`}
+        <div class="report-filter-bar workspace-filter-bar">
+          <label class="field">
+            <span>البحث</span>
+            <input id="plan-search" type="search" value="${state.planSearch || ""}" placeholder="ابحث بعنوان الخطة أو المؤشر أو الجهة المالكة">
+          </label>
+          <label class="field">
+            <span>الحالة</span>
+            <select id="plan-status-filter">
+              <option value="all" ${state.planStatusFilter === "all" ? "selected" : ""}>جميع الحالات</option>
+              <option value="قيد التنفيذ" ${state.planStatusFilter === "قيد التنفيذ" ? "selected" : ""}>قيد التنفيذ</option>
+              <option value="منجز" ${state.planStatusFilter === "منجز" ? "selected" : ""}>منجز</option>
+              <option value="متأخرة" ${state.planStatusFilter === "متأخرة" ? "selected" : ""}>متأخرة</option>
+            </select>
+          </label>
+          ${(user.role === "planning" || user.role === "admin") ? `
+            <label class="field">
+              <span>نوع المالك</span>
+              <select id="plan-owner-filter">
+                <option value="all" ${state.planOwnerFilter === "all" ? "selected" : ""}>الكل</option>
+                <option value="mission" ${state.planOwnerFilter === "mission" ? "selected" : ""}>بعثات</option>
+                <option value="department" ${state.planOwnerFilter === "department" ? "selected" : ""}>دوائر</option>
+              </select>
+            </label>
+          ` : `
+            <div class="report-mini-kpi">
+              <span>النطاق</span>
+              <strong>${user.role === "mission" ? "بعثة" : user.role === "department" ? "دائرة" : "وزارة"}</strong>
+            </div>
+          `}
+          <div class="report-mini-kpi">
+            <span>النتائج</span>
+            <strong>${plans.length}</strong>
+          </div>
+        </div>
+        <div class="workspace-record-stack">
+          ${plans.map((plan) => `
+            <details class="compact-disclosure workspace-record-card" ${plans.length <= 2 ? "open" : ""}>
+              <summary>
+                <div>
+                  <strong>${plan.title}</strong>
+                  <div class="workspace-summary-meta">
+                    <span>${getPlanOwnerLabel(plan)}</span>
+                    <span>${plan.period}</span>
+                    <span>${plan.kpi}</span>
+                  </div>
+                </div>
+                <div class="entity-tag-stack">
+                  <span class="tag ${getPlanStatusTone(plan.status)}">${plan.status}</span>
+                  <span class="tag info">${plan.progress}%</span>
+                </div>
+              </summary>
+              <div class="workspace-card-shell">
+                <div class="entity-kpi-grid workspace-kpi-grid">
+                  <div class="report-mini-kpi">
+                    <span>نسبة الإنجاز</span>
+                    <strong>${plan.progress}%</strong>
+                  </div>
+                  <div class="report-mini-kpi">
+                    <span>نوع المالك</span>
+                    <strong>${plan.ownerType === "mission" ? "بعثة" : "دائرة"}</strong>
+                  </div>
+                  <div class="report-mini-kpi">
+                    <span>الفترة</span>
+                    <strong>${plan.period}</strong>
+                  </div>
+                  <div class="report-mini-kpi">
+                    <span>الحالة</span>
+                    <strong>${plan.status}</strong>
+                  </div>
+                </div>
+                <div class="progress workspace-progress"><span style="width:${plan.progress}%"></span></div>
+                <div class="workspace-card-grid">
+                  <div class="detail-card">
+                    <div class="section-title">مرجع الخطة</div>
+                    <div class="detail-list">
+                      <div class="detail-row"><span>المالك</span><span>${getPlanOwnerLabel(plan)}</span></div>
+                      <div class="detail-row"><span>مؤشر الأداء</span><span>${plan.kpi}</span></div>
+                      <div class="detail-row"><span>الفترة</span><span>${plan.period}</span></div>
+                      <div class="detail-row"><span>الوضع الحالي</span><span>${plan.status}</span></div>
+                    </div>
+                  </div>
+                  <div class="detail-card">
+                    <div class="section-title">إجراءات سريعة</div>
+                    ${canEditPlan(plan, user) ? `<div class="inline-actions"><button class="btn secondary plan-edit" data-plan-id="${plan.id}">تعديل الخطة</button></div>` : ""}
+                    ${getPlanActions(plan, user).length ? `<div class="inline-actions">${getPlanActions(plan, user).map((action) => `<button class="btn primary plan-action" data-plan-id="${plan.id}" data-action="${action.key}" data-delta="${action.delta || ""}" data-status="${action.status || ""}" data-progress="${action.progress || ""}">${action.label}</button>`).join("")}</div>` : `<div class="detail-note">لا توجد إجراءات متاحة لهذا الحساب على هذه الخطة.</div>`}
+                  </div>
+                </div>
+                ${(plan.workflowHistory || []).length ? `
+                  <details class="compact-disclosure workspace-subrecord">
+                    <summary>
+                      <strong>سجل الخطة</strong>
+                      <span class="tag info">${Math.min((plan.workflowHistory || []).length, 4)} آخر حركات</span>
+                    </summary>
+                    <div class="detail-list">
+                      ${plan.workflowHistory.slice(0, 4).map((item) => `<div class="timeline-entry"><strong>${item.action}</strong><span>${item.actor}</span><span>${item.at}</span></div>`).join("")}
+                    </div>
+                  </details>
+                ` : ""}
+              </div>
+            </details>
+          `).join("") || `<div class="panel empty">لا توجد خطط ضمن هذه الفلاتر.</div>`}
+        </div>
+      </div>
     </section>
   `;
 }
@@ -4893,6 +5277,74 @@ function bindEvents() {
   if (managementDepartmentFilter) {
     managementDepartmentFilter.addEventListener("change", () => {
       state.managementDepartmentFilter = managementDepartmentFilter.value;
+      saveState();
+      renderApp();
+    });
+  }
+
+  const meetingSearch = document.getElementById("meeting-search");
+  if (meetingSearch) {
+    const applyMeetingSearch = () => {
+      state.meetingSearch = meetingSearch.value;
+      saveState();
+      renderApp();
+    };
+    meetingSearch.addEventListener("change", applyMeetingSearch);
+    meetingSearch.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        applyMeetingSearch();
+      }
+    });
+  }
+
+  const meetingDepartmentFilter = document.getElementById("meeting-department-filter");
+  if (meetingDepartmentFilter) {
+    meetingDepartmentFilter.addEventListener("change", () => {
+      state.meetingDepartmentFilter = meetingDepartmentFilter.value;
+      saveState();
+      renderApp();
+    });
+  }
+
+  const meetingStatusFilter = document.getElementById("meeting-status-filter");
+  if (meetingStatusFilter) {
+    meetingStatusFilter.addEventListener("change", () => {
+      state.meetingStatusFilter = meetingStatusFilter.value;
+      saveState();
+      renderApp();
+    });
+  }
+
+  const planSearch = document.getElementById("plan-search");
+  if (planSearch) {
+    const applyPlanSearch = () => {
+      state.planSearch = planSearch.value;
+      saveState();
+      renderApp();
+    };
+    planSearch.addEventListener("change", applyPlanSearch);
+    planSearch.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        applyPlanSearch();
+      }
+    });
+  }
+
+  const planStatusFilter = document.getElementById("plan-status-filter");
+  if (planStatusFilter) {
+    planStatusFilter.addEventListener("change", () => {
+      state.planStatusFilter = planStatusFilter.value;
+      saveState();
+      renderApp();
+    });
+  }
+
+  const planOwnerFilter = document.getElementById("plan-owner-filter");
+  if (planOwnerFilter) {
+    planOwnerFilter.addEventListener("change", () => {
+      state.planOwnerFilter = planOwnerFilter.value;
       saveState();
       renderApp();
     });

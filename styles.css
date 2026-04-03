@@ -738,7 +738,9 @@ textarea {
 .entity-record-stack,
 .entity-group-stack,
 .entity-compact-list,
-.entity-inline-stack {
+.entity-inline-stack,
+.workspace-record-stack,
+.workspace-note-grid {
   display: grid;
   gap: 14px;
 }
@@ -804,6 +806,69 @@ textarea {
 .management-record-card .entity-disclosure-grid,
 .management-record-card .entity-group-grid {
   margin-top: 2px;
+}
+
+.workspace-overview-strip {
+  margin-top: 18px;
+}
+
+.workspace-list-panel {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+
+.workspace-filter-bar {
+  margin: 0;
+}
+
+.workspace-record-card,
+.workspace-hero-card {
+  background:
+    linear-gradient(135deg, rgba(15, 118, 110, 0.05), rgba(255, 255, 255, 0.84)),
+    rgba(255, 255, 255, 0.74);
+}
+
+.workspace-card-shell {
+  display: grid;
+  gap: 16px;
+}
+
+.workspace-summary-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 0.93rem;
+}
+
+.workspace-card-grid,
+.workspace-note-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.workspace-kpi-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.workspace-task-card {
+  display: grid;
+  gap: 12px;
+}
+
+.workspace-subrecord {
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.workspace-progress {
+  margin-top: -2px;
+}
+
+.workspace-metric-grid {
+  margin-top: 16px;
 }
 
 .report-detail-hero {
@@ -1166,6 +1231,8 @@ textarea {
   .entity-overview-strip,
   .entity-disclosure-grid,
   .entity-group-grid,
+  .workspace-card-grid,
+  .workspace-kpi-grid,
   .entity-kpi-grid,
   .circular-kpi-strip {
     grid-template-columns: 1fr;
