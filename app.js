@@ -3010,6 +3010,11 @@ function renderSystem(user) {
     label: labels[view],
     badge: getViewBadge(view, user)
   }));
+  const activeNavItem = navItems.find((item) => item.key === state.activeView) || navItems[0] || {
+    key: "dashboard",
+    label: "لوحة القيادة",
+    badge: ""
+  };
   return `
     <div class="page-shell">
       ${renderAlerts()}
@@ -3026,6 +3031,29 @@ function renderSystem(user) {
             <span class="mini">المسار الحالي</span>
             <strong>${labels[state.activeView] || "لوحة القيادة"}</strong>
             <p class="detail-note">اختر الوحدة المناسبة من القائمة، وستظل الصلاحيات ونطاق البيانات منضبطين بحسب الدور الحالي.</p>
+          </div>
+          <div class="mobile-nav-card">
+            <details class="mobile-nav-panel">
+              <summary class="mobile-nav-summary">
+                <div class="mobile-nav-summary-main">
+                  <span class="mini">التنقل بين الوحدات</span>
+                  <div class="mobile-nav-summary-row">
+                    <strong>${activeNavItem.label}</strong>
+                    ${activeNavItem.badge ? `<span class="nav-badge">${activeNavItem.badge}</span>` : ""}
+                  </div>
+                  <p class="detail-note">افتح هذه البطاقة للوصول السريع إلى الوحدات من دون تمرير جانبي.</p>
+                </div>
+                <span class="mobile-nav-summary-action">عرض الوحدات</span>
+              </summary>
+              <div class="mobile-nav-grid">
+                ${navItems.map((item) => `
+                  <button class="nav-item mobile-nav-item ${state.activeView === item.key ? "active" : ""}" data-view="${item.key}">
+                    <span>${item.label}</span>
+                    ${item.badge ? `<span class="nav-badge">${item.badge}</span>` : ""}
+                  </button>
+                `).join("")}
+              </div>
+            </details>
           </div>
           <div class="menu-list">
             ${navItems.map((item) => `

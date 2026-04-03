@@ -443,6 +443,83 @@ textarea {
   background: rgba(255, 255, 255, 0.74);
 }
 
+.mobile-nav-card {
+  display: none;
+}
+
+.mobile-nav-panel {
+  border-radius: 22px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.78);
+  overflow: hidden;
+}
+
+.mobile-nav-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 16px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.mobile-nav-summary::-webkit-details-marker {
+  display: none;
+}
+
+.mobile-nav-summary::marker {
+  content: "";
+}
+
+.mobile-nav-summary-main {
+  display: grid;
+  gap: 6px;
+}
+
+.mobile-nav-summary-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.mobile-nav-summary-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.mobile-nav-summary-action::after {
+  content: "▾";
+  font-size: 0.9rem;
+  transition: transform 0.18s ease;
+}
+
+.mobile-nav-panel[open] .mobile-nav-summary-action::after {
+  transform: rotate(180deg);
+}
+
+.mobile-nav-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 0 16px 16px;
+  border-top: 1px solid rgba(22, 40, 46, 0.08);
+}
+
+.mobile-nav-item {
+  width: 100%;
+  min-width: 0;
+  transform: none !important;
+}
+
 .runtime-chip {
   margin-top: 12px;
   width: fit-content;
@@ -1417,18 +1494,12 @@ textarea {
     display: none;
   }
 
-  .menu-list {
-    display: flex;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    gap: 10px;
-    margin-top: 0;
-    padding-bottom: 6px;
+  .mobile-nav-card {
+    display: block;
   }
 
-  .nav-item {
-    flex: 0 0 auto;
-    min-width: 158px;
+  .menu-list {
+    display: none;
   }
 
   .sidebar-footer {
@@ -1483,7 +1554,16 @@ textarea {
     grid-template-columns: 1fr;
   }
 
-  .nav-item {
-    min-width: 144px;
+  .mobile-nav-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mobile-nav-summary {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .mobile-nav-summary-action {
+    width: fit-content;
   }
 }
