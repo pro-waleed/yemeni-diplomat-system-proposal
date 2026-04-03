@@ -35,6 +35,9 @@ jobs:
           node --check app.js
           node --check server/server.js
 
+      - name: Run smoke checks
+        run: node scripts/smoke-checks.js
+
   deploy:
     needs: validate
     environment:

@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node server/server.js",
     "start:server": "node server/server.js",
-    "check": "node --check app.js && node --check server/server.js"
+    "check": "node --check app.js && node --check server/server.js",
+    "smoke": "node scripts/smoke-checks.js"
   }
 }

@@ -1298,11 +1298,13 @@ function getMeetingActions(meeting, task, user = getSessionUser()) {
   if (!user || !task) return [];
   const actions = [];
   const canUpdateTask = canUpdateMeetingTask(meeting, task, user);
-  if (canUpdateTask && task.status !== "منجز") {
+  if (canUpdateTask && task.status !== "قيد التنفيذ" && task.status !== "منجز") {
     actions.push({ key: "start-task", label: "بدء التنفيذ", nextStatus: "قيد التنفيذ" });
+  }
+  if (canUpdateTask && task.status !== "منجز") {
     actions.push({ key: "complete-task", label: "إنجاز المهمة", nextStatus: "منجز" });
   }
-  if (canUpdateTask && task.status !== "ملغى") {
+  if (canUpdateTask && task.status !== "ملغى" && task.status !== "منجز") {
     actions.push({ key: "delay-task", label: "وضع كمُتأخر", nextStatus: "متأخر" });
   }
   return actions;
@@ -2638,7 +2640,10 @@ function getAllowedReportActions(report, user = getSessionUser()) {
     actions.push({ key: "review", label: "بدء مراجعة الدائرة", nextStage: "قيد مراجعة الدائرة" });
     actions.push({ key: "return", label: "إعادة للبعثة", nextStage: "أعيد للبعثة للاستكمال" });
   }
-  if ((user.role === "planning" || user.role === "admin") && (report.workflowStage === "قيد مراجعة الدائرة" || report.workflowStage === "مرفوع من البعثة")) {
+  if (user.role === "department" && user.departmentId === report.departmentId && report.workflowStage === "قيد مراجعة الدائرة") {
+    actions.push({ key: "return", label: "إعادة للبعثة", nextStage: "أعيد للبعثة للاستكمال" });
+  }
+  if ((user.role === "planning" || user.role === "admin") && report.workflowStage === "قيد مراجعة الدائرة") {
     actions.push({ key: "approve", label: "اعتماد من التخطيط", nextStage: "معتمد من التخطيط" });
     actions.push({ key: "return", label: "إعادة للبعثة", nextStage: "أعيد للبعثة للاستكمال" });
   }
@@ -2650,7 +2655,9 @@ function getAllowedReportActions(report, user = getSessionUser()) {
 
 function canEditReport(report, user = getSessionUser()) {
   if (!report || !user) return false;
-  return user.role === "mission" && user.missionId === report.missionId && report.workflowStage !== "مغلق ومؤرشف";
+  return user.role === "mission"
+    && user.missionId === report.missionId
+    && (report.workflowStage === "مرفوع من البعثة" || report.workflowStage === "أعيد للبعثة للاستكمال");
 }
 
 function canEditCircular(circular, user = getSessionUser()) {
@@ -6407,6 +6414,13 @@ function handleReportSubmit(event) {
   }
   const form = new FormData(event.currentTarget);
   const editingReport = state.reports.find((item) => item.id === state.editingReportId && item.missionId === user.missionId);
+  if (editingReport && !canEditReport(editingReport, user)) {
+    addAlert("danger", "تعذر تعديل التقرير", "لا يمكن تعديل التقرير بعد دخوله مرحلة المراجعة أو بعد اعتماده، ويجب أن يمر عبر المسار المؤسسي المعتمد.");
+    state.editingReportId = null;
+    saveState();
+    renderApp();
+    return;
+  }
   const previousRequestId = editingReport?.requestId || "";
   const requestId = String(form.get("requestId") || "");
   const linkedRequest = state.reportRequests.find((item) => item.id === requestId);
@@ -6576,7 +6590,12 @@ function handleRequestSubmit(event) {
   const priority = String(form.get("priority") || "متوسطة");
   const normalizedPriority = ["عالية", "متوسطة", "عادية"].includes(priority) ? priority : "متوسطة";
   const targetMissionIds = form.getAll("missionId");
-  if (!targetMissionIds.length) return;
+  if (!targetMissionIds.length) {
+    addAlert("danger", "تعذر إصدار الطلب", "يجب تحديد بعثة واحدة على الأقل قبل إصدار طلب التقرير.");
+    saveState();
+    renderApp();
+    return;
+  }
   if (!canIssueReportRequest(user, requestFamily)) {
     addAlert("danger", "تعذر إصدار الطلب", "لا تملك هذه الجهة صلاحية إصدار هذا النوع من طلبات التقارير.");
     saveState();
@@ -6903,7 +6922,19 @@ function handlePlanAction(planId, actionKey, deltaValue, nextStatus, progressVal
   const ownMissionPlan = user.role === "mission" && plan.ownerType === "mission" && plan.ownerId === user.missionId;
   const ownDepartmentPlan = user.role === "department" && plan.ownerType === "department" && plan.ownerId === user.departmentId;
   const central = user.role === "planning" || user.role === "admin";
-  if (!ownMissionPlan && !ownDepartmentPlan && !central) return;
+  if (!ownMissionPlan && !ownDepartmentPlan && !central) {
+    addAlert("danger", "تعذر تحديث الخطة", "لا تملك هذه الجهة صلاحية تعديل هذه الخطة.");
+    saveState();
+    renderApp();
+    return;
+  }
+  const allowedAction = getPlanActions(plan, user).find((action) => action.key === actionKey);
+  if (!allowedAction) {
+    addAlert("danger", "تعذر تحديث الخطة", "الإجراء المطلوب غير متاح في الحالة الحالية لهذه الخطة.");
+    saveState();
+    renderApp();
+    return;
+  }
 
   let actionLabel = "تحديث الخطة";
   if (actionKey === "progress-10") {
@@ -7138,6 +7169,13 @@ function handleMeetingTaskAction(meetingId, taskId, nextStatus) {
   if (!task) return;
   if (!canUpdateMeetingTask(meeting, task, user)) {
     addAlert("danger", "تعذر تحديث المهمة", "لا تملك هذه الجهة صلاحية تعديل هذه المهمة.");
+    saveState();
+    renderApp();
+    return;
+  }
+  const allowedAction = getMeetingActions(meeting, task, user).find((action) => action.nextStatus === nextStatus);
+  if (!allowedAction) {
+    addAlert("danger", "تعذر تحديث المهمة", "الإجراء المطلوب غير متاح لهذه المهمة في حالتها الحالية.");
     saveState();
     renderApp();
     return;
