@@ -631,6 +631,20 @@ textarea {
   gap: 14px;
 }
 
+.report-registry-strip {
+  margin: 0 0 16px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.report-registry-group {
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.report-registry-group .report-record-grid,
+.report-detail-body {
+  margin-top: 14px;
+}
+
 .report-filter-bar {
   display: grid;
   gap: 12px;
@@ -752,6 +766,14 @@ textarea {
 
 .report-detail-stack {
   gap: 16px;
+}
+
+.report-detail-section {
+  background: rgba(255, 255, 255, 0.74);
+}
+
+.report-detail-summary-grid {
+  margin-bottom: 12px;
 }
 
 .entity-profile-card {

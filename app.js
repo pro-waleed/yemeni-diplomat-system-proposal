@@ -1977,6 +1977,77 @@ function getRegistryReports(user = getSessionUser()) {
   return filtered;
 }
 
+function getReportRegistryBucket(report) {
+  if (report.workflowStage === "أعيد للبعثة للاستكمال") return "attention";
+  if (report.workflowStage === "مرفوع من البعثة" || report.workflowStage === "قيد مراجعة الدائرة") return "attention";
+  if (report.workflowStage === "معتمد من التخطيط") return "approved";
+  if (report.workflowStage === "مغلق ومؤرشف") return "archived";
+  return "other";
+}
+
+function getReportRegistryGroups(reports) {
+  const groups = [
+    {
+      key: "attention",
+      label: "تقارير قيد المتابعة",
+      description: "تشمل التقارير المرفوعة حديثًا أو قيد مراجعة الدائرة أو المعادة للاستكمال.",
+      tone: "warning",
+      items: reports.filter((report) => getReportRegistryBucket(report) === "attention")
+    },
+    {
+      key: "approved",
+      label: "تقارير معتمدة",
+      description: "تقارير اعتمدتها إدارة التخطيط وهي جاهزة للرجوع إليها مؤسسيًا.",
+      tone: "success",
+      items: reports.filter((report) => getReportRegistryBucket(report) === "approved")
+    },
+    {
+      key: "archived",
+      label: "تقارير مؤرشفة",
+      description: "تقارير أغلقت وأرشفت نهائيًا وتبقى للرجوع المرجعي.",
+      tone: "info",
+      items: reports.filter((report) => getReportRegistryBucket(report) === "archived")
+    }
+  ];
+  const other = reports.filter((report) => getReportRegistryBucket(report) === "other");
+  if (other.length) {
+    groups.push({
+      key: "other",
+      label: "تقارير أخرى",
+      description: "عناصر لا تندرج ضمن المجموعات الرئيسية الحالية.",
+      tone: "info",
+      items: other
+    });
+  }
+  return groups;
+}
+
+function getReportReadinessSummary(report) {
+  const family = inferReportFamily(report);
+  if (family === "periodic") {
+    const completion = getPeriodicCompletion(report);
+    return {
+      label: "جاهزية التقرير الزمني",
+      percent: completion.percent,
+      detail: `${completion.completed}/${completion.total} تبويبات مكتملة`
+    };
+  }
+  if (family === "thematic") {
+    const completion = getThematicCompletion(report);
+    return {
+      label: "جاهزية التقرير الموضوعي",
+      percent: completion.percent,
+      detail: `${completion.completed}/${completion.total} محاور مكتملة`
+    };
+  }
+  const completion = getActivityCompletion(report);
+  return {
+    label: "جاهزية تقرير النشاط",
+    percent: completion.percent,
+    detail: `${completion.completed}/${completion.total} محاور مكتملة`
+  };
+}
+
 function getMissionReportProfile(missionId) {
   const reports = state.reports.filter((report) => report.missionId === missionId);
   const approved = reports.filter((report) => report.workflowStage === "معتمد من التخطيط" || report.workflowStage === "مغلق ومؤرشف");
@@ -2262,11 +2333,12 @@ function renderReportsHero(reports, filteredReports, user) {
 
 function renderReportRecordCard(report, selected) {
   const quality = getReportQualitySummary(report);
+  const readiness = getReportReadinessSummary(report);
   const accent = inferReportFamily(report) === "periodic"
     ? getPeriodicCoverageLabel(report)
     : inferReportFamily(report) === "thematic"
-      ? (report.thematicTrack || "مسار موضوعي")
-      : (report.activityCategory || "نشاط عام");
+        ? (report.thematicTrack || "مسار موضوعي")
+        : (report.activityCategory || "نشاط عام");
   return `
     <article class="report-record-card ${selected && selected.id === report.id ? "selected" : ""}" data-report-id="${report.id}">
       <div class="record-top">
@@ -2276,15 +2348,19 @@ function renderReportRecordCard(report, selected) {
         </div>
         <span class="tag ${stageTone(report.workflowStage)}">${report.workflowStage}</span>
       </div>
-      <p class="record-desc">${report.summary}</p>
-      <div class="record-meta">${accent}</div>
-      <div class="report-record-footer">
-        <span class="tag info">${getReportOriginLabel(report)}</span>
-        <span class="mini">${report.submittedOn ? `رفع في ${formatDate(report.submittedOn)}` : "لم يسجل تاريخ رفع"}</span>
-        <span class="mini">${quality.average ? `جودة ${quality.average}/5` : "بانتظار التقييم"}</span>
-      </div>
-    </article>
-  `;
+        <p class="record-desc">${report.summary}</p>
+        <div class="record-meta">${accent}</div>
+        <div class="request-chip-row">
+          <span class="tag info">${getReportOriginLabel(report)}</span>
+          <span class="tag ${readiness.percent === 100 ? "success" : "warning"}">${readiness.percent}%</span>
+        </div>
+        <div class="report-record-footer">
+          <span class="mini">${report.submittedOn ? `رفع في ${formatDate(report.submittedOn)}` : "لم يسجل تاريخ رفع"}</span>
+          <span class="mini">${quality.average ? `جودة ${quality.average}/5` : "بانتظار التقييم"}</span>
+          <span class="mini">${readiness.detail}</span>
+        </div>
+      </article>
+    `;
 }
 
 function renderPeriodicDetailContent(report, tabKey) {
@@ -2365,11 +2441,136 @@ function renderPeriodicDetailContent(report, tabKey) {
     `;
   }
   return `
-    <div class="detail-card">
-      <div class="section-title">الجالية اليمنية في بلد الاعتماد</div>
-      <p class="detail-note"><strong>ملاحظات عامة:</strong> ${report.communityUpdate || "لا توجد بيانات مدخلة حتى الآن."}</p>
-      <p class="detail-note"><strong>إحصاءات عامة:</strong> ${report.communityStats || "لا توجد بيانات إحصائية مدخلة حتى الآن."}</p>
-    </div>
+      <div class="detail-card">
+        <div class="section-title">الجالية اليمنية في بلد الاعتماد</div>
+        <p class="detail-note"><strong>ملاحظات عامة:</strong> ${report.communityUpdate || "لا توجد بيانات مدخلة حتى الآن."}</p>
+        <p class="detail-note"><strong>إحصاءات عامة:</strong> ${report.communityStats || "لا توجد بيانات إحصائية مدخلة حتى الآن."}</p>
+      </div>
+    `;
+}
+
+function renderReportFamilyWorkspace(report) {
+  const family = inferReportFamily(report);
+  if (family === "periodic") {
+    const periodicTab = state.periodicReportTab || "bilateral";
+    const completion = getPeriodicCompletion(report);
+    return `
+      <details class="compact-disclosure report-detail-section" open>
+        <summary>
+          <div>
+            <strong>ملف التقرير الزمني</strong>
+            <div class="entity-summary-meta">
+              <span>${getPeriodicTypeGuidance(report.type).label}</span>
+              <span>${getPeriodicCoverageLabel(report)}</span>
+            </div>
+          </div>
+          <div class="entity-tag-stack">
+            <span class="tag ${completion.percent === 100 ? "success" : "warning"}">${completion.percent}%</span>
+          </div>
+        </summary>
+        <div class="report-detail-body">
+          <div class="reports-executive-grid report-detail-summary-grid">
+            <div class="detail-card">
+              <div class="section-title">نطاق التغطية</div>
+              <p class="detail-note">${getPeriodicCoverageLabel(report)}</p>
+            </div>
+            <div class="detail-card">
+              <div class="section-title">جاهزية الملف الزمني</div>
+              <p class="detail-note">${completion.completed}/${completion.total} تبويبات مكتملة</p>
+            </div>
+            <div class="detail-card">
+              <div class="section-title">المؤشرات الثنائية</div>
+              <p class="detail-note">${getCompletedIndicatorCount(report.bilateralIndicators)}/${BILATERAL_INDICATOR_FIELDS.length} مؤشرات مكتملة</p>
+            </div>
+          </div>
+          <div class="tab-strip">
+            ${PERIODIC_REPORT_TABS.map((tab) => `<button class="tab-chip ${periodicTab === tab.key ? "active" : ""}" type="button" data-periodic-tab="${tab.key}">${tab.label}</button>`).join("")}
+          </div>
+          ${renderPeriodicDetailContent(report, periodicTab)}
+        </div>
+      </details>
+    `;
+  }
+  if (family === "thematic") {
+    const completion = getThematicCompletion(report);
+    return `
+      <details class="compact-disclosure report-detail-section" open>
+        <summary>
+          <div>
+            <strong>محاور التقرير الموضوعي</strong>
+            <div class="entity-summary-meta">
+              <span>${completion.config.title}</span>
+              <span>${report.thematicTrack || "مسار موضوعي"}</span>
+            </div>
+          </div>
+          <div class="entity-tag-stack">
+            <span class="tag ${completion.percent === 100 ? "success" : "warning"}">${completion.percent}%</span>
+          </div>
+        </summary>
+        <div class="report-detail-body detail-list">
+          <div class="reports-executive-grid report-detail-summary-grid">
+            <div class="detail-card">
+              <div class="section-title">${completion.config.labels.situation}</div>
+              <p class="detail-note">${report.thematicSituation || "لا توجد بيانات مدخلة حتى الآن."}</p>
+            </div>
+            <div class="detail-card">
+              <div class="section-title">${completion.config.labels.implications}</div>
+              <p class="detail-note">${report.thematicImplications || "لا توجد بيانات مدخلة حتى الآن."}</p>
+            </div>
+            <div class="detail-card">
+              <div class="section-title">${completion.config.labels.recommendations}</div>
+              <p class="detail-note">${report.thematicRecommendations || "لا توجد بيانات مدخلة حتى الآن."}</p>
+            </div>
+          </div>
+          <div class="detail-card">
+            <div class="section-title">تفاصيل التحليل الموضوعي</div>
+            <div class="detail-list">
+              <div class="detail-row"><span>${completion.config.labels.developments}</span><span>${report.thematicDevelopments || "لا يوجد"}</span></div>
+              <div class="detail-row"><span>${completion.config.labels.stakeholders}</span><span>${report.thematicStakeholders || "لا يوجد"}</span></div>
+              <div class="detail-row"><span>${completion.config.labels.risks}</span><span>${report.thematicRisks || "لا يوجد"}</span></div>
+              <div class="detail-row"><span>${completion.config.labels.missionAction}</span><span>${report.thematicMissionAction || "لا يوجد"}</span></div>
+            </div>
+          </div>
+        </div>
+      </details>
+    `;
+  }
+  const completion = getActivityCompletion(report);
+  return `
+    <details class="compact-disclosure report-detail-section" open>
+      <summary>
+        <div>
+          <strong>ملف تقرير النشاط</strong>
+          <div class="entity-summary-meta">
+            <span>${report.activityCategory || "نشاط عام"}</span>
+            <span>${report.activityFollowupOwner || "لم يحدد مسؤول متابعة"}</span>
+          </div>
+        </div>
+        <div class="entity-tag-stack">
+          <span class="tag ${completion.percent === 100 ? "success" : "warning"}">${completion.percent}%</span>
+        </div>
+      </summary>
+      <div class="report-detail-body">
+        <div class="report-story-grid">
+          <div class="detail-card">
+            <div class="section-title">قبل الفعالية</div>
+            <p class="detail-note"><strong>مسار النشاط:</strong> ${report.activityCategory || "لا يوجد"}</p>
+            <p class="detail-note"><strong>الجهات المشاركة:</strong> ${report.activityPartners || "لا يوجد"}</p>
+            <p class="detail-note"><strong>الأهداف:</strong> ${report.beforeGoals || "لا توجد بيانات مدخلة حتى الآن."}</p>
+            <p class="detail-note"><strong>المتوقع:</strong> ${report.beforeExpected || "لا توجد بيانات مدخلة حتى الآن."}</p>
+          </div>
+          <div class="detail-card">
+            <div class="section-title">بعد الفعالية</div>
+            <p class="detail-note"><strong>المخرجات:</strong> ${report.activityOutputs || "لا يوجد"}</p>
+            <p class="detail-note"><strong>الصدى الإعلامي:</strong> ${report.activityMediaEcho || "لا يوجد"}</p>
+            <p class="detail-note"><strong>الأثر:</strong> ${report.activityDiplomaticImpact || "لا يوجد"}</p>
+            <p class="detail-note"><strong>النتائج:</strong> ${report.afterResults || "لا توجد بيانات مدخلة حتى الآن."}</p>
+            <p class="detail-note"><strong>التوصيات:</strong> ${report.afterRecommendations || "لا توجد بيانات مدخلة حتى الآن."}</p>
+            <p class="detail-note"><strong>مسؤول المتابعة:</strong> ${report.activityFollowupOwner || "لا يوجد"}</p>
+          </div>
+        </div>
+      </div>
+    </details>
   `;
 }
 
@@ -2979,6 +3180,7 @@ function renderReportsPage(user) {
   const reports = getVisibleReports(user);
   const filteredReports = getRegistryReports(user);
   const selected = filteredReports.find((item) => item.id === state.selectedReportId) || filteredReports[0] || null;
+  const groupedReports = getReportRegistryGroups(filteredReports);
   const missionOptions = [...new Map(reports.map((report) => [report.missionId, getMissionName(report.missionId)])).entries()];
   const stageOptions = [...new Set(reports.map((report) => report.workflowStage).filter(Boolean))];
   return `
@@ -2990,7 +3192,7 @@ function renderReportsPage(user) {
           <div class="report-registry-head">
             <div>
               <div class="section-title">سجل التقارير</div>
-              <p class="muted">اعرض التقارير بحسب العائلة الوظيفية ثم اختر التقرير المطلوب لاستعراض ملفه الكامل.</p>
+              <p class="muted">اعرض التقارير بحسب العائلة الوظيفية، ثم انتقل إلى المجموعة التشغيلية المناسبة بدل التمرير في قائمة طويلة واحدة.</p>
             </div>
             <span class="tag info">${filteredReports.length} تقرير</span>
           </div>
@@ -3026,8 +3228,43 @@ function renderReportsPage(user) {
               </select>
             </label>
           </div>
-          <div class="report-record-grid">
-            ${filteredReports.map((report) => renderReportRecordCard(report, selected)).join("") || `<div class="empty">لا توجد تقارير ضمن هذا التبويب.</div>`}
+          <div class="entity-overview-strip report-registry-strip">
+            <div class="report-mini-kpi">
+              <span>قيد المتابعة</span>
+              <strong>${groupedReports.find((group) => group.key === "attention")?.items.length || 0}</strong>
+            </div>
+            <div class="report-mini-kpi">
+              <span>معتمدة</span>
+              <strong>${groupedReports.find((group) => group.key === "approved")?.items.length || 0}</strong>
+            </div>
+            <div class="report-mini-kpi">
+              <span>مؤرشفة</span>
+              <strong>${groupedReports.find((group) => group.key === "archived")?.items.length || 0}</strong>
+            </div>
+            <div class="report-mini-kpi">
+              <span>النتائج المطابقة</span>
+              <strong>${filteredReports.length}</strong>
+            </div>
+          </div>
+          <div class="entity-record-stack">
+            ${groupedReports.map((group) => `
+              <details class="compact-disclosure report-registry-group" ${(group.key === "attention" && group.items.length) || group.items.some((item) => item.id === selected?.id) ? "open" : ""}>
+                <summary>
+                  <div>
+                    <strong>${group.label}</strong>
+                    <div class="entity-summary-meta">
+                      <span>${group.description}</span>
+                    </div>
+                  </div>
+                  <div class="entity-tag-stack">
+                    <span class="tag ${group.tone}">${group.items.length}</span>
+                  </div>
+                </summary>
+                <div class="report-record-grid">
+                  ${group.items.map((report) => renderReportRecordCard(report, selected)).join("") || `<div class="empty">لا توجد تقارير ضمن هذا القسم في العرض الحالي.</div>`}
+                </div>
+              </details>
+            `).join("") || `<div class="empty">لا توجد تقارير ضمن هذا التبويب.</div>`}
           </div>
         </div>
       </div>
@@ -3484,7 +3721,7 @@ function renderReportDetails(report, user) {
   const request = state.reportRequests.find((item) => item.id === report.requestId);
   const actions = getAllowedReportActions(report, user);
   const quality = getReportQualitySummary(report);
-  const periodicTab = state.periodicReportTab || "bilateral";
+  const readiness = getReportReadinessSummary(report);
   return `
     <div class="detail-list report-detail-stack">
       <div class="report-detail-hero">
@@ -3492,6 +3729,11 @@ function renderReportDetails(report, user) {
           <span class="tag info">${getReportFamilyLabel(report)}</span>
           <div class="section-title">${report.title}</div>
           <p class="detail-note">${report.summary}</p>
+          <div class="request-chip-row">
+            <span class="tag info">${getReportOriginLabel(report)}</span>
+            <span class="tag ${readiness.percent === 100 ? "success" : "warning"}">${readiness.label}: ${readiness.percent}%</span>
+            ${report.attachmentName ? `<span class="tag info">المرفق: ${report.attachmentName}</span>` : ""}
+          </div>
         </div>
         <div class="report-detail-kpis">
           <div class="report-mini-kpi">
@@ -3502,81 +3744,65 @@ function renderReportDetails(report, user) {
             <span>الجودة</span>
             <strong>${quality.average ? `${quality.average}/5` : "قيد التقييم"}</strong>
           </div>
-          <div class="report-mini-kpi">
-            <span>منشأ التقرير</span>
-            <strong>${getReportOriginLabel(report)}</strong>
+            <div class="report-mini-kpi">
+              <span>منشأ التقرير</span>
+              <strong>${getReportOriginLabel(report)}</strong>
+            </div>
           </div>
         </div>
-      </div>
-      <div class="report-summary-grid">
-        <div class="detail-card">
-          <div class="section-title">البيانات المرجعية</div>
-          <div class="detail-row"><span>البعثة</span><span>${getMissionName(report.missionId)}</span></div>
-          <div class="detail-row"><span>الدائرة</span><span>${getDepartmentName(report.departmentId)}</span></div>
-          <div class="detail-row"><span>نوع التقرير</span><span>${report.type}</span></div>
-          <div class="detail-row"><span>الطلب المرتبط</span><span>${request ? request.title : "لا يوجد"}</span></div>
-          ${report.submittedOn ? `<div class="detail-row"><span>تاريخ الرفع</span><span>${formatDate(report.submittedOn)}</span></div>` : ""}
+      <details class="compact-disclosure report-detail-section" open>
+        <summary>
+          <div>
+            <strong>البيانات المرجعية والجودة</strong>
+            <div class="entity-summary-meta">
+              <span>${getMissionName(report.missionId)}</span>
+              <span>${getDepartmentName(report.departmentId)}</span>
+            </div>
+          </div>
+          <div class="entity-tag-stack">
+            <span class="tag ${quality.average && Number(quality.average) >= 4 ? "success" : quality.average ? "warning" : "info"}">${quality.average ? `${quality.average}/5` : "قيد التقييم"}</span>
+          </div>
+        </summary>
+        <div class="report-detail-body">
+          <div class="report-summary-grid">
+            <div class="detail-card">
+              <div class="section-title">البيانات المرجعية</div>
+              <div class="detail-row"><span>البعثة</span><span>${getMissionName(report.missionId)}</span></div>
+              <div class="detail-row"><span>الدائرة</span><span>${getDepartmentName(report.departmentId)}</span></div>
+              <div class="detail-row"><span>نوع التقرير</span><span>${report.type}</span></div>
+              <div class="detail-row"><span>الطلب المرتبط</span><span>${request ? request.title : "لا يوجد"}</span></div>
+              ${report.submittedOn ? `<div class="detail-row"><span>تاريخ الرفع</span><span>${formatDate(report.submittedOn)}</span></div>` : ""}
+            </div>
+            <div class="detail-card">
+              <div class="section-title">مؤشرات الجودة</div>
+              <div class="detail-row"><span>الالتزام بالموعد</span><span>${quality.scores.timeliness ? `${quality.scores.timeliness}/5` : "بانتظار التقييم"}</span></div>
+              <div class="detail-row"><span>شمولية المحتوى</span><span>${quality.scores.completeness ? `${quality.scores.completeness}/5` : "بانتظار التقييم"}</span></div>
+              <div class="detail-row"><span>جودة التحليل</span><span>${quality.scores.analysis ? `${quality.scores.analysis}/5` : "بانتظار التقييم"}</span></div>
+              <p class="detail-note"><strong>ملاحظات المراجعة:</strong> ${report.reviewNotes || "لا توجد ملاحظات مراجعة حتى الآن."}</p>
+            </div>
+          </div>
         </div>
-        <div class="detail-card">
-          <div class="section-title">مؤشرات الجودة</div>
-          <div class="detail-row"><span>الالتزام بالموعد</span><span>${quality.scores.timeliness ? `${quality.scores.timeliness}/5` : "بانتظار التقييم"}</span></div>
-          <div class="detail-row"><span>شمولية المحتوى</span><span>${quality.scores.completeness ? `${quality.scores.completeness}/5` : "بانتظار التقييم"}</span></div>
-          <div class="detail-row"><span>جودة التحليل</span><span>${quality.scores.analysis ? `${quality.scores.analysis}/5` : "بانتظار التقييم"}</span></div>
-          <p class="detail-note"><strong>ملاحظات المراجعة:</strong> ${report.reviewNotes || "لا توجد ملاحظات مراجعة حتى الآن."}</p>
-        </div>
-      </div>
-      <div class="report-story-grid">
-        <div class="detail-card">
-          <div class="section-title">قبل الفعالية</div>
-          <p class="detail-note"><strong>مسار النشاط:</strong> ${report.activityCategory || "لا يوجد"}</p>
-          <p class="detail-note"><strong>الجهات المشاركة:</strong> ${report.activityPartners || "لا يوجد"}</p>
-          <p class="detail-note"><strong>الأهداف:</strong> ${report.beforeGoals}</p>
-          <p class="detail-note"><strong>المتوقع:</strong> ${report.beforeExpected}</p>
-        </div>
-        <div class="detail-card">
-          <div class="section-title">بعد الفعالية</div>
-          <p class="detail-note"><strong>المخرجات:</strong> ${report.activityOutputs || "لا يوجد"}</p>
-          <p class="detail-note"><strong>الصدى الإعلامي:</strong> ${report.activityMediaEcho || "لا يوجد"}</p>
-          <p class="detail-note"><strong>الأثر:</strong> ${report.activityDiplomaticImpact || "لا يوجد"}</p>
-          <p class="detail-note"><strong>النتائج:</strong> ${report.afterResults}</p>
-          <p class="detail-note"><strong>التوصيات:</strong> ${report.afterRecommendations}</p>
-          <p class="detail-note"><strong>مسؤول المتابعة:</strong> ${report.activityFollowupOwner || "لا يوجد"}</p>
-        </div>
-      </div>
+      </details>
+      ${renderReportFamilyWorkspace(report)}
       ${canEditReport(report, user) ? `
         <div class="detail-card">
           <div class="section-title">إجراءات سريعة</div>
           <div class="inline-actions"><button class="btn secondary report-edit" data-report-id="${report.id}">تعديل التقرير</button></div>
         </div>
       ` : ""}
-      ${inferReportFamily(report) === "periodic" ? `
-        <div class="detail-card">
-          <div class="section-title">ملف التقرير الزمني</div>
-          <div class="tab-strip">
-            ${PERIODIC_REPORT_TABS.map((tab) => `<button class="tab-chip ${periodicTab === tab.key ? "active" : ""}" type="button" data-periodic-tab="${tab.key}">${tab.label}</button>`).join("")}
+      <details class="compact-disclosure report-detail-section">
+        <summary>
+          <div>
+            <strong>سجل الاعتماد</strong>
+            <div class="entity-summary-meta">
+              <span>${report.workflowHistory.length} حركة مسجلة</span>
+            </div>
           </div>
-          ${renderPeriodicDetailContent(report, periodicTab)}
-        </div>
-      ` : ""}
-      ${inferReportFamily(report) === "thematic" ? `
-        <div class="detail-card">
-          <div class="section-title">محاور التقرير الموضوعي</div>
-          <div class="report-periodic-kpis">
-            <span class="tag info">${getThematicTrackConfig(report.thematicTrack || "سياسي").title}</span>
-            <span class="tag ${getThematicCompletion(report).percent === 100 ? "success" : "warning"}">جاهزية ${getThematicCompletion(report).percent}%</span>
+          <div class="entity-tag-stack">
+            <span class="tag info">${report.workflowHistory.length}</span>
           </div>
-          <p class="detail-note"><strong>${getThematicTrackConfig(report.thematicTrack || "سياسي").labels.situation}:</strong> ${report.thematicSituation || "لا يوجد"}</p>
-          <p class="detail-note"><strong>${getThematicTrackConfig(report.thematicTrack || "سياسي").labels.developments}:</strong> ${report.thematicDevelopments || "لا يوجد"}</p>
-          <p class="detail-note"><strong>${getThematicTrackConfig(report.thematicTrack || "سياسي").labels.stakeholders}:</strong> ${report.thematicStakeholders || "لا يوجد"}</p>
-          <p class="detail-note"><strong>${getThematicTrackConfig(report.thematicTrack || "سياسي").labels.implications}:</strong> ${report.thematicImplications || "لا يوجد"}</p>
-          <p class="detail-note"><strong>${getThematicTrackConfig(report.thematicTrack || "سياسي").labels.risks}:</strong> ${report.thematicRisks || "لا يوجد"}</p>
-          <p class="detail-note"><strong>${getThematicTrackConfig(report.thematicTrack || "سياسي").labels.missionAction}:</strong> ${report.thematicMissionAction || "لا يوجد"}</p>
-          <p class="detail-note"><strong>${getThematicTrackConfig(report.thematicTrack || "سياسي").labels.recommendations}:</strong> ${report.thematicRecommendations || "لا يوجد"}</p>
-        </div>
-      ` : ""}
-      <div class="detail-card">
-        <div class="section-title">سجل الاعتماد</div>
-        <div class="detail-list">
+        </summary>
+        <div class="report-detail-body detail-list">
           ${report.workflowHistory.map((item) => `
             <div class="timeline-entry">
               <strong>${item.action}</strong>
@@ -3586,7 +3812,7 @@ function renderReportDetails(report, user) {
             </div>
           `).join("")}
         </div>
-      </div>
+      </details>
       ${actions.length ? `
         <div class="detail-card">
           <div class="section-title">إجراءات متاحة</div>
