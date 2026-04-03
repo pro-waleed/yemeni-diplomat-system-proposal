@@ -953,6 +953,112 @@ textarea {
   font-size: 0.92rem;
 }
 
+.mission-picker,
+.mission-picker-groups,
+.mission-chip-grid,
+.compact-status-list {
+  display: grid;
+  gap: 12px;
+}
+
+.mission-picker {
+  padding: 16px;
+  border-radius: 22px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.mission-picker-head,
+.mission-picker-actions,
+.mission-group-summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.mission-picker-search-field {
+  margin: 0;
+}
+
+.mission-picker-summary {
+  margin: 0;
+}
+
+.mission-picker-groups {
+  max-height: 380px;
+  overflow: auto;
+  padding-inline-end: 4px;
+}
+
+.mission-group {
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.mission-group-summary {
+  padding: 14px 16px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.mission-group-summary::-webkit-details-marker {
+  display: none;
+}
+
+.mission-chip-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 0 14px 14px;
+}
+
+.mission-chip {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.mission-chip-title {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.mission-chip-meta {
+  color: var(--muted);
+}
+
+.mission-chip input {
+  justify-self: end;
+}
+
+.compact-disclosure {
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.68);
+  padding: 12px 14px;
+}
+
+.compact-disclosure summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.compact-disclosure summary::-webkit-details-marker {
+  display: none;
+}
+
+.compact-disclosure[open] summary {
+  margin-bottom: 12px;
+}
+
 .empty {
   padding: 24px;
   text-align: center;
@@ -1011,7 +1117,8 @@ textarea {
 
   .form-grid,
   .two-col,
-  .checkbox-grid {
+  .checkbox-grid,
+  .mission-chip-grid {
     grid-template-columns: 1fr;
   }
 
@@ -1032,6 +1139,14 @@ textarea {
 
   .report-step-strip {
     grid-template-columns: 1fr;
+  }
+
+  .mission-picker-head,
+  .mission-picker-actions,
+  .mission-group-summary,
+  .compact-disclosure summary {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .detail-row.triple {

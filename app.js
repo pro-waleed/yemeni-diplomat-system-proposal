@@ -852,6 +852,66 @@ function getDepartmentName(id) {
   return getDepartmentById(id)?.name || "-";
 }
 
+function getGroupedMissions(missions) {
+  return state.departments.map((department) => ({
+    department,
+    missions: missions.filter((mission) => mission.departmentId === department.id)
+  })).filter((group) => group.missions.length);
+}
+
+function renderMissionPicker({
+  pickerId,
+  label = "البعثات المستهدفة",
+  inputName = "missionId",
+  missions = [],
+  selectedIds = [],
+  helperText = "استخدم البحث السريع والتجميع حسب الدائرة لاختيار البعثات بسهولة."
+}) {
+  const selectedSet = new Set(selectedIds);
+  const groups = getGroupedMissions(missions);
+  return `
+    <div class="mission-picker" data-mission-picker-id="${pickerId}">
+      <div class="mission-picker-head">
+        <div>
+          <strong>${label}</strong>
+          <p class="mini">${helperText}</p>
+        </div>
+        <div class="mission-picker-actions">
+          <button class="btn secondary" type="button" data-mission-picker-action="select-all" data-picker-id="${pickerId}">تحديد الكل</button>
+          <button class="btn secondary" type="button" data-mission-picker-action="clear-all" data-picker-id="${pickerId}">إلغاء الكل</button>
+        </div>
+      </div>
+      <label class="field full mission-picker-search-field">
+        <span>بحث في البعثات</span>
+        <input type="search" class="mission-picker-search" data-picker-id="${pickerId}" placeholder="ابحث باسم البعثة أو الدائرة">
+      </label>
+      <div class="detail-row mission-picker-summary">
+        <span>إجمالي البعثات المختارة</span>
+        <span id="mission-picker-count-${pickerId}">${selectedIds.length} من ${missions.length}</span>
+      </div>
+      <div class="mission-picker-groups">
+        ${groups.map((group) => `
+          <details class="mission-group" data-picker-group ${group.missions.length <= 6 ? "open" : ""}>
+            <summary class="mission-group-summary">
+              <span>${group.department.name}</span>
+              <span class="tag info" data-mission-group-count>${group.missions.length}</span>
+            </summary>
+            <div class="mission-chip-grid">
+              ${group.missions.map((mission) => `
+                <label class="mission-chip" data-mission-chip data-search-text="${`${mission.name} ${group.department.name}`.toLowerCase()}">
+                  <input type="checkbox" name="${inputName}" value="${mission.id}" ${selectedSet.has(mission.id) ? "checked" : ""}>
+                  <span class="mission-chip-title">${mission.name}</span>
+                  <small class="mission-chip-meta">${group.department.name}</small>
+                </label>
+              `).join("")}
+            </div>
+          </details>
+        `).join("")}
+      </div>
+    </div>
+  `;
+}
+
 function visibleViews(user) {
   if (!user) return [];
   if (user.role === "admin") return ["dashboard", "reports", "circulars", "meetings", "plans", "training", "entities", "requests", "governance", "management"];
@@ -3183,19 +3243,13 @@ function renderCircularsPage(user) {
               </div>
               <label class="field full">
                 <span>البعثات المستهدفة</span>
-                <div class="checkbox-grid">
-                  ${state.missions.map((mission) => `
-                    <label class="check-item">
-                      <input type="checkbox" name="missionId" value="${mission.id}" ${!editingCircular || editingCircular.targetMissionIds.includes(mission.id) ? "checked" : ""}>
-                      <span>${mission.name}</span>
-                    </label>
-                  `).join("")}
-                </div>
+                ${renderMissionPicker({
+                  pickerId: "circular",
+                  missions: state.missions,
+                  selectedIds: editingCircular ? editingCircular.targetMissionIds : state.missions.map((mission) => mission.id),
+                  helperText: "قائمة البعثات مجمعة حسب الدائرة مع إمكانية البحث والتحديد الجماعي."
+                })}
               </label>
-              <div class="detail-row field full circular-selection-summary">
-                <span>عدد البعثات المختارة</span>
-                <span id="circular-selection-count">${editingCircular ? editingCircular.targetMissionIds.length : state.missions.length}</span>
-              </div>
               <div class="field full">
                 <button class="btn primary" type="submit">${editingCircular ? "حفظ التعديلات" : "إصدار التعميم"}</button>
                 ${editingCircular ? `<button class="btn secondary cancel-edit" type="button" data-kind="circular">إلغاء التعديل</button>` : ""}
@@ -3294,21 +3348,27 @@ function renderCircularsPage(user) {
                 </div>
                 <span class="tag ${urgency.tone}">${urgency.label}</span>
               </div>
-              <div class="circular-recipient-list">
-                ${recipientRows.map((row) => `
-                  <div class="circular-recipient-row">
-                    <div class="circular-recipient-main">
-                      <strong>${row.missionName}</strong>
-                      <span class="circular-recipient-meta">${row.departmentName}</span>
+              <details class="compact-disclosure" ${recipientRows.length <= 3 ? "open" : ""}>
+                <summary>
+                  <span>حالات البعثات المستهدفة</span>
+                  <span class="tag info">${recipientRows.length}</span>
+                </summary>
+                <div class="circular-recipient-list">
+                  ${recipientRows.map((row) => `
+                    <div class="circular-recipient-row">
+                      <div class="circular-recipient-main">
+                        <strong>${row.missionName}</strong>
+                        <span class="circular-recipient-meta">${row.departmentName}</span>
+                      </div>
+                      <div class="circular-status-stack">
+                        <span class="tag ${row.status.tone}">${row.status.label}</span>
+                        <span class="mini">${row.response?.note || row.status.detail}</span>
+                        ${row.response?.evidenceRef ? `<span class="mini">مرجع: ${row.response.evidenceRef}</span>` : ""}
+                      </div>
                     </div>
-                    <div class="circular-status-stack">
-                      <span class="tag ${row.status.tone}">${row.status.label}</span>
-                      <span class="mini">${row.response?.note || row.status.detail}</span>
-                      ${row.response?.evidenceRef ? `<span class="mini">مرجع: ${row.response.evidenceRef}</span>` : ""}
-                    </div>
-                  </div>
-                `).join("") || `<div class="empty">لا توجد بعثات في نطاق هذا الحساب داخل هذا التعميم.</div>`}
-              </div>
+                  `).join("") || `<div class="empty">لا توجد بعثات في نطاق هذا الحساب داخل هذا التعميم.</div>`}
+                </div>
+              </details>
               <div class="section-title">آخر المعالجات</div>
               <div class="detail-list">
                 ${((circular.processingLog || []).length ? circular.processingLog : circular.workflowHistory || []).slice(0, 4).map((item) => `
@@ -3795,17 +3855,23 @@ function renderRequestsPage(user) {
                   </div>
                 ` : `
                   <p class="record-desc">${user.role === "department" ? `ضمن نطاق دائرتك: ${scopedMissionIds.length} بعثة مستهدفة في هذا الطلب.` : `رفعت ${c.done} بعثة تقاريرها، واعتمد ${c.approved} تقريرًا، وما يزال ${c.pending} بعثة دون رفع من أصل ${c.total}.`}</p>
-                  <div class="detail-list">
-                    ${scopedMissionIds.map((missionId) => {
-                      const missionStatus = getMissionRequestStatus(request.id, missionId);
-                      return `
-                      <div class="detail-row">
-                        <span>${getMissionName(missionId)}</span>
-                        <span class="tag ${missionStatus.tone}">${missionStatus.label}</span>
-                      </div>
-                    `;
-                    }).join("") || `<div class="empty">لا توجد بعثات واقعة ضمن نطاق هذا الحساب داخل هذا الطلب.</div>`}
-                  </div>
+                  <details class="compact-disclosure" ${scopedMissionIds.length <= 4 ? "open" : ""}>
+                    <summary>
+                      <span>حالات البعثات المستهدفة</span>
+                      <span class="tag info">${scopedMissionIds.length}</span>
+                    </summary>
+                    <div class="detail-list compact-status-list">
+                      ${scopedMissionIds.map((missionId) => {
+                        const missionStatus = getMissionRequestStatus(request.id, missionId);
+                        return `
+                        <div class="detail-row">
+                          <span>${getMissionName(missionId)}</span>
+                          <span class="tag ${missionStatus.tone}">${missionStatus.label}</span>
+                        </div>
+                      `;
+                      }).join("") || `<div class="empty">لا توجد بعثات واقعة ضمن نطاق هذا الحساب داخل هذا الطلب.</div>`}
+                    </div>
+                  </details>
                 `}
               </div>
             `;
@@ -3817,9 +3883,9 @@ function renderRequestsPage(user) {
 }
 
 function renderRequestForm(user) {
-  const availableMissionIds = user.role === "department"
-    ? state.missions.filter((mission) => mission.departmentId === user.departmentId).map((mission) => mission.id)
-    : state.missions.map((mission) => mission.id);
+  const availableMissions = user.role === "department"
+    ? state.missions.filter((mission) => mission.departmentId === user.departmentId)
+    : state.missions;
   return `
     <div class="panel">
       <div class="section-title">إصدار طلب تقرير جديد</div>
@@ -3867,14 +3933,12 @@ function renderRequestForm(user) {
         </label>
         <label class="field full">
           <span>البعثات المستهدفة</span>
-          <div class="checkbox-grid">
-            ${state.missions.filter((mission) => availableMissionIds.includes(mission.id)).map((mission) => `
-              <label class="check-item">
-                <input type="checkbox" name="missionId" value="${mission.id}" checked>
-                <span>${mission.name} - ${getDepartmentName(mission.departmentId)}</span>
-              </label>
-            `).join("")}
-          </div>
+          ${renderMissionPicker({
+            pickerId: "request",
+            missions: availableMissions,
+            selectedIds: availableMissions.map((mission) => mission.id),
+            helperText: "حدد البعثات المستهدفة من خلال البحث أو اختيار الكل أو الإلغاء."
+          })}
         </label>
         <div class="field full">
           <button class="btn primary" type="submit">إصدار الطلب</button>
@@ -4306,15 +4370,50 @@ function bindEvents() {
     applyCircularCategoryGuidance();
   }
 
-  const circularSelectionCount = document.getElementById("circular-selection-count");
-  if (circularSelectionCount && circularForm) {
-    const missionInputs = circularForm.querySelectorAll('input[name="missionId"]');
-    const updateCircularSelectionCount = () => {
-      circularSelectionCount.textContent = String([...missionInputs].filter((input) => input.checked).length);
+  document.querySelectorAll("[data-mission-picker-id]").forEach((picker) => {
+    const pickerId = picker.dataset.missionPickerId;
+    const searchInput = picker.querySelector(`.mission-picker-search[data-picker-id="${pickerId}"]`);
+    const countNode = picker.querySelector(`#mission-picker-count-${pickerId}`);
+    const checkboxes = [...picker.querySelectorAll(`input[name="missionId"]`)];
+    const groups = [...picker.querySelectorAll("[data-picker-group]")];
+    const updatePickerCount = () => {
+      if (countNode) countNode.textContent = `${checkboxes.filter((input) => input.checked).length} من ${checkboxes.length}`;
     };
-    missionInputs.forEach((input) => input.addEventListener("change", updateCircularSelectionCount));
-    updateCircularSelectionCount();
-  }
+    const applyPickerFilter = () => {
+      const search = String(searchInput?.value || "").trim().toLowerCase();
+      picker.querySelectorAll("[data-mission-chip]").forEach((chip) => {
+        const haystack = String(chip.dataset.searchText || "");
+        chip.hidden = Boolean(search) && !haystack.includes(search);
+      });
+      groups.forEach((group) => {
+        const visibleCount = group.querySelectorAll("[data-mission-chip]:not([hidden])").length;
+        group.hidden = visibleCount === 0;
+        const countBadge = group.querySelector("[data-mission-group-count]");
+        if (countBadge) countBadge.textContent = String(visibleCount);
+      });
+    };
+    if (searchInput) {
+      searchInput.addEventListener("input", applyPickerFilter);
+      applyPickerFilter();
+    }
+    checkboxes.forEach((input) => input.addEventListener("change", updatePickerCount));
+    updatePickerCount();
+  });
+
+  document.querySelectorAll("[data-mission-picker-action]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const pickerId = button.dataset.pickerId;
+      const picker = document.querySelector(`[data-mission-picker-id="${pickerId}"]`);
+      if (!picker) return;
+      const checked = button.dataset.missionPickerAction === "select-all";
+      picker.querySelectorAll('input[name="missionId"]').forEach((input) => {
+        input.checked = checked;
+      });
+      const countNode = picker.querySelector(`#mission-picker-count-${pickerId}`);
+      const checkboxes = [...picker.querySelectorAll('input[name="missionId"]')];
+      if (countNode) countNode.textContent = `${checkboxes.filter((input) => input.checked).length} من ${checkboxes.length}`;
+    });
+  });
 
   const circularSearch = document.getElementById("circular-search");
   if (circularSearch) {
