@@ -685,9 +685,7 @@ function getPlanActions(plan, user = getSessionUser()) {
 function getMeetingActions(meeting, task, user = getSessionUser()) {
   if (!user || !task) return [];
   const actions = [];
-  const missionName = user.role === "mission" ? getMissionName(user.missionId) : "";
-  const departmentName = user.role === "department" ? getDepartmentName(user.departmentId) : "";
-  const canUpdateTask = user.role === "admin" || user.role === "planning" || task.assignee === missionName || task.assignee === departmentName;
+  const canUpdateTask = canUpdateMeetingTask(meeting, task, user);
   if (canUpdateTask && task.status !== "منجز") {
     actions.push({ key: "start-task", label: "بدء التنفيذ", nextStatus: "قيد التنفيذ" });
     actions.push({ key: "complete-task", label: "إنجاز المهمة", nextStatus: "منجز" });
@@ -719,15 +717,18 @@ function getCircularCompletion(circular) {
 function getCircularActions(circular, user = getSessionUser()) {
   if (!user) return [];
   const actions = [];
-  if (user.role === "mission" && circular.targetMissionIds.includes(user.missionId)) {
-    if (!circular.readMissionIds.includes(user.missionId)) {
+  const targetMissionIds = normalizeMissionIdList(circular.targetMissionIds);
+  const readMissionIds = normalizeMissionIdList(circular.readMissionIds);
+  const completedMissionIds = normalizeMissionIdList(circular.completedMissionIds);
+  if (user.role === "mission" && targetMissionIds.includes(user.missionId)) {
+    if (!readMissionIds.includes(user.missionId)) {
       actions.push({ key: "mark-read", label: "تأكيد القراءة" });
     }
-    if (!circular.completedMissionIds.includes(user.missionId)) {
+    if (!completedMissionIds.includes(user.missionId)) {
       actions.push({ key: "mark-complete", label: "تأكيد الإنجاز" });
     }
   }
-  if ((user.role === "planning" || user.role === "admin") && circular.status === "نشط") {
+  if (canSubmitCircular(user) && circular.status === "نشط") {
     actions.push({ key: "close", label: "إغلاق التعميم" });
   }
   return actions;
@@ -1600,6 +1601,29 @@ function canEditPlan(plan, user = getSessionUser()) {
   if (user.role === "planning" || user.role === "admin") return true;
   if (user.role === "department") return plan.ownerType === "department" && plan.ownerId === user.departmentId;
   return user.role === "mission" && plan.ownerType === "mission" && plan.ownerId === user.missionId;
+}
+
+function canManageEntities(user = getSessionUser()) {
+  return Boolean(user && user.role === "admin");
+}
+
+function canSubmitCircular(user = getSessionUser()) {
+  return Boolean(user && (user.role === "planning" || user.role === "admin"));
+}
+
+function canManageMeetingRecord(user = getSessionUser(), meeting = null, departmentId = "") {
+  if (!user) return false;
+  if (user.role === "planning" || user.role === "admin") return true;
+  if (user.role !== "department") return false;
+  if (meeting) return meeting.departmentId === user.departmentId;
+  return !departmentId || departmentId === user.departmentId;
+}
+
+function canUpdateMeetingTask(meeting, task, user = getSessionUser()) {
+  if (!meeting || !task || !user) return false;
+  const missionName = user.role === "mission" ? getMissionName(user.missionId) : "";
+  const departmentName = user.role === "department" ? getDepartmentName(user.departmentId) : "";
+  return user.role === "admin" || user.role === "planning" || task.assignee === missionName || task.assignee === departmentName;
 }
 
 function renderApp() {
@@ -2528,6 +2552,9 @@ function renderMeetingsPage(user) {
   const meetings = getVisibleMeetings(user);
   const editingMeeting = meetings.find((item) => item.id === state.editingMeetingId) || null;
   const primaryTask = editingMeeting?.tasks?.[0] || null;
+  const meetingDepartments = user.role === "department"
+    ? state.departments.filter((department) => department.id === user.departmentId)
+    : state.departments;
   return `
     <section class="panel">
       <div class="topbar">
@@ -2549,9 +2576,10 @@ function renderMeetingsPage(user) {
             </label>
             <label class="field">
               <span>الدائرة المعنية</span>
-              <select name="departmentId" required>
-                ${state.departments.map((department) => `<option value="${department.id}" ${editingMeeting && editingMeeting.departmentId === department.id ? "selected" : ""}>${department.name}</option>`).join("")}
+              <select name="departmentId" required ${user.role === "department" ? "disabled" : ""}>
+                ${meetingDepartments.map((department) => `<option value="${department.id}" ${(editingMeeting ? editingMeeting.departmentId : user.departmentId) === department.id ? "selected" : ""}>${department.name}</option>`).join("")}
               </select>
+              ${user.role === "department" ? `<input type="hidden" name="departmentId" value="${user.departmentId}">` : ""}
             </label>
             <label class="field full">
               <span>ملخص المحضر</span>
@@ -3655,6 +3683,12 @@ function handleLogin(event) {
 function handleReportSubmit(event) {
   event.preventDefault();
   const user = getSessionUser();
+  if (!user || user.role !== "mission") {
+    addAlert("danger", "تعذر رفع التقرير", "رفع التقارير محصور بحسابات البعثات ضمن هذه النسخة.");
+    saveState();
+    renderApp();
+    return;
+  }
   const form = new FormData(event.currentTarget);
   const editingReport = state.reports.find((item) => item.id === state.editingReportId && item.missionId === user.missionId);
   const previousRequestId = editingReport?.requestId || "";
@@ -3864,10 +3898,17 @@ function handleRequestSubmit(event) {
 function handleCircularSubmit(event) {
   event.preventDefault();
   const user = getSessionUser();
+  if (!canSubmitCircular(user)) {
+    addAlert("danger", "تعذر إصدار التعميم", "لا تملك هذه الجهة صلاحية إصدار أو تعديل التعاميم.");
+    saveState();
+    renderApp();
+    return;
+  }
   const form = new FormData(event.currentTarget);
   const targetMissionIds = normalizeMissionIdList(form.getAll("missionId"));
   const summary = String(form.get("summary") || "").trim();
   const body = String(form.get("body") || "").trim();
+  const dueDate = String(form.get("dueDate") || "");
   if (!targetMissionIds.length) {
     addAlert("danger", "تعذر إصدار التعميم", "يجب اختيار بعثة واحدة على الأقل ضمن الجهات المستهدفة.");
     saveState();
@@ -3876,6 +3917,13 @@ function handleCircularSubmit(event) {
   }
   if (!summary && !body) {
     addAlert("danger", "تعذر إصدار التعميم", "يجب إدخال ملخص أو نص التعميم قبل الإصدار.");
+    saveState();
+    renderApp();
+    return;
+  }
+  const today = new Date().toISOString().slice(0, 10);
+  if (!dueDate || dueDate < today) {
+    addAlert("danger", "تعذر إصدار التعميم", "يجب تحديد موعد نهائي صالح اليوم أو بتاريخ لاحق.");
     saveState();
     renderApp();
     return;
@@ -3896,7 +3944,7 @@ function handleCircularSubmit(event) {
   circular.summary = summary;
   circular.body = body;
   circular.targetMissionIds = targetMissionIds;
-  circular.dueDate = String(form.get("dueDate"));
+  circular.dueDate = dueDate;
   circular.workflowHistory.unshift({
     actor: user.name,
     action: editingCircular ? "تعديل التعميم" : "إصدار التعميم",
@@ -3918,6 +3966,13 @@ function handleMeetingSubmit(event) {
   const user = getSessionUser();
   const form = new FormData(event.currentTarget);
   const editingMeeting = state.meetings.find((item) => item.id === state.editingMeetingId);
+  const requestedDepartmentId = String(form.get("departmentId") || "");
+  if (!canManageMeetingRecord(user, editingMeeting, requestedDepartmentId)) {
+    addAlert("danger", "تعذر تسجيل الاجتماع", "لا تملك هذه الجهة صلاحية إنشاء أو تعديل هذا الاجتماع.");
+    saveState();
+    renderApp();
+    return;
+  }
   const meeting = editingMeeting || {
     id: `meet-${Date.now()}`,
     ownerRole: user.role,
@@ -3925,9 +3980,11 @@ function handleMeetingSubmit(event) {
     workflowHistory: []
   };
   const existingTask = meeting.tasks[0];
+  const preservedTasks = Array.isArray(meeting.tasks) ? meeting.tasks.slice(1) : [];
+  const departmentId = user.role === "department" ? user.departmentId : requestedDepartmentId;
   Object.assign(meeting, {
     title: String(form.get("title")),
-    departmentId: String(form.get("departmentId")),
+    departmentId,
     summary: String(form.get("summary")),
     tasks: [
       {
@@ -3936,7 +3993,8 @@ function handleMeetingSubmit(event) {
         assignee: String(form.get("assignee")),
         status: existingTask?.status || "قيد التنفيذ",
         priority: String(form.get("priority"))
-      }
+      },
+      ...preservedTasks
     ]
   });
   meeting.workflowHistory.unshift({
@@ -3988,6 +4046,12 @@ function handlePlanSubmit(event) {
   }
 
   const editingPlan = state.plans.find((item) => item.id === state.editingPlanId);
+  if (editingPlan && !canEditPlan(editingPlan, user)) {
+    addAlert("danger", "تعذر تعديل الخطة", "لا تملك هذه الجهة صلاحية تعديل هذه الخطة.");
+    saveState();
+    renderApp();
+    return;
+  }
   const plan = editingPlan || {
     id: `plan-${Date.now()}`,
     progress: 0,
@@ -4024,6 +4088,13 @@ function handlePlanSubmit(event) {
 
 function handleDepartmentSubmit(event) {
   event.preventDefault();
+  const user = getSessionUser();
+  if (!canManageEntities(user)) {
+    addAlert("danger", "تعذر إضافة الدائرة", "صلاحية إضافة الدوائر محصورة بمدير النظام.");
+    saveState();
+    renderApp();
+    return;
+  }
   const form = new FormData(event.currentTarget);
   const username = String(form.get("username")).trim();
   if (getAllUsers().some((user) => user.username === username)) {
@@ -4039,15 +4110,29 @@ function handleDepartmentSubmit(event) {
     password: String(form.get("password"))
   });
   addAlert("success", "تمت إضافة دائرة", `أضيفت دائرة جديدة مع حساب دخول خاص بها: ${username}`);
-  logAudit("مدير النظام", "إضافة دائرة", String(form.get("name")), "وزارة");
+  logAudit(user.name, "إضافة دائرة", String(form.get("name")), "وزارة");
   saveState();
   renderApp();
 }
 
 function handleMissionSubmit(event) {
   event.preventDefault();
+  const user = getSessionUser();
+  if (!canManageEntities(user)) {
+    addAlert("danger", "تعذر إضافة البعثة", "صلاحية إضافة البعثات محصورة بمدير النظام.");
+    saveState();
+    renderApp();
+    return;
+  }
   const form = new FormData(event.currentTarget);
   const username = String(form.get("username")).trim();
+  const departmentId = String(form.get("departmentId"));
+  if (!getDepartmentById(departmentId)) {
+    addAlert("danger", "تعذر إضافة البعثة", "الدائرة المختارة غير صحيحة أو لم تعد موجودة.");
+    saveState();
+    renderApp();
+    return;
+  }
   if (getAllUsers().some((user) => user.username === username)) {
     addAlert("danger", "تعذر إضافة البعثة", "اسم المستخدم مستخدم بالفعل.");
     saveState();
@@ -4057,12 +4142,12 @@ function handleMissionSubmit(event) {
   state.missions.push({
     id: `mission-${Date.now()}`,
     name: String(form.get("name")),
-    departmentId: String(form.get("departmentId")),
+    departmentId,
     username,
     password: String(form.get("password"))
   });
   addAlert("success", "تمت إضافة بعثة", "أضيفت بعثة جديدة وربطت بالدائرة المختارة مع حساب دخول خاص.");
-  logAudit("مدير النظام", "إضافة بعثة", String(form.get("name")), getDepartmentName(String(form.get("departmentId"))));
+  logAudit(user.name, "إضافة بعثة", String(form.get("name")), getDepartmentName(departmentId));
   saveState();
   renderApp();
 }
@@ -4205,7 +4290,7 @@ function handleCircularAction(circularId, actionKey) {
     logAudit(user.name, "إنجاز تعميم", circular.title, getMissionName(user.missionId));
   }
 
-  if (actionKey === "close" && (user.role === "planning" || user.role === "admin")) {
+  if (actionKey === "close" && canSubmitCircular(user)) {
     circular.status = "مغلق";
     circular.workflowHistory.unshift({
       actor: user.name,
@@ -4227,6 +4312,12 @@ function handleMeetingTaskAction(meetingId, taskId, nextStatus) {
   if (!meeting || !user) return;
   const task = meeting.tasks.find((item) => item.id === taskId);
   if (!task) return;
+  if (!canUpdateMeetingTask(meeting, task, user)) {
+    addAlert("danger", "تعذر تحديث المهمة", "لا تملك هذه الجهة صلاحية تعديل هذه المهمة.");
+    saveState();
+    renderApp();
+    return;
+  }
 
   task.status = nextStatus;
   meeting.workflowHistory.unshift({
