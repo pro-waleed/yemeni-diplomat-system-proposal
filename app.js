@@ -287,6 +287,12 @@ const seedState = () => ({
   planSearch: "",
   planStatusFilter: "all",
   planOwnerFilter: "all",
+  requestSearch: "",
+  requestFamilyFilter: "all",
+  requestStatusFilter: "all",
+  trainingSearch: "",
+  trainingAudienceFilter: "all",
+  trainingStatusFilter: "all",
   auditSearch: "",
   auditActionFilter: "all",
   editingCircularId: null,
@@ -507,6 +513,12 @@ function extractRuntimeState(source = seedState()) {
     planSearch: source.planSearch || "",
     planStatusFilter: source.planStatusFilter || "all",
     planOwnerFilter: source.planOwnerFilter || "all",
+    requestSearch: source.requestSearch || "",
+    requestFamilyFilter: source.requestFamilyFilter || "all",
+    requestStatusFilter: source.requestStatusFilter || "all",
+    trainingSearch: source.trainingSearch || "",
+    trainingAudienceFilter: source.trainingAudienceFilter || "all",
+    trainingStatusFilter: source.trainingStatusFilter || "all",
     auditSearch: source.auditSearch || "",
     auditActionFilter: source.auditActionFilter || "all",
     editingCircularId: source.editingCircularId || null,
@@ -1147,6 +1159,125 @@ function getVisibleTrainings(user = getSessionUser()) {
   if (user.role === "admin" || user.role === "planning" || user.role === "leadership") return state.trainings;
   if (user.role === "department") return state.trainings;
   return state.trainings.filter((training) => training.audience === "جميع المستخدمين" || training.audience.includes("البعثات"));
+}
+
+function getTrainingProgress(training) {
+  const totalUsers = Number(training?.totalUsers || 0);
+  const completedUsers = Number(training?.completedUsers || 0);
+  const completionTarget = Number(training?.completionTarget || 0);
+  const percent = totalUsers ? Math.round((completedUsers / totalUsers) * 100) : 0;
+  const gap = Math.max(completionTarget - percent, 0);
+  if (percent >= completionTarget) {
+    return { percent, gap, label: "حقق الهدف", tone: "success", group: "met" };
+  }
+  if (gap <= 10) {
+    return { percent, gap, label: "قريب من الهدف", tone: "warning", group: "near" };
+  }
+  return { percent, gap, label: "بحاجة متابعة", tone: "danger", group: "attention" };
+}
+
+function getTrainingAudienceBucket(training) {
+  const audience = String(training?.audience || "");
+  if (audience === "جميع المستخدمين") return "all-users";
+  if (audience.includes("البعثات") && audience.includes("الدوائر")) return "shared";
+  if (audience.includes("البعثات")) return "missions";
+  if (audience.includes("الدوائر")) return "departments";
+  return "specialized";
+}
+
+function getTrainingAudienceLabel(bucket) {
+  if (bucket === "all-users") return "جميع المستخدمين";
+  if (bucket === "shared") return "البعثات والدوائر";
+  if (bucket === "missions") return "البعثات";
+  if (bucket === "departments") return "الدوائر";
+  return "برامج متخصصة";
+}
+
+function matchesTrainingAudienceFilter(training, filterValue) {
+  if (filterValue === "all") return true;
+  const audienceBucket = getTrainingAudienceBucket(training);
+  if (filterValue === audienceBucket) return true;
+  if (filterValue === "missions") return audienceBucket === "shared";
+  if (filterValue === "departments") return audienceBucket === "shared";
+  return false;
+}
+
+function getFilteredTrainings(user = getSessionUser()) {
+  const search = String(state.trainingSearch || "").trim().toLowerCase();
+  return getVisibleTrainings(user)
+    .filter((training) => {
+      const progress = getTrainingProgress(training);
+      const matchesSearch = !search || [
+        training.title,
+        training.audience,
+        progress.label
+      ].some((value) => String(value || "").toLowerCase().includes(search));
+      const matchesAudience = matchesTrainingAudienceFilter(training, state.trainingAudienceFilter);
+      const matchesStatus = state.trainingStatusFilter === "all" || progress.group === state.trainingStatusFilter;
+      return matchesSearch && matchesAudience && matchesStatus;
+    })
+    .sort((a, b) => {
+      const progressA = getTrainingProgress(a);
+      const progressB = getTrainingProgress(b);
+      const order = { attention: 3, near: 2, met: 1 };
+      if ((order[progressB.group] || 0) !== (order[progressA.group] || 0)) {
+        return (order[progressB.group] || 0) - (order[progressA.group] || 0);
+      }
+      if (progressB.gap !== progressA.gap) return progressB.gap - progressA.gap;
+      return String(a.title || "").localeCompare(String(b.title || ""), "ar");
+    });
+}
+
+function getFilteredRequestsForDisplay(user = getSessionUser()) {
+  const search = String(state.requestSearch || "").trim().toLowerCase();
+  return getSortedRequestsForDisplay(
+    getVisibleRequests(user).filter((request) => {
+      const lifecycle = getRequestLifecycle(request);
+      const urgency = getRequestUrgency(request);
+      const missionNames = request.targetMissionIds.map((missionId) => getMissionName(missionId)).join(" ");
+      const matchesSearch = !search || [
+        request.title,
+        request.type,
+        request.createdBy,
+        request.thematicTrack,
+        lifecycle.label,
+        urgency.label,
+        missionNames
+      ].some((value) => String(value || "").toLowerCase().includes(search));
+      const matchesFamily = state.requestFamilyFilter === "all" || request.requestFamily === state.requestFamilyFilter;
+      const lifecycleGroup = lifecycle.label === "مغلق" || lifecycle.label === "مكتمل"
+        ? "complete"
+        : lifecycle.label === "متأخر"
+          ? "overdue"
+          : urgency.label === "قريب الاستحقاق"
+            ? "due-soon"
+            : "active";
+      const matchesStatus = state.requestStatusFilter === "all" || lifecycleGroup === state.requestStatusFilter;
+      return matchesSearch && matchesFamily && matchesStatus;
+    })
+  );
+}
+
+function groupRequestsForBoard(requests) {
+  const groups = {
+    urgent: [],
+    active: [],
+    archive: []
+  };
+  requests.forEach((request) => {
+    const lifecycle = getRequestLifecycle(request);
+    const urgency = getRequestUrgency(request);
+    if (lifecycle.label === "مكتمل" || lifecycle.label === "مغلق") {
+      groups.archive.push(request);
+      return;
+    }
+    if (lifecycle.label === "متأخر" || urgency.label === "قريب الاستحقاق" || request.priority === "عالية") {
+      groups.urgent.push(request);
+      return;
+    }
+    groups.active.push(request);
+  });
+  return groups;
 }
 
 function getPlanActions(plan, user = getSessionUser()) {
@@ -4130,29 +4261,167 @@ function renderPlansPage(user) {
 }
 
 function renderTrainingPage(user) {
-  const trainings = getVisibleTrainings(user);
+  const trainings = getFilteredTrainings(user);
+  const groupedTrainings = {
+    attention: trainings.filter((training) => getTrainingProgress(training).group === "attention"),
+    near: trainings.filter((training) => getTrainingProgress(training).group === "near"),
+    met: trainings.filter((training) => getTrainingProgress(training).group === "met")
+  };
+  const averageProgress = trainings.length
+    ? Math.round(trainings.reduce((sum, training) => sum + getTrainingProgress(training).percent, 0) / trainings.length)
+    : 0;
+  const trainingGroups = [
+    {
+      key: "attention",
+      label: "برامج بحاجة إلى متابعة",
+      description: "ابدأ بهذه البرامج لأنها بعيدة عن الهدف أو تحتاج دعماً إداريًا أو تنسيقًا إضافيًا.",
+      tone: "danger",
+      items: groupedTrainings.attention
+    },
+    {
+      key: "near",
+      label: "برامج قريبة من الهدف",
+      description: "هذه البرامج تحتاج دفعة أخيرة للوصول إلى نسبة الإنجاز المستهدفة.",
+      tone: "warning",
+      items: groupedTrainings.near
+    },
+    {
+      key: "met",
+      label: "برامج حققت الهدف",
+      description: "يمكن استخدامها كنماذج نجاح أو الاكتفاء بمتابعة دورية أخف.",
+      tone: "success",
+      items: groupedTrainings.met
+    }
+  ];
   return `
     <section class="panel">
       <div class="topbar">
         <div>
           <span class="tag info">التدريب</span>
           <h1 class="page-title">منصة التدريب</h1>
-          <p class="muted">سجل تدريبي للمستخدمين وبرامج إلزامية وتخصصية كما نصت الوثيقة.</p>
+          <p class="muted">متابعة برامج التدريب الإلزامية والمتخصصة مع إبراز البرامج التي تحتاج دعماً عاجلاً قبل أن تمتد الصفحة بلا فائدة تشغيلية.</p>
+        </div>
+        <span class="tag info">${trainings.length} برنامج ضمن العرض الحالي</span>
+      </div>
+      <div class="reports-stat-strip">
+        <div class="reports-stat-card">
+          <span>إجمالي البرامج</span>
+          <strong>${trainings.length}</strong>
+        </div>
+        <div class="reports-stat-card">
+          <span>بحاجة متابعة</span>
+          <strong>${groupedTrainings.attention.length}</strong>
+        </div>
+        <div class="reports-stat-card">
+          <span>قريبة من الهدف</span>
+          <strong>${groupedTrainings.near.length}</strong>
+        </div>
+        <div class="reports-stat-card">
+          <span>حققت الهدف</span>
+          <strong>${groupedTrainings.met.length}</strong>
+        </div>
+        <div class="reports-stat-card">
+          <span>متوسط الإنجاز</span>
+          <strong>${averageProgress}%</strong>
+        </div>
+      </div>
+      <div class="report-filter-bar workspace-filter-bar">
+        <label class="field">
+          <span>البحث</span>
+          <input id="training-search" type="search" value="${state.trainingSearch || ""}" placeholder="ابحث بعنوان البرنامج أو الفئة المستهدفة">
+        </label>
+        <label class="field">
+          <span>الفئة المستهدفة</span>
+          <select id="training-audience-filter">
+            <option value="all" ${state.trainingAudienceFilter === "all" ? "selected" : ""}>جميع الفئات</option>
+            <option value="all-users" ${state.trainingAudienceFilter === "all-users" ? "selected" : ""}>جميع المستخدمين</option>
+            <option value="missions" ${state.trainingAudienceFilter === "missions" ? "selected" : ""}>برامج البعثات</option>
+            <option value="departments" ${state.trainingAudienceFilter === "departments" ? "selected" : ""}>برامج الدوائر</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>الحالة</span>
+          <select id="training-status-filter">
+            <option value="all" ${state.trainingStatusFilter === "all" ? "selected" : ""}>جميع الحالات</option>
+            <option value="attention" ${state.trainingStatusFilter === "attention" ? "selected" : ""}>بحاجة متابعة</option>
+            <option value="near" ${state.trainingStatusFilter === "near" ? "selected" : ""}>قريبة من الهدف</option>
+            <option value="met" ${state.trainingStatusFilter === "met" ? "selected" : ""}>حققت الهدف</option>
+          </select>
+        </label>
+        <div class="report-mini-kpi">
+          <span>النتائج المعروضة</span>
+          <strong>${trainings.length}</strong>
         </div>
       </div>
     </section>
-    <section class="two-col">
-      ${trainings.map((training) => {
-        const percent = training.totalUsers ? Math.round((training.completedUsers / training.totalUsers) * 100) : 0;
-        return `
-          <div class="panel">
-            <div class="section-title">${training.title}</div>
-            <div class="record-meta">${training.audience}</div>
-            <div class="progress"><span style="width:${percent}%"></span></div>
-            <p class="muted">المكتملون ${training.completedUsers} من أصل ${training.totalUsers} | الهدف ${training.completionTarget}%</p>
-          </div>
-        `;
-      }).join("")}
+    <section class="panel">
+      <div class="entity-section-head">
+        <div>
+          <div class="section-title">لوحة متابعة البرامج</div>
+          <p class="mini">تم تجميع البرامج حسب الأولوية التشغيلية حتى تصل إلى ما يحتاج التدخل أولًا من دون إغراق بصري.</p>
+        </div>
+        <span class="tag info">${trainingGroups.filter((group) => group.items.length).length} مجموعات نشطة</span>
+      </div>
+      <div class="entity-record-stack">
+        ${trainingGroups.map((group) => `
+          <details class="compact-disclosure entity-group-card" ${(group.key === "attention" || (trainings.length && group.items.length === trainings.length)) ? "open" : ""}>
+            <summary>
+              <div>
+                <strong>${group.label}</strong>
+                <div class="entity-summary-meta">
+                  <span>${group.description}</span>
+                </div>
+              </div>
+              <div class="entity-tag-stack">
+                <span class="tag ${group.tone}">${group.items.length}</span>
+              </div>
+            </summary>
+            <div class="entity-group-grid">
+              ${group.items.map((training) => {
+                const progress = getTrainingProgress(training);
+                const audienceBucket = getTrainingAudienceBucket(training);
+                return `
+                  <div class="detail-card workspace-card-shell training-card">
+                    <div class="record-top">
+                      <div>
+                        <strong>${training.title}</strong>
+                        <div class="workspace-summary-meta">
+                          <span>${training.audience}</span>
+                          <span>الفجوة ${progress.gap}%</span>
+                        </div>
+                      </div>
+                      <div class="entity-tag-stack">
+                        <span class="tag info">${getTrainingAudienceLabel(audienceBucket)}</span>
+                        <span class="tag ${progress.tone}">${progress.label}</span>
+                      </div>
+                    </div>
+                    <div class="workspace-kpi-grid training-kpi-grid">
+                      <div class="report-mini-kpi">
+                        <span>الإنجاز</span>
+                        <strong>${progress.percent}%</strong>
+                      </div>
+                      <div class="report-mini-kpi">
+                        <span>المستهدف</span>
+                        <strong>${training.completionTarget}%</strong>
+                      </div>
+                      <div class="report-mini-kpi">
+                        <span>المكتملون</span>
+                        <strong>${training.completedUsers}</strong>
+                      </div>
+                      <div class="report-mini-kpi">
+                        <span>إجمالي المستهدفين</span>
+                        <strong>${training.totalUsers}</strong>
+                      </div>
+                    </div>
+                    <div class="progress workspace-progress"><span style="width:${progress.percent}%"></span></div>
+                    <p class="muted">${progress.label === "حقق الهدف" ? "يمكن الاكتفاء بمتابعة دورية خفيفة مع الحفاظ على المستوى." : progress.label === "قريب من الهدف" ? "دفعة متابعة صغيرة قد تكفي للوصول إلى المستهدف." : "هذا البرنامج يحتاج دعماً وتذكيراً وتشجيعاً أكبر لرفع نسبة الالتزام."}</p>
+                  </div>
+                `;
+              }).join("") || `<div class="empty">لا توجد برامج ضمن هذه الحالة في العرض الحالي.</div>`}
+            </div>
+          </details>
+        `).join("")}
+      </div>
     </section>
   `;
 }
@@ -4577,17 +4846,115 @@ function renderGovernancePage(user) {
 }
 
 function renderRequestsPage(user) {
-  const requests = getSortedRequestsForDisplay(getVisibleRequests(user));
+  const requests = getFilteredRequestsForDisplay(user);
   const canRequest = canIssueReportRequest(user, "activity") || canIssueReportRequest(user, "periodic");
   const metrics = getRequestExecutiveMetrics(user);
+  const requestBoard = groupRequestsForBoard(requests);
+  const requestGroups = [
+    {
+      key: "urgent",
+      label: "طلبات تحتاج متابعة عاجلة",
+      description: "تشمل الطلبات المتأخرة أو قريبة الاستحقاق أو العالية الأولوية.",
+      tone: "danger",
+      items: requestBoard.urgent
+    },
+    {
+      key: "active",
+      label: "طلبات جارية ضمن المسار",
+      description: "طلبات نشطة لكن لا تظهر عليها مؤشرات خطر مباشر الآن.",
+      tone: "info",
+      items: requestBoard.active
+    },
+    {
+      key: "archive",
+      label: "طلبات مكتملة أو مغلقة",
+      description: "للاطلاع السريع من دون تمديد الصفحة الرئيسية بالطلبات المنتهية.",
+      tone: "success",
+      items: requestBoard.archive
+    }
+  ];
+  const renderRequestCard = (request) => {
+    const c = getCompletion(request);
+    const lifecycle = getRequestLifecycle(request);
+    const urgency = getRequestUrgency(request);
+    const scopedMissionIds = getRequestMissionIdsForUser(request, user);
+    const ownMissionStatus = user.role === "mission" ? getMissionRequestStatus(request.id, user.missionId) : null;
+    return `
+      <div class="detail-card workspace-card-shell request-board-card">
+        <div class="record-top">
+          <div>
+            <strong>${request.title}</strong>
+            <div class="record-meta">${request.requestFamily === "periodic" ? "طلب زمني" : request.requestFamily === "thematic" ? "طلب موضوعي" : "طلب نشاط"} | ${request.type} | الموعد ${formatDate(request.dueDate)}</div>
+          </div>
+          <span class="tag ${lifecycle.tone}">${lifecycle.label}</span>
+        </div>
+        <div class="request-chip-row">
+          <span class="tag ${getRequestPriorityTone(request.priority)}">${request.priority || "متوسطة"} الأولوية</span>
+          <span class="tag ${urgency.tone}">${urgency.label}</span>
+          ${request.thematicTrack ? `<span class="tag info">${request.thematicTrack}</span>` : ""}
+        </div>
+        <div class="workspace-kpi-grid request-kpi-grid">
+          <div class="report-mini-kpi">
+            <span>نسبة الإنجاز</span>
+            <strong>${c.percent}%</strong>
+          </div>
+          <div class="report-mini-kpi">
+            <span>المرفوع</span>
+            <strong>${c.done}</strong>
+          </div>
+          <div class="report-mini-kpi">
+            <span>المعتمد</span>
+            <strong>${c.approved}</strong>
+          </div>
+          <div class="report-mini-kpi">
+            <span>الجهات المستهدفة</span>
+            <strong>${scopedMissionIds.length || c.total}</strong>
+          </div>
+        </div>
+        <div class="progress workspace-progress"><span style="width:${c.percent}%"></span></div>
+        <div class="detail-list">
+          <div class="detail-row"><span>الجهة الطالبة</span><span>${request.createdBy}</span></div>
+          ${user.role === "mission" ? `
+            <div class="detail-row"><span>حالة بعثتك</span><span class="tag ${ownMissionStatus.tone}">${ownMissionStatus.label}</span></div>
+            <div class="detail-row"><span>البعثة المستهدفة</span><span>${getMissionName(user.missionId)}</span></div>
+          ` : `
+            <div class="detail-row"><span>النطاق المعروض</span><span>${user.role === "department" ? `${scopedMissionIds.length} بعثة ضمن الدائرة` : `${c.total} بعثة مستهدفة`}</span></div>
+            <div class="detail-row"><span>بعثات لم ترفع بعد</span><span>${c.pending}</span></div>
+          `}
+        </div>
+        ${user.role === "mission" ? `
+          <p class="muted">يعرض هذا السجل الطلب الوارد إلى بعثتك فقط، مع حالتك الحالية ضمن دورة الإنجاز.</p>
+        ` : `
+          <details class="compact-disclosure compact-inline-disclosure" ${scopedMissionIds.length <= 4 ? "open" : ""}>
+            <summary>
+              <span>حالات البعثات المستهدفة</span>
+              <span class="tag info">${scopedMissionIds.length}</span>
+            </summary>
+            <div class="detail-list compact-status-list">
+              ${scopedMissionIds.map((missionId) => {
+                const missionStatus = getMissionRequestStatus(request.id, missionId);
+                return `
+                  <div class="detail-row">
+                    <span>${getMissionName(missionId)}</span>
+                    <span class="tag ${missionStatus.tone}">${missionStatus.label}</span>
+                  </div>
+                `;
+              }).join("") || `<div class="empty">لا توجد بعثات واقعة ضمن نطاق هذا الحساب داخل هذا الطلب.</div>`}
+            </div>
+          </details>
+        `}
+      </div>
+    `;
+  };
   return `
     <section class="panel">
       <div class="topbar">
         <div>
           <span class="tag info">متابعة الإنجاز</span>
           <h1 class="page-title">طلبات التقارير</h1>
-          <p class="muted">${canRequest ? "يمكنك إصدار طلبات تقارير ومتابعة الإنجاز بحسب صلاحيتك." : "يمكنك متابعة الطلبات الواقعة ضمن نطاقك."}</p>
+          <p class="muted">${canRequest ? "يمكنك إصدار الطلبات ومتابعة الأداء ضمن لوحة مختصرة تبرز ما يحتاج قرارًا أو متابعة قبل أن تتضخم الصفحة." : "يمكنك متابعة الطلبات الواردة ضمن نطاقك مع إبراز ما يحتاج تدخلك أولًا."}</p>
         </div>
+        <span class="tag info">${requests.length} طلب ضمن العرض الحالي</span>
       </div>
       <div class="reports-stat-strip">
         <div class="reports-stat-card">
@@ -4606,67 +4973,70 @@ function renderRequestsPage(user) {
           <span>متأخرة</span>
           <strong>${metrics.overdue}</strong>
         </div>
+        <div class="reports-stat-card">
+          <span>ضمن الفلترة الحالية</span>
+          <strong>${requests.length}</strong>
+        </div>
       </div>
     </section>
     <section class="two-col">
       ${canRequest ? renderRequestForm(user) : ""}
       <div class="panel">
-        <div class="section-title">سجل الطلبات</div>
-        <div class="detail-list">
-          ${requests.map((request) => {
-            const c = getCompletion(request);
-            const lifecycle = getRequestLifecycle(request);
-            const urgency = getRequestUrgency(request);
-            const scopedMissionIds = getRequestMissionIdsForUser(request, user);
-            const ownMissionStatus = user.role === "mission" ? getMissionRequestStatus(request.id, user.missionId) : null;
-            return `
-              <div class="detail-card">
-                <div class="record-top">
-                  <div>
-                    <strong>${request.title}</strong>
-                    <div class="record-meta">${request.requestFamily === "periodic" ? "طلب زمني" : request.requestFamily === "thematic" ? "طلب موضوعي" : "طلب نشاط"} | ${request.type} | الموعد ${formatDate(request.dueDate)}</div>
+        <div class="entity-section-head">
+          <div>
+            <div class="section-title">سجل الطلبات</div>
+            <p class="mini">تم تنظيم الطلبات بحسب الأولوية التشغيلية مع فلاتر تقلل زمن الوصول إلى الطلب المهم.</p>
+          </div>
+          <span class="tag info">${requests.length} طلب</span>
+        </div>
+        <div class="report-filter-bar workspace-filter-bar">
+          <label class="field">
+            <span>البحث</span>
+            <input id="request-search" type="search" value="${state.requestSearch || ""}" placeholder="ابحث بعنوان الطلب أو الجهة أو البعثة أو المسار">
+          </label>
+          <label class="field">
+            <span>عائلة الطلب</span>
+            <select id="request-family-filter">
+              <option value="all" ${state.requestFamilyFilter === "all" ? "selected" : ""}>جميع الطلبات</option>
+              <option value="activity" ${state.requestFamilyFilter === "activity" ? "selected" : ""}>طلبات الأنشطة</option>
+              <option value="thematic" ${state.requestFamilyFilter === "thematic" ? "selected" : ""}>الطلبات الموضوعية</option>
+              <option value="periodic" ${state.requestFamilyFilter === "periodic" ? "selected" : ""}>الطلبات الزمنية</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>حالة المتابعة</span>
+            <select id="request-status-filter">
+              <option value="all" ${state.requestStatusFilter === "all" ? "selected" : ""}>جميع الحالات</option>
+              <option value="overdue" ${state.requestStatusFilter === "overdue" ? "selected" : ""}>متأخرة</option>
+              <option value="due-soon" ${state.requestStatusFilter === "due-soon" ? "selected" : ""}>قريبة الاستحقاق</option>
+              <option value="active" ${state.requestStatusFilter === "active" ? "selected" : ""}>نشطة</option>
+              <option value="complete" ${state.requestStatusFilter === "complete" ? "selected" : ""}>مكتملة أو مغلقة</option>
+            </select>
+          </label>
+          <div class="report-mini-kpi">
+            <span>النتائج المطابقة</span>
+            <strong>${requests.length}</strong>
+          </div>
+        </div>
+        <div class="entity-record-stack workspace-board">
+          ${requestGroups.map((group) => `
+            <details class="compact-disclosure entity-group-card" ${(group.key === "urgent" || (requests.length && group.items.length === requests.length)) ? "open" : ""}>
+              <summary>
+                <div>
+                  <strong>${group.label}</strong>
+                  <div class="entity-summary-meta">
+                    <span>${group.description}</span>
                   </div>
-                  <span class="tag ${lifecycle.tone}">${lifecycle.label}</span>
                 </div>
-                <div class="request-chip-row">
-                  <span class="tag ${getRequestPriorityTone(request.priority)}">${request.priority || "متوسطة"} الأولوية</span>
-                  <span class="tag ${urgency.tone}">${urgency.label}</span>
+                <div class="entity-tag-stack">
+                  <span class="tag ${group.tone}">${group.items.length}</span>
                 </div>
-                <div class="detail-row"><span>الجهة الطالبة</span><span>${request.createdBy}</span></div>
-                ${request.thematicTrack ? `<div class="detail-row"><span>المسار الموضوعي</span><span>${request.thematicTrack}</span></div>` : ""}
-                <div class="detail-row"><span>نسبة الإنجاز</span><span>${c.percent}%</span></div>
-                <div class="progress"><span style="width:${c.percent}%"></span></div>
-                ${user.role === "mission" ? `
-                  <p class="record-desc">هذا الطلب موجّه إلى ${getMissionName(user.missionId)}، وحالة الإنجاز الحالية للبعثة هي ${ownMissionStatus.label}.</p>
-                  <div class="detail-list">
-                    <div class="detail-row">
-                      <span>${getMissionName(user.missionId)}</span>
-                      <span class="tag ${ownMissionStatus.tone}">${ownMissionStatus.label}</span>
-                    </div>
-                  </div>
-                ` : `
-                  <p class="record-desc">${user.role === "department" ? `ضمن نطاق دائرتك: ${scopedMissionIds.length} بعثة مستهدفة في هذا الطلب.` : `رفعت ${c.done} بعثة تقاريرها، واعتمد ${c.approved} تقريرًا، وما يزال ${c.pending} بعثة دون رفع من أصل ${c.total}.`}</p>
-                  <details class="compact-disclosure" ${scopedMissionIds.length <= 4 ? "open" : ""}>
-                    <summary>
-                      <span>حالات البعثات المستهدفة</span>
-                      <span class="tag info">${scopedMissionIds.length}</span>
-                    </summary>
-                    <div class="detail-list compact-status-list">
-                      ${scopedMissionIds.map((missionId) => {
-                        const missionStatus = getMissionRequestStatus(request.id, missionId);
-                        return `
-                        <div class="detail-row">
-                          <span>${getMissionName(missionId)}</span>
-                          <span class="tag ${missionStatus.tone}">${missionStatus.label}</span>
-                        </div>
-                      `;
-                      }).join("") || `<div class="empty">لا توجد بعثات واقعة ضمن نطاق هذا الحساب داخل هذا الطلب.</div>`}
-                    </div>
-                  </details>
-                `}
+              </summary>
+              <div class="entity-record-stack">
+                ${group.items.map((request) => renderRequestCard(request)).join("") || `<div class="empty">لا توجد طلبات ضمن هذا القسم في العرض الحالي.</div>`}
               </div>
-            `;
-          }).join("") || `<div class="empty">لا توجد طلبات ظاهرة لهذا الحساب.</div>`}
+            </details>
+          `).join("") || `<div class="empty">لا توجد طلبات ظاهرة لهذا الحساب.</div>`}
         </div>
       </div>
     </section>
@@ -5566,6 +5936,74 @@ function bindEvents() {
   if (planOwnerFilter) {
     planOwnerFilter.addEventListener("change", () => {
       state.planOwnerFilter = planOwnerFilter.value;
+      saveState();
+      renderApp();
+    });
+  }
+
+  const requestSearch = document.getElementById("request-search");
+  if (requestSearch) {
+    const applyRequestSearch = () => {
+      state.requestSearch = requestSearch.value;
+      saveState();
+      renderApp();
+    };
+    requestSearch.addEventListener("change", applyRequestSearch);
+    requestSearch.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        applyRequestSearch();
+      }
+    });
+  }
+
+  const requestFamilyFilter = document.getElementById("request-family-filter");
+  if (requestFamilyFilter) {
+    requestFamilyFilter.addEventListener("change", () => {
+      state.requestFamilyFilter = requestFamilyFilter.value;
+      saveState();
+      renderApp();
+    });
+  }
+
+  const requestStatusFilter = document.getElementById("request-status-filter");
+  if (requestStatusFilter) {
+    requestStatusFilter.addEventListener("change", () => {
+      state.requestStatusFilter = requestStatusFilter.value;
+      saveState();
+      renderApp();
+    });
+  }
+
+  const trainingSearch = document.getElementById("training-search");
+  if (trainingSearch) {
+    const applyTrainingSearch = () => {
+      state.trainingSearch = trainingSearch.value;
+      saveState();
+      renderApp();
+    };
+    trainingSearch.addEventListener("change", applyTrainingSearch);
+    trainingSearch.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        applyTrainingSearch();
+      }
+    });
+  }
+
+  const trainingAudienceFilter = document.getElementById("training-audience-filter");
+  if (trainingAudienceFilter) {
+    trainingAudienceFilter.addEventListener("change", () => {
+      state.trainingAudienceFilter = trainingAudienceFilter.value;
+      saveState();
+      renderApp();
+    });
+  }
+
+  const trainingStatusFilter = document.getElementById("training-status-filter");
+  if (trainingStatusFilter) {
+    trainingStatusFilter.addEventListener("change", () => {
+      state.trainingStatusFilter = trainingStatusFilter.value;
       saveState();
       renderApp();
     });

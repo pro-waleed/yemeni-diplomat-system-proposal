@@ -866,6 +866,10 @@ textarea {
   gap: 16px;
 }
 
+.workspace-filter-bar {
+  align-items: end;
+}
+
 .workspace-summary-meta {
   display: flex;
   flex-wrap: wrap;
@@ -889,6 +893,24 @@ textarea {
 .workspace-task-card {
   display: grid;
   gap: 12px;
+}
+
+.workspace-board {
+  margin-top: 12px;
+}
+
+.request-board-card,
+.training-card {
+  background:
+    linear-gradient(135deg, rgba(15, 118, 110, 0.05), rgba(255, 255, 255, 0.82)),
+    rgba(255, 255, 255, 0.76);
+}
+
+.compact-inline-disclosure {
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  padding: 2px 2px 8px;
 }
 
 .audit-entry-card {
