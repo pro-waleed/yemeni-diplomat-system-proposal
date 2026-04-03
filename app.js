@@ -218,6 +218,7 @@ const seedState = () => ({
   reportFormStep: "basics",
   periodicFormTab: "bilateral",
   editingReportId: null,
+  reportActionDialog: null,
   editingCircularId: null,
   editingMeetingId: null,
   editingPlanId: null,
@@ -394,7 +395,13 @@ const root = document.getElementById("app-root");
 function loadState() {
   const saved = localStorage.getItem(STORAGE_KEY);
   if (!saved) return seedState();
-  const parsed = JSON.parse(saved);
+  let parsed = null;
+  try {
+    parsed = JSON.parse(saved);
+  } catch (error) {
+    console.warn("Failed to parse saved state, resetting to seed state.", error);
+    return seedState();
+  }
   if (!parsed || !Array.isArray(parsed.departments) || !Array.isArray(parsed.missions) || !Array.isArray(parsed.reports)) {
     return seedState();
   }
@@ -423,6 +430,7 @@ function loadState() {
   parsed.missions = [...canonicalMissions, ...customMissions];
   parsed.reportRequests = Array.isArray(parsed.reportRequests) ? parsed.reportRequests : seeded.reportRequests;
   parsed.editingReportId = parsed.editingReportId || null;
+  parsed.reportActionDialog = parsed.reportActionDialog && typeof parsed.reportActionDialog === "object" ? parsed.reportActionDialog : null;
   parsed.reportRegistryTab = parsed.reportRegistryTab || "all";
   parsed.reportSearch = parsed.reportSearch || "";
   parsed.reportStageFilter = parsed.reportStageFilter || "all";
@@ -474,6 +482,7 @@ function loadState() {
   }));
   parsed.trainings = Array.isArray(parsed.trainings) ? parsed.trainings : seedState().trainings;
   parsed.auditLog = Array.isArray(parsed.auditLog) ? parsed.auditLog : seedState().auditLog;
+  parsed.alerts = Array.isArray(parsed.alerts) ? parsed.alerts : seedState().alerts;
   parsed.reports = parsed.reports.map((report) => ({
     ...report,
     departmentId: parsed.missions.find((mission) => mission.id === report.missionId)?.departmentId || LEGACY_DEPARTMENT_ID_MAP[report.departmentId] || report.departmentId,
@@ -1626,6 +1635,120 @@ function canUpdateMeetingTask(meeting, task, user = getSessionUser()) {
   return user.role === "admin" || user.role === "planning" || task.assignee === missionName || task.assignee === departmentName;
 }
 
+function dismissAlert(alertId) {
+  state.alerts = (state.alerts || []).filter((alert) => alert.id !== alertId);
+  saveState();
+  renderApp();
+}
+
+function openReportActionDialog(reportId, actionKey, nextStage) {
+  const report = state.reports.find((item) => item.id === reportId);
+  const user = getSessionUser();
+  if (!report || !user) return;
+  const allowedAction = getAllowedReportActions(report, user).find((action) => action.key === actionKey && action.nextStage === nextStage);
+  if (!allowedAction) {
+    addAlert("danger", "تعذر تنفيذ الإجراء", "هذا الإجراء غير مسموح به من هذا الحساب أو لا يتوافق مع المرحلة الحالية.");
+    saveState();
+    renderApp();
+    return;
+  }
+  const quality = normalizeQualityScores(report.qualityScores);
+  state.reportActionDialog = {
+    reportId,
+    actionKey,
+    nextStage,
+    reviewNotes: report.reviewNotes || "",
+    completeness: String(quality.completeness || 4),
+    analysis: String(quality.analysis || 4)
+  };
+  saveState();
+  renderApp();
+}
+
+function closeReportActionDialog() {
+  state.reportActionDialog = null;
+  saveState();
+  renderApp();
+}
+
+function renderAlerts() {
+  if (!Array.isArray(state.alerts) || !state.alerts.length) return "";
+  return `
+    <div class="alerts-stack">
+      ${state.alerts.map((alert) => `
+        <article class="alert-card alert-${alert.level || "info"}">
+          <div class="alert-card-head">
+            <strong>${alert.title}</strong>
+            <button class="alert-close" type="button" data-dismiss-alert="${alert.id}" aria-label="إغلاق التنبيه">×</button>
+          </div>
+          <p>${alert.text}</p>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderReportActionDialog() {
+  const dialog = state.reportActionDialog;
+  if (!dialog) return "";
+  const report = state.reports.find((item) => item.id === dialog.reportId);
+  if (!report) return "";
+  const isApproval = dialog.actionKey === "approve";
+  const isReturn = dialog.actionKey === "return";
+  const title = isApproval ? "اعتماد التقرير" : "إعادة التقرير للبعثة";
+  const subtitle = isApproval
+    ? "أدخل تقييم الجودة بصورة مؤسسية قبل اعتماد التقرير ضمن السجل الرسمي."
+    : "أدخل ملاحظات المراجعة المطلوبة بوضوح حتى تعود للبعثة كتكليف قابل للمعالجة.";
+  return `
+    <div class="modal-backdrop">
+      <div class="modal-card">
+        <div class="modal-head">
+          <div>
+            <span class="tag info">${getMissionName(report.missionId)}</span>
+            <div class="section-title">${title}</div>
+            <p class="muted">${subtitle}</p>
+          </div>
+          <button class="modal-close" type="button" data-close-report-dialog aria-label="إغلاق">×</button>
+        </div>
+        <div class="detail-card modal-reference-card">
+          <div class="detail-row"><span>عنوان التقرير</span><span>${report.title}</span></div>
+          <div class="detail-row"><span>المرحلة الحالية</span><span>${report.workflowStage}</span></div>
+          <div class="detail-row"><span>المرحلة التالية</span><span>${dialog.nextStage}</span></div>
+        </div>
+        <form id="report-action-form" class="form-grid">
+          <input type="hidden" name="reportId" value="${dialog.reportId}">
+          <input type="hidden" name="actionKey" value="${dialog.actionKey}">
+          <input type="hidden" name="nextStage" value="${dialog.nextStage}">
+          ${(isApproval || isReturn) ? `
+            <label class="field full">
+              <span>ملاحظات المراجعة</span>
+              <textarea name="reviewNotes" required>${dialog.reviewNotes || ""}</textarea>
+            </label>
+          ` : ""}
+          ${isApproval ? `
+            <label class="field">
+              <span>شمولية المحتوى</span>
+              <select name="completeness" required>
+                ${[1, 2, 3, 4, 5].map((value) => `<option value="${value}" ${Number(dialog.completeness) === value ? "selected" : ""}>${value}/5</option>`).join("")}
+              </select>
+            </label>
+            <label class="field">
+              <span>جودة التحليل</span>
+              <select name="analysis" required>
+                ${[1, 2, 3, 4, 5].map((value) => `<option value="${value}" ${Number(dialog.analysis) === value ? "selected" : ""}>${value}/5</option>`).join("")}
+              </select>
+            </label>
+          ` : ""}
+          <div class="field full modal-actions">
+            <button class="btn primary" type="submit">${isApproval ? "تأكيد الاعتماد" : "تأكيد الإعادة"}</button>
+            <button class="btn secondary" type="button" data-close-report-dialog>إلغاء</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+}
+
 function renderApp() {
   const user = getSessionUser();
   root.innerHTML = user ? renderSystem(user) : renderLogin();
@@ -1714,6 +1837,7 @@ function renderSystem(user) {
   };
   return `
     <div class="page-shell">
+      ${renderAlerts()}
       <div class="app-shell">
       <aside class="sidebar">
         <div class="sidebar-top">
@@ -1735,6 +1859,7 @@ function renderSystem(user) {
           ${renderPage(user)}
         </main>
       </div>
+      ${renderReportActionDialog()}
       ${renderIntellectualFooter()}
     </div>
   `;
@@ -3219,12 +3344,19 @@ function bindEvents() {
     }
     state.sessionUserId = null;
     state.activeView = "dashboard";
+    state.reportActionDialog = null;
     saveState();
     renderApp();
   });
 
   const resetBtn = document.getElementById("reset-btn");
   if (resetBtn) resetBtn.addEventListener("click", resetState);
+
+  document.querySelectorAll("[data-dismiss-alert]").forEach((button) => {
+    button.addEventListener("click", () => {
+      dismissAlert(button.dataset.dismissAlert);
+    });
+  });
 
   const reportForm = document.getElementById("report-form");
   if (reportForm) reportForm.addEventListener("submit", handleReportSubmit);
@@ -3578,8 +3710,19 @@ function bindEvents() {
 
   document.querySelectorAll(".report-action").forEach((button) => {
     button.addEventListener("click", () => {
+      if (button.dataset.action === "approve" || button.dataset.action === "return") {
+        openReportActionDialog(button.dataset.reportId, button.dataset.action, button.dataset.stage);
+        return;
+      }
       handleReportAction(button.dataset.reportId, button.dataset.action, button.dataset.stage);
     });
+  });
+
+  const reportActionForm = document.getElementById("report-action-form");
+  if (reportActionForm) reportActionForm.addEventListener("submit", handleReportActionFormSubmit);
+
+  document.querySelectorAll("[data-close-report-dialog]").forEach((button) => {
+    button.addEventListener("click", closeReportActionDialog);
   });
 
   document.querySelectorAll(".report-edit").forEach((button) => {
@@ -3675,6 +3818,7 @@ function handleLogin(event) {
   state.loginError = "";
   state.sessionUserId = user.id;
   state.activeView = "dashboard";
+  state.reportActionDialog = null;
   logAudit(user.name, "تسجيل الدخول", "جلسة النظام", user.role === "mission" ? getMissionName(user.missionId) : user.role === "department" ? getDepartmentName(user.departmentId) : "وزارة");
   saveState();
   renderApp();
@@ -4194,7 +4338,22 @@ function handlePlanAction(planId, actionKey, deltaValue, nextStatus, progressVal
   renderApp();
 }
 
-function handleReportAction(reportId, actionKey, nextStage) {
+function handleReportActionFormSubmit(event) {
+  event.preventDefault();
+  const form = new FormData(event.currentTarget);
+  handleReportAction(
+    String(form.get("reportId") || ""),
+    String(form.get("actionKey") || ""),
+    String(form.get("nextStage") || ""),
+    {
+      reviewNotes: String(form.get("reviewNotes") || "").trim(),
+      completeness: Number(form.get("completeness") || 0),
+      analysis: Number(form.get("analysis") || 0)
+    }
+  );
+}
+
+function handleReportAction(reportId, actionKey, nextStage, actionPayload = null) {
   const report = state.reports.find((item) => item.id === reportId);
   const user = getSessionUser();
   if (!report || !user) return;
@@ -4212,18 +4371,26 @@ function handleReportAction(reportId, actionKey, nextStage) {
     archive: "أرشفة التقرير",
     resubmit: "إعادة رفع التقرير"
   };
+  if ((actionKey === "return" || actionKey === "approve") && !actionPayload) {
+    addAlert("danger", "تعذر تنفيذ الإجراء", "يجب استكمال نموذج المراجعة قبل تنفيذ هذا الإجراء.");
+    saveState();
+    renderApp();
+    return;
+  }
   if (actionKey === "return") {
-    const note = window.prompt("أدخل ملاحظات المراجعة المطلوبة لاستكمال التقرير:", report.reviewNotes || "");
-    if (note === null) return;
-    report.reviewNotes = note.trim();
+    const note = String(actionPayload?.reviewNotes || "").trim();
+    if (!note) {
+      addAlert("danger", "تعذر إعادة التقرير", "يجب إدخال ملاحظات مراجعة واضحة قبل إعادة التقرير للبعثة.");
+      saveState();
+      renderApp();
+      return;
+    }
+    report.reviewNotes = note;
   }
   if (actionKey === "approve") {
-    const completenessInput = window.prompt("قيّم شمولية المحتوى من 1 إلى 5:", String(report.qualityScores?.completeness || 4));
-    if (completenessInput === null) return;
-    const analysisInput = window.prompt("قيّم جودة التحليل من 1 إلى 5:", String(report.qualityScores?.analysis || 4));
-    if (analysisInput === null) return;
-    const completeness = Math.min(5, Math.max(1, Number(completenessInput)));
-    const analysis = Math.min(5, Math.max(1, Number(analysisInput)));
+    const note = String(actionPayload?.reviewNotes || "").trim();
+    const completeness = Math.min(5, Math.max(1, Number(actionPayload?.completeness || 0)));
+    const analysis = Math.min(5, Math.max(1, Number(actionPayload?.analysis || 0)));
     if (!Number.isFinite(completeness) || !Number.isFinite(analysis)) {
       addAlert("danger", "تعذر اعتماد التقرير", "يجب إدخال درجات صحيحة بين 1 و5 لتقييم الجودة.");
       saveState();
@@ -4235,14 +4402,13 @@ function handleReportAction(reportId, actionKey, nextStage) {
       completeness,
       analysis
     };
-    if (!report.reviewNotes) {
-      report.reviewNotes = "تمت المراجعة والاعتماد بعد استكمال المتطلبات.";
-    }
+    report.reviewNotes = note || report.reviewNotes || "تمت المراجعة والاعتماد بعد استكمال المتطلبات.";
   }
   report.workflowStage = allowedAction.nextStage;
   if (report.requestId) {
     syncRequestCompletion(report.requestId, report.missionId);
   }
+  state.reportActionDialog = null;
   addWorkflowEntry(report, user.name, labels[actionKey] || "تحديث المسار", allowedAction.nextStage);
   addAlert(allowedAction.nextStage === "أعيد للبعثة للاستكمال" ? "warning" : "info", "تحديث مسار التقرير", `انتقل التقرير "${report.title}" إلى مرحلة "${allowedAction.nextStage}".`);
   logAudit(user.name, labels[actionKey] || "تحديث المسار", report.title, getMissionName(report.missionId));
