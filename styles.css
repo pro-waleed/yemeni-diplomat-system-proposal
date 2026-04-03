@@ -141,6 +141,18 @@ textarea {
   background: linear-gradient(135deg, var(--teal), var(--teal-strong));
 }
 
+.mobile-tab-switcher {
+  display: none;
+  padding: 16px 18px;
+  border-radius: 22px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.desktop-tab-strip {
+  display: flex;
+}
+
 .cred-card,
 .nav-item,
 .metric-card,
@@ -1509,12 +1521,21 @@ textarea {
     margin-top: 0;
   }
 
+  .mobile-tab-switcher {
+    display: block;
+  }
+
+  .desktop-tab-strip {
+    display: none;
+  }
+
   .tab-strip {
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
+    overflow: visible;
   }
 
   .tab-chip {
-    white-space: nowrap;
+    white-space: normal;
   }
 
   .detail-row.triple {

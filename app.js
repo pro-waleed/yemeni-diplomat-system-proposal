@@ -2451,6 +2451,20 @@ function renderPeriodicDetailContent(report, tabKey) {
     `;
 }
 
+function renderMobileTabSwitcher(id, label, options, selectedValue, note = "") {
+  return `
+    <div class="mobile-tab-switcher">
+      <label class="field">
+        <span>${label}</span>
+        <select id="${id}">
+          ${options.map((option) => `<option value="${option.key}" ${selectedValue === option.key ? "selected" : ""}>${option.label}</option>`).join("")}
+        </select>
+      </label>
+      ${note ? `<p class="detail-note">${note}</p>` : ""}
+    </div>
+  `;
+}
+
 function renderReportFamilyWorkspace(report) {
   const family = inferReportFamily(report);
   if (family === "periodic") {
@@ -2485,7 +2499,8 @@ function renderReportFamilyWorkspace(report) {
               <p class="detail-note">${getCompletedIndicatorCount(report.bilateralIndicators)}/${BILATERAL_INDICATOR_FIELDS.length} مؤشرات مكتملة</p>
             </div>
           </div>
-          <div class="tab-strip">
+          ${renderMobileTabSwitcher("periodic-detail-switcher", "محور الملف الزمني", PERIODIC_REPORT_TABS, periodicTab, "اختر المحور المطلوب لعرض تفاصيله داخل الملف الزمني من دون تنقل أفقي طويل.")}
+          <div class="tab-strip desktop-tab-strip">
             ${PERIODIC_REPORT_TABS.map((tab) => `<button class="tab-chip ${periodicTab === tab.key ? "active" : ""}" type="button" data-periodic-tab="${tab.key}">${tab.label}</button>`).join("")}
           </div>
           ${renderPeriodicDetailContent(report, periodicTab)}
@@ -3231,7 +3246,8 @@ function renderReportsPage(user) {
             </div>
             <span class="tag info">${filteredReports.length} تقرير</span>
           </div>
-          <div class="tab-strip">
+          ${renderMobileTabSwitcher("report-family-switcher", "عائلة التقارير", REPORT_FAMILY_TABS, state.reportRegistryTab, "اختر العائلة التي تريد مراجعتها، وسيُعاد ضبط السجل على نفس النطاق مباشرة.")}
+          <div class="tab-strip desktop-tab-strip">
             ${REPORT_FAMILY_TABS.map((tab) => `<button class="tab-chip ${state.reportRegistryTab === tab.key ? "active" : ""}" type="button" data-report-family-tab="${tab.key}">${tab.label}</button>`).join("")}
           </div>
           <div class="report-filter-bar">
@@ -3596,7 +3612,8 @@ function renderMissionReportForm(user) {
                 `).join("")}
               </div>
             </div>
-            <div class="tab-strip report-inner-tabs">
+            ${renderMobileTabSwitcher("periodic-form-switcher", "تبويب التقرير الزمني", PERIODIC_REPORT_TABS, periodicFormTab, "تنقل بين محاور التقرير الزمني خطوة بخطوة من هذه القائمة المخصصة للجوال.")}
+            <div class="tab-strip report-inner-tabs desktop-tab-strip">
               ${PERIODIC_REPORT_TABS.map((tab) => `<button class="tab-chip ${periodicFormTab === tab.key ? "active" : ""}" type="button" data-periodic-form-tab="${tab.key}">${tab.label}</button>`).join("")}
             </div>
             <div class="periodic-form-panels">
@@ -5638,6 +5655,7 @@ function bindEvents() {
   const reportFormPanels = document.querySelectorAll("[data-report-form-panel]");
   const reportFormStepButtons = document.querySelectorAll("[data-report-form-step]");
   const periodicFormTabButtons = document.querySelectorAll("[data-periodic-form-tab]");
+  const periodicFormSwitcher = document.getElementById("periodic-form-switcher");
   if (reportFamily && reportType && thematicTrack) {
     const periodicCoverageBadge = document.getElementById("periodic-coverage-badge");
     const periodicProgressBadge = document.getElementById("periodic-progress-badge");
@@ -5853,8 +5871,22 @@ function bindEvents() {
         document.querySelectorAll("[data-periodic-form-panel]").forEach((panel) => {
           panel.classList.toggle("active", panel.dataset.periodicFormPanel === state.periodicFormTab);
         });
+        if (periodicFormSwitcher) periodicFormSwitcher.value = state.periodicFormTab;
       });
     });
+
+    if (periodicFormSwitcher) {
+      periodicFormSwitcher.addEventListener("change", () => {
+        state.periodicFormTab = periodicFormSwitcher.value;
+        saveState();
+        periodicFormTabButtons.forEach((chip) => {
+          chip.classList.toggle("active", chip.dataset.periodicFormTab === state.periodicFormTab);
+        });
+        document.querySelectorAll("[data-periodic-form-panel]").forEach((panel) => {
+          panel.classList.toggle("active", panel.dataset.periodicFormPanel === state.periodicFormTab);
+        });
+      });
+    }
     reportForm.addEventListener("input", () => {
       updatePeriodicInsights();
       updateThematicInsights();
@@ -6032,6 +6064,17 @@ function bindEvents() {
       renderApp();
     });
   });
+
+  const reportFamilySwitcher = document.getElementById("report-family-switcher");
+  if (reportFamilySwitcher) {
+    reportFamilySwitcher.addEventListener("change", () => {
+      state.reportRegistryTab = reportFamilySwitcher.value;
+      const visibleReports = getRegistryReports(getSessionUser());
+      state.selectedReportId = visibleReports[0]?.id || null;
+      saveState();
+      renderApp();
+    });
+  }
 
   const reportSearch = document.getElementById("report-search");
   if (reportSearch) {
@@ -6302,6 +6345,15 @@ function bindEvents() {
       renderApp();
     });
   });
+
+  const periodicDetailSwitcher = document.getElementById("periodic-detail-switcher");
+  if (periodicDetailSwitcher) {
+    periodicDetailSwitcher.addEventListener("change", () => {
+      state.periodicReportTab = periodicDetailSwitcher.value;
+      saveState();
+      renderApp();
+    });
+  }
 
   document.querySelectorAll(".report-action").forEach((button) => {
     button.addEventListener("click", () => {
