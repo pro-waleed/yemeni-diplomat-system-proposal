@@ -162,6 +162,45 @@ const THEMATIC_TRACK_CONFIG = {
 
 const ACTIVITY_CATEGORY_OPTIONS = ["سياسي", "اقتصادي", "إعلامي", "ثقافي", "قنصلي", "بروتوكولي", "متعدد المسارات"];
 
+const CIRCULAR_CATEGORY_CONFIG = {
+  "توجيهي": {
+    description: "يستخدم لإيصال توجيه سياساتي أو إداري يحتاج إلى الإحاطة والعمل وفقه من البعثات.",
+    useCases: "توحيد المواقف، إحاطة رسمية، توجيه مرجعي",
+    actionHint: "حدد ما الذي يجب على البعثة التقيد به أو متابعته أو موافاة الوزارة بشأنه.",
+    bodyHint: "اكتب نصًا توجيهيًا واضحًا يحدد الخلفية العامة والمطلوب من البعثات بصورة مؤسسية.",
+    summaryHint: "موجز يوضح مضمون التوجيه وأثره على عمل البعثات.",
+    responseExpectation: "إفادة بالاطلاع والتنفيذ أو موافاة بملاحظات عند الحاجة.",
+    recommendedPriority: "متوسطة"
+  },
+  "تنفيذي": {
+    description: "يستخدم عندما يكون المطلوب من البعثات تنفيذ إجراء محدد خلال مهلة زمنية ومتابعته داخل النظام.",
+    useCases: "تحديث بيانات، رفع إفادة، تنفيذ إجراء تشغيلي",
+    actionHint: "صغ الإجراء التنفيذي المطلوب بدقة مع المخرج المتوقع من البعثة.",
+    bodyHint: "اكتب متن التعميم مع الخلفية والمطلوب التنفيذي والمعايير المرجوة للإنجاز.",
+    summaryHint: "موجز تنفيذي يشرح المطلوب العملي من البعثات.",
+    responseExpectation: "تأكيد إنجاز مع نتيجة التنفيذ ومرجع أو مرفق داعم إن وجد.",
+    recommendedPriority: "متوسطة"
+  },
+  "إداري": {
+    description: "يستخدم للترتيبات الإدارية والتنظيمية الداخلية التي تمس العمل المؤسسي أو متطلبات التشغيل.",
+    useCases: "تحديثات تنظيمية، بيانات إدارية، ترتيبات داخلية",
+    actionHint: "وضح المتطلبات الإدارية المطلوب استكمالها من كل بعثة والموعد النهائي.",
+    bodyHint: "اكتب متنًا إداريًا مباشرًا يوضح الإجراءات والنماذج أو البيانات المطلوبة.",
+    summaryHint: "موجز إداري يبين ماهية المطلوب وأثره التنظيمي.",
+    responseExpectation: "إفادة إدارية أو استكمال بيانات أو اعتماد ترتيب داخلي.",
+    recommendedPriority: "عادية"
+  },
+  "عاجل": {
+    description: "يستخدم للحالات المستعجلة التي تتطلب استجابة سريعة أو متابعة فورية من البعثات المستهدفة.",
+    useCases: "تكليف عاجل، حالة طارئة، استجابة زمنية ضيقة",
+    actionHint: "اذكر المطلوب العاجل والموعد القصير بوضوح مع تحديد ما يجب رفعه فورًا.",
+    bodyHint: "اكتب متنًا مختصرًا وحاسمًا يوضح سبب الاستعجال والإجراء الفوري المطلوب.",
+    summaryHint: "موجز عاجل يلفت إلى طبيعة الاستعجال والإجراء المطلوب فورًا.",
+    responseExpectation: "تأكيد فوري بالاطلاع ثم موافاة بنتيجة التنفيذ خلال المهلة.",
+    recommendedPriority: "عالية"
+  }
+};
+
 const BILATERAL_INDICATOR_FIELDS = [
   { key: "political", label: "السياسية", hint: "الاتصالات الرسمية، الزيارات، التنسيق في المحافل الدولية" },
   { key: "economic", label: "الاقتصادية والاستثمارية", hint: "التبادل التجاري، الاستثمارات، الاتفاقيات الاقتصادية" },
@@ -234,6 +273,10 @@ const seedState = () => ({
   editingReportId: null,
   reportActionDialog: null,
   circularActionDialog: null,
+  circularSearch: "",
+  circularStatusFilter: "all",
+  circularCategoryFilter: "all",
+  circularPriorityFilter: "all",
   editingCircularId: null,
   editingMeetingId: null,
   editingPlanId: null,
@@ -438,6 +481,10 @@ function extractRuntimeState(source = seedState()) {
     editingReportId: source.editingReportId || null,
     reportActionDialog: source.reportActionDialog || null,
     circularActionDialog: source.circularActionDialog && typeof source.circularActionDialog === "object" ? source.circularActionDialog : null,
+    circularSearch: source.circularSearch || "",
+    circularStatusFilter: source.circularStatusFilter || "all",
+    circularCategoryFilter: source.circularCategoryFilter || "all",
+    circularPriorityFilter: source.circularPriorityFilter || "all",
     editingCircularId: source.editingCircularId || null,
     editingMeetingId: source.editingMeetingId || null,
     editingPlanId: source.editingPlanId || null,
@@ -510,6 +557,10 @@ function loadState() {
   parsed.reportFormStep = parsed.reportFormStep || "basics";
   parsed.periodicFormTab = parsed.periodicFormTab || "bilateral";
   parsed.circularActionDialog = parsed.circularActionDialog && typeof parsed.circularActionDialog === "object" ? parsed.circularActionDialog : null;
+  parsed.circularSearch = parsed.circularSearch || "";
+  parsed.circularStatusFilter = parsed.circularStatusFilter || "all";
+  parsed.circularCategoryFilter = parsed.circularCategoryFilter || "all";
+  parsed.circularPriorityFilter = parsed.circularPriorityFilter || "all";
   parsed.editingCircularId = parsed.editingCircularId || null;
   parsed.editingMeetingId = parsed.editingMeetingId || null;
   parsed.editingPlanId = parsed.editingPlanId || null;
@@ -927,6 +978,10 @@ function getCircularPriorityTone(priority) {
   return "info";
 }
 
+function getCircularCategoryConfig(category = "تنفيذي") {
+  return CIRCULAR_CATEGORY_CONFIG[category] || CIRCULAR_CATEGORY_CONFIG["تنفيذي"];
+}
+
 function getCircularUrgency(circular) {
   const stats = getCircularCompletion(circular);
   if (circular.status === "مغلق") return { label: "مغلق", tone: "success" };
@@ -1035,6 +1090,50 @@ function getSortedCircularsForDisplay(circulars) {
     if (priorityB !== priorityA) return priorityB - priorityA;
     return String(a.dueDate || "").localeCompare(String(b.dueDate || ""));
   });
+}
+
+function getCircularRegistryCirculars(user = getSessionUser()) {
+  const search = String(state.circularSearch || "").trim().toLowerCase();
+  let circulars = getVisibleCirculars(user);
+
+  if (state.circularStatusFilter !== "all") {
+    circulars = circulars.filter((circular) => {
+      const urgency = getCircularUrgency(circular).label;
+      if (state.circularStatusFilter === "active") return circular.status === "نشط";
+      if (state.circularStatusFilter === "overdue") return urgency === "متأخر";
+      if (state.circularStatusFilter === "due-soon") return urgency === "قريب الاستحقاق";
+      if (state.circularStatusFilter === "completed") return urgency === "مكتمل التنفيذ";
+      if (state.circularStatusFilter === "closed") return circular.status === "مغلق";
+      return true;
+    });
+  }
+
+  if (state.circularCategoryFilter !== "all") {
+    circulars = circulars.filter((circular) => circular.category === state.circularCategoryFilter);
+  }
+
+  if (state.circularPriorityFilter !== "all") {
+    circulars = circulars.filter((circular) => circular.priority === state.circularPriorityFilter);
+  }
+
+  if (search) {
+    circulars = circulars.filter((circular) => {
+      const haystack = [
+        circular.title,
+        circular.summary,
+        circular.body,
+        circular.actionRequired,
+        circular.category,
+        circular.priority,
+        circular.issuedBy,
+        circular.attachmentName,
+        ...normalizeMissionIdList(circular.targetMissionIds).map((missionId) => getMissionName(missionId))
+      ].join(" ").toLowerCase();
+      return haystack.includes(search);
+    });
+  }
+
+  return getSortedCircularsForDisplay(circulars);
 }
 
 function getCircularActions(circular, user = getSessionUser()) {
@@ -2974,10 +3073,13 @@ function renderReportDetails(report, user) {
 }
 
 function renderCircularsPage(user) {
-  const circulars = getSortedCircularsForDisplay(getVisibleCirculars(user));
-  const editingCircular = circulars.find((item) => item.id === state.editingCircularId) || null;
+  const visibleCirculars = getVisibleCirculars(user);
+  const circulars = getCircularRegistryCirculars(user);
+  const editingCircular = visibleCirculars.find((item) => item.id === state.editingCircularId) || null;
   const metrics = getCircularExecutiveMetrics(user);
   const canIssueCircular = user.role === "planning" || user.role === "admin";
+  const circularCategory = editingCircular?.category || "تنفيذي";
+  const categoryConfig = getCircularCategoryConfig(circularCategory);
   return `
     <section class="panel">
       <div class="topbar">
@@ -2995,6 +3097,39 @@ function renderCircularsPage(user) {
       <article class="metric-card"><span>قريبة الاستحقاق</span><strong>${metrics.dueSoon}</strong></article>
       <article class="metric-card"><span>عالية الأولوية</span><strong>${metrics.highPriority}</strong></article>
     </section>
+    <section class="panel">
+      <div class="report-filter-bar circular-filter-bar">
+        <label class="field">
+          <span>بحث</span>
+          <input id="circular-search" value="${state.circularSearch || ""}" placeholder="ابحث في العنوان أو المتن أو البعثة أو الجهة المصدرة">
+        </label>
+        <label class="field">
+          <span>الحالة</span>
+          <select id="circular-status-filter">
+            <option value="all" ${state.circularStatusFilter === "all" ? "selected" : ""}>الكل</option>
+            <option value="active" ${state.circularStatusFilter === "active" ? "selected" : ""}>نشط</option>
+            <option value="due-soon" ${state.circularStatusFilter === "due-soon" ? "selected" : ""}>قريب الاستحقاق</option>
+            <option value="overdue" ${state.circularStatusFilter === "overdue" ? "selected" : ""}>متأخر</option>
+            <option value="completed" ${state.circularStatusFilter === "completed" ? "selected" : ""}>مكتمل التنفيذ</option>
+            <option value="closed" ${state.circularStatusFilter === "closed" ? "selected" : ""}>مغلق</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>نوع التعميم</span>
+          <select id="circular-category-filter">
+            <option value="all" ${state.circularCategoryFilter === "all" ? "selected" : ""}>الكل</option>
+            ${Object.keys(CIRCULAR_CATEGORY_CONFIG).map((item) => `<option value="${item}" ${state.circularCategoryFilter === item ? "selected" : ""}>${item}</option>`).join("")}
+          </select>
+        </label>
+        <label class="field">
+          <span>الأولوية</span>
+          <select id="circular-priority-filter">
+            <option value="all" ${state.circularPriorityFilter === "all" ? "selected" : ""}>الكل</option>
+            ${["عالية", "متوسطة", "عادية"].map((item) => `<option value="${item}" ${state.circularPriorityFilter === item ? "selected" : ""}>${item}</option>`).join("")}
+          </select>
+        </label>
+      </div>
+    </section>
     <section class="two-col">
       <div class="panel">
         ${canIssueCircular ? `
@@ -3011,32 +3146,41 @@ function renderCircularsPage(user) {
               </label>
               <label class="field">
                 <span>نوع التعميم</span>
-                <select name="category" required>
+                <select name="category" id="circular-category" required>
                   ${["توجيهي", "تنفيذي", "إداري", "عاجل"].map((item) => `<option value="${item}" ${editingCircular?.category === item || (!editingCircular && item === "تنفيذي") ? "selected" : ""}>${item}</option>`).join("")}
                 </select>
               </label>
               <label class="field">
                 <span>الأولوية</span>
-                <select name="priority" required>
+                <select name="priority" id="circular-priority" required>
                   ${["عالية", "متوسطة", "عادية"].map((item) => `<option value="${item}" ${editingCircular?.priority === item || (!editingCircular && item === "متوسطة") ? "selected" : ""}>${item}</option>`).join("")}
                 </select>
               </label>
               <label class="field full">
                 <span>ملخص التعميم</span>
-                <textarea name="summary" placeholder="موجز يوضح الغرض من التعميم وما هو المطلوب من البعثات.">${editingCircular ? (editingCircular.summary || "") : ""}</textarea>
+                <textarea id="circular-summary" name="summary" placeholder="${categoryConfig.summaryHint}">${editingCircular ? (editingCircular.summary || "") : ""}</textarea>
               </label>
               <label class="field full">
                 <span>نص التعميم / المطلوب التنفيذي</span>
-                <textarea name="body" placeholder="اكتب هنا متن التعميم أو التعليمات المطلوب تنفيذها بصورة واضحة ومباشرة.">${editingCircular ? (editingCircular.body || "") : ""}</textarea>
+                <textarea id="circular-body" name="body" placeholder="${categoryConfig.bodyHint}">${editingCircular ? (editingCircular.body || "") : ""}</textarea>
               </label>
               <label class="field full">
                 <span>الإجراء المطلوب من البعثات</span>
-                <textarea name="actionRequired" placeholder="حدد الإجراء التنفيذي المطلوب، مثل: رفع إفادة، تحديث قاعدة بيانات، موافاة الوزارة بملاحظات..." required>${editingCircular ? (editingCircular.actionRequired || "") : ""}</textarea>
+                <textarea id="circular-action-required" name="actionRequired" placeholder="${categoryConfig.actionHint}" required>${editingCircular ? (editingCircular.actionRequired || "") : ""}</textarea>
               </label>
               <label class="field full">
                 <span>اسم المرفق المرجعي</span>
                 <input name="attachmentName" value="${editingCircular ? (editingCircular.attachmentName || "") : ""}" placeholder="اسم ملف أو مرجع مختصر إذا كان هناك تعميم مرفق">
               </label>
+              <div class="detail-card circular-guidance-card field full">
+                <div class="record-top">
+                  <strong id="circular-guidance-title">دليل ${circularCategory}</strong>
+                  <span class="tag info" id="circular-guidance-tag">${circularCategory}</span>
+                </div>
+                <p class="detail-note" id="circular-guidance-description">${categoryConfig.description}</p>
+                <div class="detail-row"><span>مناسب لـ</span><span id="circular-guidance-use-cases">${categoryConfig.useCases}</span></div>
+                <div class="detail-row"><span>المخرج المتوقع</span><span id="circular-guidance-response">${categoryConfig.responseExpectation}</span></div>
+              </div>
               <label class="field full">
                 <span>البعثات المستهدفة</span>
                 <div class="checkbox-grid">
@@ -3048,6 +3192,10 @@ function renderCircularsPage(user) {
                   `).join("")}
                 </div>
               </label>
+              <div class="detail-row field full circular-selection-summary">
+                <span>عدد البعثات المختارة</span>
+                <span id="circular-selection-count">${editingCircular ? editingCircular.targetMissionIds.length : state.missions.length}</span>
+              </div>
               <div class="field full">
                 <button class="btn primary" type="submit">${editingCircular ? "حفظ التعديلات" : "إصدار التعميم"}</button>
                 ${editingCircular ? `<button class="btn secondary cancel-edit" type="button" data-kind="circular">إلغاء التعديل</button>` : ""}
@@ -3055,7 +3203,10 @@ function renderCircularsPage(user) {
             </form>
           </div>
         ` : ""}
-        <div class="section-title">سجل التعاميم</div>
+        <div class="record-top">
+          <div class="section-title">سجل التعاميم</div>
+          <span class="tag info">النتائج ${circulars.length}</span>
+        </div>
         <div class="detail-list circular-record-stack">
           ${circulars.map((circular) => {
             const stats = getCircularCompletion(circular);
@@ -4127,6 +4278,86 @@ function bindEvents() {
 
   const circularForm = document.getElementById("circular-form");
   if (circularForm) circularForm.addEventListener("submit", handleCircularSubmit);
+
+  const circularCategory = document.getElementById("circular-category");
+  const circularPriority = document.getElementById("circular-priority");
+  const circularSummary = document.getElementById("circular-summary");
+  const circularBody = document.getElementById("circular-body");
+  const circularActionRequired = document.getElementById("circular-action-required");
+  const circularGuidanceTitle = document.getElementById("circular-guidance-title");
+  const circularGuidanceTag = document.getElementById("circular-guidance-tag");
+  const circularGuidanceDescription = document.getElementById("circular-guidance-description");
+  const circularGuidanceUseCases = document.getElementById("circular-guidance-use-cases");
+  const circularGuidanceResponse = document.getElementById("circular-guidance-response");
+  if (circularCategory) {
+    const applyCircularCategoryGuidance = () => {
+      const config = getCircularCategoryConfig(circularCategory.value);
+      if (!state.editingCircularId && circularPriority) circularPriority.value = config.recommendedPriority;
+      if (circularSummary) circularSummary.placeholder = config.summaryHint;
+      if (circularBody) circularBody.placeholder = config.bodyHint;
+      if (circularActionRequired) circularActionRequired.placeholder = config.actionHint;
+      if (circularGuidanceTitle) circularGuidanceTitle.textContent = `دليل ${circularCategory.value}`;
+      if (circularGuidanceTag) circularGuidanceTag.textContent = circularCategory.value;
+      if (circularGuidanceDescription) circularGuidanceDescription.textContent = config.description;
+      if (circularGuidanceUseCases) circularGuidanceUseCases.textContent = config.useCases;
+      if (circularGuidanceResponse) circularGuidanceResponse.textContent = config.responseExpectation;
+    };
+    circularCategory.addEventListener("change", applyCircularCategoryGuidance);
+    applyCircularCategoryGuidance();
+  }
+
+  const circularSelectionCount = document.getElementById("circular-selection-count");
+  if (circularSelectionCount && circularForm) {
+    const missionInputs = circularForm.querySelectorAll('input[name="missionId"]');
+    const updateCircularSelectionCount = () => {
+      circularSelectionCount.textContent = String([...missionInputs].filter((input) => input.checked).length);
+    };
+    missionInputs.forEach((input) => input.addEventListener("change", updateCircularSelectionCount));
+    updateCircularSelectionCount();
+  }
+
+  const circularSearch = document.getElementById("circular-search");
+  if (circularSearch) {
+    const applyCircularSearch = () => {
+      state.circularSearch = circularSearch.value;
+      saveState();
+      renderApp();
+    };
+    circularSearch.addEventListener("change", applyCircularSearch);
+    circularSearch.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        applyCircularSearch();
+      }
+    });
+  }
+
+  const circularStatusFilter = document.getElementById("circular-status-filter");
+  if (circularStatusFilter) {
+    circularStatusFilter.addEventListener("change", () => {
+      state.circularStatusFilter = circularStatusFilter.value;
+      saveState();
+      renderApp();
+    });
+  }
+
+  const circularCategoryFilter = document.getElementById("circular-category-filter");
+  if (circularCategoryFilter) {
+    circularCategoryFilter.addEventListener("change", () => {
+      state.circularCategoryFilter = circularCategoryFilter.value;
+      saveState();
+      renderApp();
+    });
+  }
+
+  const circularPriorityFilter = document.getElementById("circular-priority-filter");
+  if (circularPriorityFilter) {
+    circularPriorityFilter.addEventListener("change", () => {
+      state.circularPriorityFilter = circularPriorityFilter.value;
+      saveState();
+      renderApp();
+    });
+  }
 
   const meetingForm = document.getElementById("meeting-form");
   if (meetingForm) meetingForm.addEventListener("submit", handleMeetingSubmit);

@@ -655,6 +655,15 @@ textarea {
     rgba(255, 255, 255, 0.72);
 }
 
+.circular-filter-bar {
+  margin: 0;
+}
+
+.circular-guidance-card,
+.circular-selection-summary {
+  background: rgba(255, 255, 255, 0.78);
+}
+
 .circular-body-card {
   background: rgba(255, 255, 255, 0.7);
 }
