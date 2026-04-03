@@ -733,6 +733,79 @@ textarea {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.entity-filter-bar,
+.entity-overview-strip,
+.entity-record-stack,
+.entity-group-stack,
+.entity-compact-list,
+.entity-inline-stack {
+  display: grid;
+  gap: 14px;
+}
+
+.entity-overview-strip {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 18px;
+}
+
+.entity-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.entity-section-head .mini {
+  margin-top: 6px;
+}
+
+.entity-group-card,
+.entity-inline-card,
+.management-record-card {
+  background:
+    linear-gradient(135deg, rgba(15, 118, 110, 0.05), rgba(255, 255, 255, 0.84)),
+    rgba(255, 255, 255, 0.72);
+}
+
+.entity-summary-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 0.93rem;
+}
+
+.entity-tag-stack {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: end;
+  gap: 8px;
+}
+
+.entity-disclosure-grid,
+.entity-group-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.entity-group-grid .detail-card,
+.entity-disclosure-grid .detail-card {
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.entity-compact-list {
+  gap: 10px;
+}
+
+.entity-inline-card .entity-profile-card,
+.management-record-card .entity-disclosure-grid,
+.management-record-card .entity-group-grid {
+  margin-top: 2px;
+}
+
 .report-detail-hero {
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(240px, 0.85fr);
@@ -1090,6 +1163,9 @@ textarea {
   .report-indicator-grid,
   .report-periodic-status-grid,
   .report-filter-bar,
+  .entity-overview-strip,
+  .entity-disclosure-grid,
+  .entity-group-grid,
   .entity-kpi-grid,
   .circular-kpi-strip {
     grid-template-columns: 1fr;
@@ -1144,9 +1220,14 @@ textarea {
   .mission-picker-head,
   .mission-picker-actions,
   .mission-group-summary,
-  .compact-disclosure summary {
+  .compact-disclosure summary,
+  .entity-section-head {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .entity-tag-stack {
+    justify-content: start;
   }
 
   .detail-row.triple {

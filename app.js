@@ -277,6 +277,10 @@ const seedState = () => ({
   circularStatusFilter: "all",
   circularCategoryFilter: "all",
   circularPriorityFilter: "all",
+  entitySearch: "",
+  entityDepartmentFilter: "all",
+  managementSearch: "",
+  managementDepartmentFilter: "all",
   editingCircularId: null,
   editingMeetingId: null,
   editingPlanId: null,
@@ -485,6 +489,10 @@ function extractRuntimeState(source = seedState()) {
     circularStatusFilter: source.circularStatusFilter || "all",
     circularCategoryFilter: source.circularCategoryFilter || "all",
     circularPriorityFilter: source.circularPriorityFilter || "all",
+    entitySearch: source.entitySearch || "",
+    entityDepartmentFilter: source.entityDepartmentFilter || "all",
+    managementSearch: source.managementSearch || "",
+    managementDepartmentFilter: source.managementDepartmentFilter || "all",
     editingCircularId: source.editingCircularId || null,
     editingMeetingId: source.editingMeetingId || null,
     editingPlanId: source.editingPlanId || null,
@@ -857,6 +865,63 @@ function getGroupedMissions(missions) {
     department,
     missions: missions.filter((mission) => mission.departmentId === department.id)
   })).filter((group) => group.missions.length);
+}
+
+function matchesSearchText(values, query) {
+  const normalizedQuery = String(query || "").trim().toLowerCase();
+  if (!normalizedQuery) return true;
+  return values.some((value) => String(value || "").toLowerCase().includes(normalizedQuery));
+}
+
+function getFilteredDepartmentMissionCollections({
+  departments = state.departments,
+  missions = state.missions,
+  search = "",
+  departmentFilter = "all"
+} = {}) {
+  const normalizedSearch = String(search || "").trim().toLowerCase();
+  const availableDepartmentIds = new Set(departments.map((department) => department.id));
+  const effectiveDepartmentFilter = departmentFilter !== "all" && availableDepartmentIds.has(departmentFilter)
+    ? departmentFilter
+    : "all";
+  const matchingDepartmentIds = new Set(
+    departments
+      .filter((department) => matchesSearchText([department.name, department.username], normalizedSearch))
+      .map((department) => department.id)
+  );
+  const visibleMissions = missions.filter((mission) => {
+    if (effectiveDepartmentFilter !== "all" && mission.departmentId !== effectiveDepartmentFilter) return false;
+    if (!normalizedSearch) return true;
+    return matchingDepartmentIds.has(mission.departmentId)
+      || matchesSearchText([mission.name, mission.username, getDepartmentName(mission.departmentId)], normalizedSearch);
+  });
+  const visibleDepartmentIds = new Set(visibleMissions.map((mission) => mission.departmentId));
+  const visibleDepartments = departments.filter((department) => {
+    if (effectiveDepartmentFilter !== "all" && department.id !== effectiveDepartmentFilter) return false;
+    if (!normalizedSearch) return true;
+    return matchingDepartmentIds.has(department.id) || visibleDepartmentIds.has(department.id);
+  });
+  return {
+    search: normalizedSearch,
+    departmentFilter: effectiveDepartmentFilter,
+    visibleDepartments,
+    visibleMissions,
+    groups: getGroupedMissions(visibleMissions)
+  };
+}
+
+function getQualityTone(score) {
+  const numericScore = Number(score || 0);
+  if (numericScore >= 4) return "success";
+  if (numericScore >= 3) return "warning";
+  return "danger";
+}
+
+function getQualityLabel(score) {
+  const numericScore = Number(score || 0);
+  if (numericScore >= 4) return "مرتفع";
+  if (numericScore >= 3) return "متوسط";
+  return "بحاجة إلى تحسين";
 }
 
 function renderMissionPicker({
@@ -3607,6 +3672,29 @@ function renderEntitiesPage(user) {
   const departments = user.role === "department"
     ? state.departments.filter((department) => department.id === user.departmentId)
     : state.departments;
+  const {
+    visibleDepartments,
+    visibleMissions,
+    groups: visibleMissionGroups,
+    departmentFilter
+  } = getFilteredDepartmentMissionCollections({
+    departments,
+    missions,
+    search: state.entitySearch,
+    departmentFilter: user.role === "department" ? user.departmentId : state.entityDepartmentFilter
+  });
+  const missionProfiles = visibleMissions.map((mission) => ({
+    mission,
+    profile: getMissionReportProfile(mission.id)
+  }));
+  const averageQuality = missionProfiles.length
+    ? (missionProfiles.reduce((sum, item) => sum + Number(item.profile.averageQuality || 0), 0) / missionProfiles.length).toFixed(1)
+    : "0.0";
+  const overdueRequests = missionProfiles.reduce((sum, item) => sum + item.profile.overdueRequests.length, 0);
+  const approvedReports = missionProfiles.reduce((sum, item) => sum + item.profile.approvedCount, 0);
+  const pendingDepartmentReviews = missionProfiles.reduce((sum, item) => sum + item.profile.pendingDepartmentCount, 0);
+  const autoOpenDepartmentCards = visibleDepartments.length <= 1;
+  const autoOpenMissionGroups = visibleMissionGroups.length <= 1 || departmentFilter !== "all";
   return `
     <section class="panel">
       <div class="topbar">
@@ -3616,120 +3704,239 @@ function renderEntitiesPage(user) {
           <p class="muted">ملف موحد لكل بعثة أو دائرة يشمل الخطط والتقارير والتعاميم والاجتماعات والتدريب.</p>
         </div>
       </div>
-    </section>
-    <section class="two-col">
-      ${departments.map((department) => {
-        const profile = getDepartmentReportProfile(department.id);
-        return `
-          <div class="panel entity-profile-card">
-            <div class="record-top">
-              <div>
-                <div class="section-title">${department.name}</div>
-                <div class="record-meta">${profile.missions.length} بعثة ضمن النطاق</div>
-              </div>
-              <span class="tag ${Number(profile.averageQuality) >= 4 ? "success" : Number(profile.averageQuality) >= 3 ? "warning" : "danger"}">جودة ${profile.averageQuality}/5</span>
-            </div>
-            <div class="entity-kpi-grid">
-              <div class="report-mini-kpi">
-                <span>المعتمد</span>
-                <strong>${profile.approvedCount}</strong>
-              </div>
-              <div class="report-mini-kpi">
-                <span>قيد المراجعة</span>
-                <strong>${profile.pendingDepartmentCount}</strong>
-              </div>
-              <div class="report-mini-kpi">
-                <span>المعاد للاستكمال</span>
-                <strong>${profile.returnedCount}</strong>
-              </div>
-              <div class="report-mini-kpi">
-                <span>الطلبات المتأخرة</span>
-                <strong>${profile.overdueCount}</strong>
-              </div>
-            </div>
-            <div class="detail-card">
-              <div class="section-title">مقارنة البعثات</div>
-              <div class="detail-list">
-                ${profile.missions.map((item) => `
-                  <div class="detail-row">
-                    <span>${item.mission.name}</span>
-                    <span>جودة ${item.profile.averageQuality}/5 | متأخر ${item.profile.overdueRequests.length}</span>
-                  </div>
-                `).join("") || `<div class="empty">لا توجد بعثات ضمن هذه الدائرة.</div>`}
-              </div>
-            </div>
-            <div class="detail-card">
-              <div class="section-title">نقاط انتباه الدائرة</div>
-              <div class="detail-list">
-                <div class="detail-row"><span>الأقل جودة</span><span>${profile.weakestMission ? `${profile.weakestMission.mission.name} (${profile.weakestMission.profile.averageQuality}/5)` : "لا توجد بيانات كافية"}</span></div>
-                <div class="detail-row"><span>الأكثر تأخرًا</span><span>${profile.mostDelayedMission && profile.mostDelayedMission.profile.overdueRequests.length ? `${profile.mostDelayedMission.mission.name} (${profile.mostDelayedMission.profile.overdueRequests.length})` : "لا توجد طلبات متأخرة"}</span></div>
-                <div class="detail-row"><span>التقييم العام</span><span>${Number(profile.averageQuality) >= 4 ? "أداء قوي" : Number(profile.averageQuality) >= 3 ? "أداء متوسط" : "يحتاج متابعة مركزة"}</span></div>
-                <div class="detail-row"><span>اتجاه الجودة</span><span>${profile.qualityTrend}</span></div>
-              </div>
-            </div>
+      <div class="report-filter-bar entity-filter-bar">
+        <label class="field">
+          <span>البحث</span>
+          <input id="entity-search" type="search" value="${state.entitySearch || ""}" placeholder="ابحث باسم البعثة أو الدائرة أو اسم المستخدم">
+        </label>
+        ${departments.length > 1 ? `
+          <label class="field">
+            <span>الدائرة</span>
+            <select id="entity-department-filter">
+              <option value="all" ${departmentFilter === "all" ? "selected" : ""}>جميع الدوائر</option>
+              ${departments.map((department) => `<option value="${department.id}" ${departmentFilter === department.id ? "selected" : ""}>${department.name}</option>`).join("")}
+            </select>
+          </label>
+        ` : `
+          <div class="report-mini-kpi">
+            <span>النطاق</span>
+            <strong>${departments[0]?.name || "لا توجد دائرة"}</strong>
           </div>
-        `;
-      }).join("")}
+        `}
+        <div class="report-mini-kpi">
+          <span>الدوائر المعروضة</span>
+          <strong>${visibleDepartments.length}</strong>
+        </div>
+        <div class="report-mini-kpi">
+          <span>البعثات المعروضة</span>
+          <strong>${visibleMissions.length}</strong>
+        </div>
+      </div>
+      <div class="entity-overview-strip">
+        <div class="report-mini-kpi">
+          <span>متوسط الجودة</span>
+          <strong>${averageQuality}/5</strong>
+        </div>
+        <div class="report-mini-kpi">
+          <span>إجمالي الطلبات المتأخرة</span>
+          <strong>${overdueRequests}</strong>
+        </div>
+        <div class="report-mini-kpi">
+          <span>التقارير المعتمدة</span>
+          <strong>${approvedReports}</strong>
+        </div>
+        <div class="report-mini-kpi">
+          <span>قيد مراجعة الدوائر</span>
+          <strong>${pendingDepartmentReviews}</strong>
+        </div>
+      </div>
     </section>
-    <section class="two-col">
-      ${missions.map((mission) => `
-        ${(() => {
-          const profile = getMissionReportProfile(mission.id);
-          return `
-            <div class="panel entity-profile-card">
-              <div class="record-top">
-                <div>
-                  <div class="section-title">${mission.name}</div>
-                  <div class="record-meta">${getDepartmentName(mission.departmentId)}</div>
+    <section class="panel">
+      <div class="entity-section-head">
+        <div>
+          <div class="section-title">ملفات الدوائر</div>
+          <p class="mini">عرض مختصر للدوائر مع فتح التفاصيل عند الحاجة لتقليل طول الصفحة.</p>
+        </div>
+        <span class="tag info">${visibleDepartments.length} دائرة</span>
+      </div>
+      <div class="entity-record-stack">
+      ${visibleDepartments.map((department) => {
+        const profile = getDepartmentReportProfile(department.id);
+        const missionRows = [...profile.missions].sort((a, b) => (
+          b.profile.overdueRequests.length - a.profile.overdueRequests.length
+          || Number(a.profile.averageQuality) - Number(b.profile.averageQuality)
+        ));
+        return `
+          <details class="compact-disclosure entity-group-card" ${autoOpenDepartmentCards ? "open" : ""}>
+            <summary>
+              <div>
+                <strong>${department.name}</strong>
+                <div class="entity-summary-meta">
+                  <span>${profile.missions.length} بعثة</span>
+                  <span>متوسط الجودة ${profile.averageQuality}/5</span>
+                  <span>اتجاه الجودة ${profile.qualityTrend}</span>
                 </div>
-                <span class="tag ${Number(profile.averageQuality) >= 4 ? "success" : Number(profile.averageQuality) >= 3 ? "warning" : "danger"}">جودة ${profile.averageQuality}/5</span>
               </div>
+              <div class="entity-tag-stack">
+                <span class="tag ${getQualityTone(profile.averageQuality)}">جودة ${profile.averageQuality}/5</span>
+                <span class="tag ${profile.overdueCount ? "danger" : "success"}">${profile.overdueCount ? `متأخر ${profile.overdueCount}` : "لا تأخير"}</span>
+              </div>
+            </summary>
+            <div class="entity-profile-card">
               <div class="entity-kpi-grid">
                 <div class="report-mini-kpi">
                   <span>المعتمد</span>
                   <strong>${profile.approvedCount}</strong>
                 </div>
                 <div class="report-mini-kpi">
-                  <span>قيد مراجعة الدائرة</span>
+                  <span>قيد المراجعة</span>
                   <strong>${profile.pendingDepartmentCount}</strong>
                 </div>
                 <div class="report-mini-kpi">
-                  <span>أعيد للاستكمال</span>
+                  <span>المعاد للاستكمال</span>
                   <strong>${profile.returnedCount}</strong>
                 </div>
                 <div class="report-mini-kpi">
-                  <span>طلبات متأخرة</span>
-                  <strong>${profile.overdueRequests.length}</strong>
+                  <span>الطلبات المتأخرة</span>
+                  <strong>${profile.overdueCount}</strong>
                 </div>
               </div>
-              <div class="detail-list">
-                <div class="detail-row"><span>إجمالي التقارير</span><span>${profile.reports.length}</span></div>
-                <div class="detail-row"><span>عدد التعاميم</span><span>${state.circulars.filter((circular) => circular.targetMissionIds.includes(mission.id)).length}</span></div>
-                <div class="detail-row"><span>حالة الخطة</span><span>${state.plans.find((plan) => plan.ownerId === mission.id)?.status || "لا توجد خطة"}</span></div>
-                <div class="detail-row"><span>طلبات تقرير قيد المتابعة</span><span>${profile.pendingRequests.length}</span></div>
-              </div>
-              <div class="detail-card">
-                <div class="section-title">آخر حركة تقريرية</div>
-                ${profile.latestReport ? `
-                  <div class="detail-row"><span>العنوان</span><span>${profile.latestReport.title}</span></div>
-                  <div class="detail-row"><span>النوع</span><span>${profile.latestReport.type}</span></div>
-                  <div class="detail-row"><span>المرحلة</span><span>${profile.latestReport.workflowStage}</span></div>
-                  <div class="detail-row"><span>تاريخ الرفع</span><span>${formatDate(profile.latestReport.submittedOn || profile.latestReport.activityDate)}</span></div>
-                ` : `<div class="empty">لا توجد تقارير مرفوعة لهذه البعثة بعد.</div>`}
-              </div>
-              <div class="detail-card">
-                <div class="section-title">نقاط انتباه</div>
-                <div class="detail-list">
-                  <div class="detail-row"><span>طلبات متأخرة</span><span>${profile.overdueRequests.length ? profile.overdueRequests.map((request) => request.title).join("، ") : "لا توجد"}</span></div>
-                  <div class="detail-row"><span>تقارير معادة</span><span>${profile.returnedCount ? `${profile.returnedCount} تقرير يحتاج استكمال` : "لا توجد"}</span></div>
-                  <div class="detail-row"><span>مستوى الجودة</span><span>${Number(profile.averageQuality) >= 4 ? "مرتفع" : Number(profile.averageQuality) >= 3 ? "متوسط" : "بحاجة إلى تحسين"}</span></div>
-                  <div class="detail-row"><span>اتجاه الجودة</span><span>${profile.qualityTrend}</span></div>
+              <div class="entity-disclosure-grid">
+                <div class="detail-card">
+                  <div class="section-title">مقارنة البعثات</div>
+                  <div class="detail-list">
+                    ${missionRows.map((item) => `
+                      <div class="detail-row">
+                        <span>${item.mission.name}</span>
+                        <span>جودة ${item.profile.averageQuality}/5 | متأخر ${item.profile.overdueRequests.length}</span>
+                      </div>
+                    `).join("") || `<div class="empty">لا توجد بعثات ضمن هذه الدائرة.</div>`}
+                  </div>
+                </div>
+                <div class="detail-card">
+                  <div class="section-title">نقاط انتباه الدائرة</div>
+                  <div class="detail-list">
+                    <div class="detail-row"><span>الأقل جودة</span><span>${profile.weakestMission ? `${profile.weakestMission.mission.name} (${profile.weakestMission.profile.averageQuality}/5)` : "لا توجد بيانات كافية"}</span></div>
+                    <div class="detail-row"><span>الأكثر تأخرًا</span><span>${profile.mostDelayedMission && profile.mostDelayedMission.profile.overdueRequests.length ? `${profile.mostDelayedMission.mission.name} (${profile.mostDelayedMission.profile.overdueRequests.length})` : "لا توجد طلبات متأخرة"}</span></div>
+                    <div class="detail-row"><span>التقييم العام</span><span>${Number(profile.averageQuality) >= 4 ? "أداء قوي" : Number(profile.averageQuality) >= 3 ? "أداء متوسط" : "يحتاج متابعة مركزة"}</span></div>
+                    <div class="detail-row"><span>اتجاه الجودة</span><span>${profile.qualityTrend}</span></div>
+                  </div>
                 </div>
               </div>
             </div>
+          </details>
+        `;
+      }).join("") || `<div class="empty">لا توجد دوائر مطابقة لخيارات البحث الحالية.</div>`}
+      </div>
+    </section>
+    <section class="panel">
+      <div class="entity-section-head">
+        <div>
+          <div class="section-title">ملفات البعثات</div>
+          <p class="mini">تم تجميع البعثات حسب الدائرة مع إبقاء التفاصيل داخل كل بطاقة لتسهيل الوصول السريع.</p>
+        </div>
+        <span class="tag info">${visibleMissions.length} بعثة</span>
+      </div>
+      <div class="entity-group-stack">
+        ${visibleMissionGroups.map((group) => {
+          const groupProfiles = group.missions.map((mission) => ({
+            mission,
+            profile: getMissionReportProfile(mission.id)
+          }));
+          const groupAverageQuality = groupProfiles.length
+            ? (groupProfiles.reduce((sum, item) => sum + Number(item.profile.averageQuality || 0), 0) / groupProfiles.length).toFixed(1)
+            : "0.0";
+          const groupOverdueCount = groupProfiles.reduce((sum, item) => sum + item.profile.overdueRequests.length, 0);
+          return `
+            <details class="compact-disclosure entity-group-card" ${autoOpenMissionGroups ? "open" : ""}>
+              <summary>
+                <div>
+                  <strong>${group.department.name}</strong>
+                  <div class="entity-summary-meta">
+                    <span>${group.missions.length} بعثة</span>
+                    <span>متوسط الجودة ${groupAverageQuality}/5</span>
+                    <span>متأخر ${groupOverdueCount}</span>
+                  </div>
+                </div>
+                <div class="entity-tag-stack">
+                  <span class="tag ${getQualityTone(groupAverageQuality)}">جودة ${groupAverageQuality}/5</span>
+                  <span class="tag ${groupOverdueCount ? "danger" : "success"}">${groupOverdueCount ? `طلبات متأخرة ${groupOverdueCount}` : "مستوى متابعة جيد"}</span>
+                </div>
+              </summary>
+              <div class="entity-group-grid">
+                ${groupProfiles.sort((a, b) => a.mission.name.localeCompare(b.mission.name, "ar")).map((item) => `
+                  <details class="compact-disclosure entity-inline-card">
+                    <summary>
+                      <div>
+                        <strong>${item.mission.name}</strong>
+                        <div class="entity-summary-meta">
+                          <span>${item.profile.reports.length} تقرير</span>
+                          <span>${item.profile.pendingRequests.length} طلب قيد المتابعة</span>
+                        </div>
+                      </div>
+                      <div class="entity-tag-stack">
+                        <span class="tag ${getQualityTone(item.profile.averageQuality)}">جودة ${item.profile.averageQuality}/5</span>
+                        <span class="tag ${item.profile.overdueRequests.length ? "danger" : "success"}">${item.profile.overdueRequests.length ? `متأخر ${item.profile.overdueRequests.length}` : "ملتزم"}</span>
+                      </div>
+                    </summary>
+                    <div class="entity-profile-card">
+                      <div class="entity-kpi-grid">
+                        <div class="report-mini-kpi">
+                          <span>المعتمد</span>
+                          <strong>${item.profile.approvedCount}</strong>
+                        </div>
+                        <div class="report-mini-kpi">
+                          <span>قيد مراجعة الدائرة</span>
+                          <strong>${item.profile.pendingDepartmentCount}</strong>
+                        </div>
+                        <div class="report-mini-kpi">
+                          <span>أعيد للاستكمال</span>
+                          <strong>${item.profile.returnedCount}</strong>
+                        </div>
+                        <div class="report-mini-kpi">
+                          <span>طلبات متأخرة</span>
+                          <strong>${item.profile.overdueRequests.length}</strong>
+                        </div>
+                      </div>
+                      <div class="entity-disclosure-grid">
+                        <div class="detail-card">
+                          <div class="section-title">ملخص تشغيلي</div>
+                          <div class="detail-list">
+                            <div class="detail-row"><span>إجمالي التقارير</span><span>${item.profile.reports.length}</span></div>
+                            <div class="detail-row"><span>عدد التعاميم</span><span>${state.circulars.filter((circular) => normalizeMissionIdList(circular.targetMissionIds).includes(item.mission.id)).length}</span></div>
+                            <div class="detail-row"><span>حالة الخطة</span><span>${state.plans.find((plan) => plan.ownerId === item.mission.id)?.status || "لا توجد خطة"}</span></div>
+                            <div class="detail-row"><span>طلبات التقرير قيد المتابعة</span><span>${item.profile.pendingRequests.length}</span></div>
+                          </div>
+                        </div>
+                        <div class="detail-card">
+                          <div class="section-title">آخر حركة تقريرية</div>
+                          ${item.profile.latestReport ? `
+                            <div class="detail-list">
+                              <div class="detail-row"><span>العنوان</span><span>${item.profile.latestReport.title}</span></div>
+                              <div class="detail-row"><span>النوع</span><span>${item.profile.latestReport.type}</span></div>
+                              <div class="detail-row"><span>المرحلة</span><span>${item.profile.latestReport.workflowStage}</span></div>
+                              <div class="detail-row"><span>تاريخ الرفع</span><span>${formatDate(item.profile.latestReport.submittedOn || item.profile.latestReport.activityDate)}</span></div>
+                            </div>
+                          ` : `<div class="empty">لا توجد تقارير مرفوعة لهذه البعثة بعد.</div>`}
+                        </div>
+                      </div>
+                      <div class="detail-card">
+                        <div class="section-title">نقاط انتباه</div>
+                        <div class="detail-list">
+                          <div class="detail-row"><span>طلبات متأخرة</span><span>${item.profile.overdueRequests.length ? item.profile.overdueRequests.map((request) => request.title).join("، ") : "لا توجد"}</span></div>
+                          <div class="detail-row"><span>تقارير معادة</span><span>${item.profile.returnedCount ? `${item.profile.returnedCount} تقرير يحتاج استكمال` : "لا توجد"}</span></div>
+                          <div class="detail-row"><span>مستوى الجودة</span><span>${getQualityLabel(item.profile.averageQuality)}</span></div>
+                          <div class="detail-row"><span>اتجاه الجودة</span><span>${item.profile.qualityTrend}</span></div>
+                        </div>
+                      </div>
+                    </div>
+                  </details>
+                `).join("")}
+              </div>
+            </details>
           `;
-        })()}
-      `).join("")}
+        }).join("") || `<div class="empty">لا توجد بعثات مطابقة لخيارات البحث الحالية.</div>`}
+      </div>
     </section>
   `;
 }
@@ -3952,6 +4159,16 @@ function renderManagementPage(user) {
   if (user.role !== "admin") {
     return `<section class="panel empty">هذه الشاشة متاحة فقط لمدير النظام.</section>`;
   }
+  const {
+    visibleDepartments,
+    visibleMissions,
+    groups: visibleMissionGroups,
+    departmentFilter
+  } = getFilteredDepartmentMissionCollections({
+    search: state.managementSearch,
+    departmentFilter: state.managementDepartmentFilter
+  });
+  const autoOpenManagementGroups = visibleMissionGroups.length <= 1 || departmentFilter !== "all";
   return `
     <section class="panel">
       <div class="topbar">
@@ -4010,29 +4227,121 @@ function renderManagementPage(user) {
         </form>
       </div>
     </section>
+    <section class="panel">
+      <div class="entity-section-head">
+        <div>
+          <div class="section-title">دليل الكيانات الحالي</div>
+          <p class="mini">تم ضغط القوائم الطويلة في مجموعات قابلة للطي مع بحث مباشر للوصول السريع.</p>
+        </div>
+        <span class="tag info">${visibleMissions.length} بعثة ضمن العرض الحالي</span>
+      </div>
+      <div class="report-filter-bar entity-filter-bar">
+        <label class="field">
+          <span>البحث</span>
+          <input id="management-search" type="search" value="${state.managementSearch || ""}" placeholder="ابحث باسم الدائرة أو البعثة أو اسم المستخدم">
+        </label>
+        <label class="field">
+          <span>الدائرة</span>
+          <select id="management-department-filter">
+            <option value="all" ${departmentFilter === "all" ? "selected" : ""}>جميع الدوائر</option>
+            ${state.departments.map((department) => `<option value="${department.id}" ${departmentFilter === department.id ? "selected" : ""}>${department.name}</option>`).join("")}
+          </select>
+        </label>
+        <div class="report-mini-kpi">
+          <span>الدوائر الظاهرة</span>
+          <strong>${visibleDepartments.length}</strong>
+        </div>
+        <div class="report-mini-kpi">
+          <span>البعثات الظاهرة</span>
+          <strong>${visibleMissions.length}</strong>
+        </div>
+      </div>
+    </section>
     <section class="two-col">
       <div class="panel">
-        <div class="section-title">الدوائر الحالية</div>
-        <div class="detail-list">
-          ${state.departments.map((department) => `
-            <div class="detail-card">
-              <strong>${department.name}</strong>
-              <div class="detail-row"><span>اسم المستخدم</span><span>${department.username}</span></div>
-              <div class="detail-row"><span>عدد البعثات التابعة</span><span>${state.missions.filter((mission) => mission.departmentId === department.id).length}</span></div>
-            </div>
-          `).join("")}
+        <div class="entity-section-head">
+          <div class="section-title">الدوائر الحالية</div>
+          <span class="tag info">${visibleDepartments.length} دائرة</span>
+        </div>
+        <div class="entity-record-stack">
+          ${visibleDepartments.map((department) => {
+            const departmentMissions = state.missions
+              .filter((mission) => mission.departmentId === department.id)
+              .sort((a, b) => a.name.localeCompare(b.name, "ar"));
+            return `
+              <details class="compact-disclosure management-record-card" ${visibleDepartments.length <= 1 ? "open" : ""}>
+                <summary>
+                  <div>
+                    <strong>${department.name}</strong>
+                    <div class="entity-summary-meta">
+                      <span>اسم المستخدم ${department.username}</span>
+                      <span>${departmentMissions.length} بعثة تابعة</span>
+                    </div>
+                  </div>
+                  <div class="entity-tag-stack">
+                    <span class="tag info">${departmentMissions.length} بعثة</span>
+                  </div>
+                </summary>
+                <div class="entity-disclosure-grid">
+                  <div class="detail-card">
+                    <div class="section-title">بيانات الدائرة</div>
+                    <div class="detail-list">
+                      <div class="detail-row"><span>اسم المستخدم</span><span>${department.username}</span></div>
+                      <div class="detail-row"><span>عدد البعثات التابعة</span><span>${departmentMissions.length}</span></div>
+                    </div>
+                  </div>
+                  <div class="detail-card">
+                    <div class="section-title">البعثات التابعة</div>
+                    <div class="entity-compact-list">
+                      ${departmentMissions.map((mission) => `
+                        <div class="detail-row">
+                          <span>${mission.name}</span>
+                          <span>${mission.username}</span>
+                        </div>
+                      `).join("") || `<div class="empty">لا توجد بعثات تابعة لهذه الدائرة.</div>`}
+                    </div>
+                  </div>
+                </div>
+              </details>
+            `;
+          }).join("") || `<div class="empty">لا توجد دوائر مطابقة للبحث الحالي.</div>`}
         </div>
       </div>
       <div class="panel">
-        <div class="section-title">البعثات الحالية</div>
-        <div class="detail-list">
-          ${state.missions.map((mission) => `
-            <div class="detail-card">
-              <strong>${mission.name}</strong>
-              <div class="detail-row"><span>الدائرة التابعة</span><span>${getDepartmentName(mission.departmentId)}</span></div>
-              <div class="detail-row"><span>اسم المستخدم</span><span>${mission.username}</span></div>
-            </div>
-          `).join("")}
+        <div class="entity-section-head">
+          <div class="section-title">البعثات الحالية</div>
+          <span class="tag info">${visibleMissions.length} بعثة</span>
+        </div>
+        <div class="entity-group-stack">
+          ${visibleMissionGroups.map((group) => `
+            <details class="compact-disclosure management-record-card" ${autoOpenManagementGroups ? "open" : ""}>
+              <summary>
+                <div>
+                  <strong>${group.department.name}</strong>
+                  <div class="entity-summary-meta">
+                    <span>${group.missions.length} بعثة ضمن هذه المجموعة</span>
+                  </div>
+                </div>
+                <div class="entity-tag-stack">
+                  <span class="tag info">${group.missions.length} بعثة</span>
+                </div>
+              </summary>
+              <div class="entity-group-grid">
+                ${group.missions
+                  .slice()
+                  .sort((a, b) => a.name.localeCompare(b.name, "ar"))
+                  .map((mission) => `
+                    <div class="detail-card">
+                      <strong>${mission.name}</strong>
+                      <div class="detail-list">
+                        <div class="detail-row"><span>الدائرة التابعة</span><span>${getDepartmentName(mission.departmentId)}</span></div>
+                        <div class="detail-row"><span>اسم المستخدم</span><span>${mission.username}</span></div>
+                      </div>
+                    </div>
+                  `).join("")}
+              </div>
+            </details>
+          `).join("") || `<div class="empty">لا توجد بعثات مطابقة للبحث الحالي.</div>`}
         </div>
       </div>
     </section>
@@ -4534,6 +4843,56 @@ function bindEvents() {
       state.reportSort = reportSort.value;
       const visibleReports = getRegistryReports(getSessionUser());
       state.selectedReportId = visibleReports[0]?.id || null;
+      saveState();
+      renderApp();
+    });
+  }
+
+  const entitySearch = document.getElementById("entity-search");
+  if (entitySearch) {
+    const applyEntitySearch = () => {
+      state.entitySearch = entitySearch.value;
+      saveState();
+      renderApp();
+    };
+    entitySearch.addEventListener("change", applyEntitySearch);
+    entitySearch.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        applyEntitySearch();
+      }
+    });
+  }
+
+  const entityDepartmentFilter = document.getElementById("entity-department-filter");
+  if (entityDepartmentFilter) {
+    entityDepartmentFilter.addEventListener("change", () => {
+      state.entityDepartmentFilter = entityDepartmentFilter.value;
+      saveState();
+      renderApp();
+    });
+  }
+
+  const managementSearch = document.getElementById("management-search");
+  if (managementSearch) {
+    const applyManagementSearch = () => {
+      state.managementSearch = managementSearch.value;
+      saveState();
+      renderApp();
+    };
+    managementSearch.addEventListener("change", applyManagementSearch);
+    managementSearch.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        applyManagementSearch();
+      }
+    });
+  }
+
+  const managementDepartmentFilter = document.getElementById("management-department-filter");
+  if (managementDepartmentFilter) {
+    managementDepartmentFilter.addEventListener("change", () => {
+      state.managementDepartmentFilter = managementDepartmentFilter.value;
       saveState();
       renderApp();
     });
