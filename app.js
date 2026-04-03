@@ -1,4 +1,18 @@
 const STORAGE_KEY = "yemeni_diplomat_system_v3";
+const API_BASE_PATH = "/api";
+const API_TIMEOUT_MS = 2500;
+const SHARED_STATE_KEYS = [
+  "departments",
+  "missions",
+  "coreUsers",
+  "reportRequests",
+  "reports",
+  "circulars",
+  "meetings",
+  "plans",
+  "trainings",
+  "auditLog"
+];
 
 const CANONICAL_DEPARTMENTS = [
   { id: "dept-gulf", name: "دائرة الجزيرة والخليج", username: "gulf_dept", password: "Gulf@2026" },
@@ -389,8 +403,53 @@ const seedState = () => ({
   ]
 });
 
+function extractSharedState(source = seedState()) {
+  const seeded = seedState();
+  return SHARED_STATE_KEYS.reduce((acc, key) => {
+    const value = source?.[key] ?? seeded[key];
+    acc[key] = JSON.parse(JSON.stringify(value));
+    return acc;
+  }, {});
+}
+
+function extractRuntimeState(source = seedState()) {
+  return {
+    sessionUserId: source.sessionUserId ?? null,
+    activeView: source.activeView || "dashboard",
+    selectedReportId: source.selectedReportId || null,
+    reportRegistryTab: source.reportRegistryTab || "all",
+    reportSearch: source.reportSearch || "",
+    reportStageFilter: source.reportStageFilter || "all",
+    reportMissionFilter: source.reportMissionFilter || "all",
+    reportSort: source.reportSort || "latest",
+    periodicReportTab: source.periodicReportTab || "bilateral",
+    reportFormStep: source.reportFormStep || "basics",
+    periodicFormTab: source.periodicFormTab || "bilateral",
+    editingReportId: source.editingReportId || null,
+    reportActionDialog: source.reportActionDialog || null,
+    editingCircularId: source.editingCircularId || null,
+    editingMeetingId: source.editingMeetingId || null,
+    editingPlanId: source.editingPlanId || null,
+    loginError: source.loginError || "",
+    alerts: Array.isArray(source.alerts) ? source.alerts : seedState().alerts
+  };
+}
+
+function buildPersistedState(sharedState = seedState(), runtimeState = seedState()) {
+  return {
+    ...seedState(),
+    ...extractRuntimeState(runtimeState),
+    ...extractSharedState(sharedState)
+  };
+}
+
 let state = loadState();
 const root = document.getElementById("app-root");
+let runtimeDataMode = "browser-local";
+let remoteSyncTimer = null;
+let remoteSyncInFlight = false;
+let queuedRemotePayload = "";
+let lastSharedStateHash = JSON.stringify(extractSharedState(state));
 
 function loadState() {
   const saved = localStorage.getItem(STORAGE_KEY);
@@ -527,8 +586,103 @@ function loadState() {
   return parsed;
 }
 
+function canUseRemoteApi() {
+  return typeof window !== "undefined" && /^https?:$/i.test(window.location.protocol);
+}
+
+async function requestRemote(path, options = {}) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+  try {
+    const response = await fetch(path, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...(options.headers || {})
+      },
+      signal: controller.signal
+    });
+    if (!response.ok) {
+      throw new Error(`Request failed with status ${response.status}`);
+    }
+    return response.status === 204 ? null : response.json();
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+function setStateFromSharedSource(sharedSource) {
+  const runtimeState = extractRuntimeState(state);
+  const persisted = buildPersistedState(sharedSource, runtimeState);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
+  state = loadState();
+  lastSharedStateHash = JSON.stringify(extractSharedState(state));
+}
+
+function scheduleRemoteSync(payload) {
+  if (runtimeDataMode !== "shared-api") return;
+  queuedRemotePayload = payload || JSON.stringify(extractSharedState(state));
+  if (remoteSyncTimer) clearTimeout(remoteSyncTimer);
+  remoteSyncTimer = setTimeout(() => {
+    void flushRemoteSync();
+  }, 300);
+}
+
+async function flushRemoteSync() {
+  if (runtimeDataMode !== "shared-api" || !queuedRemotePayload) return;
+  if (remoteSyncInFlight) return;
+  remoteSyncInFlight = true;
+  const payload = queuedRemotePayload;
+  queuedRemotePayload = "";
+  try {
+    await requestRemote(`${API_BASE_PATH}/state`, {
+      method: "PUT",
+      body: JSON.stringify({ state: JSON.parse(payload) })
+    });
+  } catch (error) {
+    console.warn("Remote sync failed. Falling back to browser-local mode.", error);
+    runtimeDataMode = "browser-local";
+    queuedRemotePayload = "";
+  } finally {
+    remoteSyncInFlight = false;
+    if (queuedRemotePayload) scheduleRemoteSync(queuedRemotePayload);
+  }
+}
+
+async function bootstrapDataLayer() {
+  if (!canUseRemoteApi()) return;
+  try {
+    const health = await requestRemote(`${API_BASE_PATH}/health`);
+    if (!health?.ok) return;
+    runtimeDataMode = "shared-api";
+    const remoteStateResponse = await requestRemote(`${API_BASE_PATH}/state`);
+    if (remoteStateResponse?.state && typeof remoteStateResponse.state === "object") {
+      const remoteState = remoteStateResponse.state;
+      const remoteIsBootstrapState = !Array.isArray(remoteState.departments) || !remoteState.departments.length || !Array.isArray(remoteState.missions) || !remoteState.missions.length;
+      if (remoteIsBootstrapState) {
+        lastSharedStateHash = JSON.stringify(extractSharedState(state));
+        scheduleRemoteSync(lastSharedStateHash);
+      } else {
+        setStateFromSharedSource(remoteState);
+      }
+    } else {
+      lastSharedStateHash = JSON.stringify(extractSharedState(state));
+      scheduleRemoteSync(lastSharedStateHash);
+    }
+    renderApp();
+  } catch (error) {
+    runtimeDataMode = "browser-local";
+    console.warn("Shared API unavailable. Continuing in browser-local mode.", error);
+  }
+}
+
 function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  const sharedStateHash = JSON.stringify(extractSharedState(state));
+  if (runtimeDataMode === "shared-api" && sharedStateHash !== lastSharedStateHash) {
+    lastSharedStateHash = sharedStateHash;
+    scheduleRemoteSync(sharedStateHash);
+  }
 }
 
 function resetState() {
@@ -1612,6 +1766,14 @@ function canEditPlan(plan, user = getSessionUser()) {
   return user.role === "mission" && plan.ownerType === "mission" && plan.ownerId === user.missionId;
 }
 
+function getRuntimeModeLabel() {
+  return runtimeDataMode === "shared-api" ? "وضع تشغيلي مشترك" : "وضع تجريبي محلي";
+}
+
+function getRuntimeModeTone() {
+  return runtimeDataMode === "shared-api" ? "success" : "warning";
+}
+
 function canManageEntities(user = getSessionUser()) {
   return Boolean(user && user.role === "admin");
 }
@@ -1845,6 +2007,7 @@ function renderSystem(user) {
           <div class="user-box">
             <strong>${user.name}</strong>
             <p>${roleLabel(user)}</p>
+            <span class="tag ${getRuntimeModeTone()} runtime-chip">${getRuntimeModeLabel()}</span>
           </div>
           <div class="menu-list">
             ${visibleViews(user).map((view) => `<button class="nav-item ${state.activeView === view ? "active" : ""}" data-view="${view}">${labels[view]}</button>`).join("")}
@@ -4503,3 +4666,4 @@ function formatDate(value) {
 }
 
 renderApp();
+void bootstrapDataLayer();

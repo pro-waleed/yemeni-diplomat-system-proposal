@@ -1,0 +1,11 @@
+{
+  "name": "yemeni-diplomat-system",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Integrated diplomatic system prototype with shared local API mode.",
+  "scripts": {
+    "start": "node server/server.js",
+    "start:server": "node server/server.js",
+    "check": "node --check app.js && node --check server/server.js"
+  }
+}

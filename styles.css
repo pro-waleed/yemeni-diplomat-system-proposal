@@ -416,6 +416,11 @@ textarea {
   color: var(--muted);
 }
 
+.runtime-chip {
+  margin-top: 12px;
+  width: fit-content;
+}
+
 .menu-list {
   margin-top: 8px;
 }
