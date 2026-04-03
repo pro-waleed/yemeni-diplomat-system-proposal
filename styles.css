@@ -426,8 +426,8 @@ textarea {
   gap: 16px;
   position: sticky;
   top: 16px;
-  max-height: calc(100vh - 32px);
-  overflow: hidden;
+  align-self: start;
+  overflow: visible;
 }
 
 .sidebar-top {
@@ -539,9 +539,7 @@ textarea {
 
 .menu-list {
   margin-top: 8px;
-  max-height: calc(100vh - 320px);
-  overflow: auto;
-  padding-inline-end: 4px;
+  padding-inline-end: 0;
 }
 
 .nav-item {
@@ -1428,10 +1426,27 @@ textarea {
   .sidebar {
     position: static;
     max-height: none;
+    padding: 14px;
+    gap: 12px;
+  }
+
+  .sidebar-section-card {
+    display: none;
+  }
+
+  .mobile-nav-card {
+    display: block;
   }
 
   .menu-list {
-    max-height: none;
+    display: none;
+  }
+
+  .sidebar-footer {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 0;
   }
 }
 
@@ -1495,30 +1510,6 @@ textarea {
 
   .entity-tag-stack {
     justify-content: start;
-  }
-
-  .sidebar {
-    padding: 14px;
-    gap: 12px;
-  }
-
-  .sidebar-section-card {
-    display: none;
-  }
-
-  .mobile-nav-card {
-    display: block;
-  }
-
-  .menu-list {
-    display: none;
-  }
-
-  .sidebar-footer {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-    margin-top: 0;
   }
 
   .mobile-tab-switcher {
