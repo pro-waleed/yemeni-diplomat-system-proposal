@@ -233,6 +233,7 @@ const seedState = () => ({
   periodicFormTab: "bilateral",
   editingReportId: null,
   reportActionDialog: null,
+  circularActionDialog: null,
   editingCircularId: null,
   editingMeetingId: null,
   editingPlanId: null,
@@ -331,18 +332,27 @@ const seedState = () => ({
     {
       id: "circ-1",
       title: "تحديث قاعدة بيانات التواصل الرسمي",
+      category: "تنفيذي",
+      priority: "عالية",
       summary: "توجيه للبعثات بمراجعة بيانات التواصل الرسمية وتحديث القوائم المعتمدة خلال المهلة المحددة.",
       body: "يرجى من جميع البعثات المستهدفة مراجعة بيانات التواصل الرسمية للجهات الحكومية والشركاء الرئيسيين، وتحديث أي تغييرات طرأت على الأسماء أو المناصب أو وسائل الاتصال، ثم تأكيد الإنجاز ضمن النظام خلال الفترة المحددة.",
+      actionRequired: "مراجعة قاعدة بيانات التواصل الرسمي وتحديثها ثم رفع تأكيد الإنجاز مع الإشارة إلى ما تم تعديله.",
+      attachmentName: "official-contacts-template.docx",
       issuedBy: "إدارة التخطيط",
       targetMissionIds: CANONICAL_MISSIONS.map((mission) => mission.id),
       dueDate: "2026-03-28",
       status: "نشط",
       readMissionIds: ["mission-cairo", "mission-riyadh", "mission-washington"],
-      completedMissionIds: [],
+      completedMissionIds: ["mission-riyadh"],
       workflowHistory: [
         { actor: "إدارة التخطيط", action: "إصدار التعميم", stage: "نشط", at: "2026-03-15 09:10" }
       ],
-      processingLog: []
+      processingLog: [
+        { actor: "بعثة الرياض", missionId: "mission-riyadh", result: "تم تحديث قائمة الاتصال الرسمية وإرفاق النسخة المعتمدة.", evidenceRef: "riyadh-contacts-update.xlsx", at: "2026-03-18 10:20" }
+      ],
+      missionResponses: [
+        { missionId: "mission-riyadh", note: "تم تحديث قائمة الاتصال الرسمية وإرفاق النسخة المعتمدة.", evidenceRef: "riyadh-contacts-update.xlsx", completedAt: "2026-03-18 10:20", actor: "بعثة الرياض" }
+      ]
     }
   ],
   meetings: [
@@ -427,6 +437,7 @@ function extractRuntimeState(source = seedState()) {
     periodicFormTab: source.periodicFormTab || "bilateral",
     editingReportId: source.editingReportId || null,
     reportActionDialog: source.reportActionDialog || null,
+    circularActionDialog: source.circularActionDialog && typeof source.circularActionDialog === "object" ? source.circularActionDialog : null,
     editingCircularId: source.editingCircularId || null,
     editingMeetingId: source.editingMeetingId || null,
     editingPlanId: source.editingPlanId || null,
@@ -498,6 +509,7 @@ function loadState() {
   parsed.periodicReportTab = parsed.periodicReportTab || "bilateral";
   parsed.reportFormStep = parsed.reportFormStep || "basics";
   parsed.periodicFormTab = parsed.periodicFormTab || "bilateral";
+  parsed.circularActionDialog = parsed.circularActionDialog && typeof parsed.circularActionDialog === "object" ? parsed.circularActionDialog : null;
   parsed.editingCircularId = parsed.editingCircularId || null;
   parsed.editingMeetingId = parsed.editingMeetingId || null;
   parsed.editingPlanId = parsed.editingPlanId || null;
@@ -515,14 +527,21 @@ function loadState() {
   parsed.circulars = Array.isArray(parsed.circulars) ? parsed.circulars : seedState().circulars;
   parsed.circulars = parsed.circulars.map((circular) => ({
     ...circular,
+    category: ["توجيهي", "تنفيذي", "إداري", "عاجل"].includes(circular.category) ? circular.category : "تنفيذي",
+    priority: ["عالية", "متوسطة", "عادية"].includes(circular.priority) ? circular.priority : "متوسطة",
     summary: circular.summary || "",
     body: circular.body || "",
+    actionRequired: circular.actionRequired || "",
+    attachmentName: circular.attachmentName || "",
     issuedAt: circular.issuedAt || "",
+    closureNote: circular.closureNote || "",
+    closedAt: circular.closedAt || "",
     targetMissionIds: normalizeMissionIdList(circular.targetMissionIds, parsed.missions),
     readMissionIds: normalizeMissionIdList(circular.readMissionIds, parsed.missions),
     completedMissionIds: normalizeMissionIdList(circular.completedMissionIds, parsed.missions),
     workflowHistory: Array.isArray(circular.workflowHistory) ? circular.workflowHistory : [],
-    processingLog: Array.isArray(circular.processingLog) ? circular.processingLog : []
+    processingLog: Array.isArray(circular.processingLog) ? circular.processingLog : [],
+    missionResponses: normalizeCircularResponses(circular.missionResponses, parsed.missions)
   }));
   parsed.meetings = (Array.isArray(parsed.meetings) ? parsed.meetings : seedState().meetings).map((meeting) => ({
     ...meeting,
@@ -739,6 +758,29 @@ function normalizeMissionIdList(values, sourceMissions = null) {
   return [...new Set(values.map((value) => resolveMissionId(value, sourceMissions)).filter(Boolean))];
 }
 
+function normalizeCircularResponses(values, sourceMissions = null) {
+  if (!Array.isArray(values)) return [];
+  const normalized = [];
+  values.forEach((entry) => {
+    const missionId = resolveMissionId(entry?.missionId || entry?.missionName || "", sourceMissions);
+    if (!missionId) return;
+    const existingIndex = normalized.findIndex((item) => item.missionId === missionId);
+    const nextEntry = {
+      missionId,
+      note: String(entry?.note || entry?.result || "").trim(),
+      evidenceRef: String(entry?.evidenceRef || entry?.attachmentName || "").trim(),
+      completedAt: String(entry?.completedAt || entry?.at || "").trim(),
+      actor: String(entry?.actor || "").trim()
+    };
+    if (existingIndex >= 0) {
+      normalized[existingIndex] = nextEntry;
+    } else {
+      normalized.push(nextEntry);
+    }
+  });
+  return normalized;
+}
+
 function getSessionUser() {
   return getAllUsers().find((user) => user.id === state.sessionUserId) || null;
 }
@@ -792,19 +834,21 @@ function getVisibleRequests(user = getSessionUser()) {
 
 function getVisibleCirculars(user = getSessionUser()) {
   if (!user) return [];
+  const normalizedCirculars = state.circulars.map((circular) => ({
+    ...circular,
+    targetMissionIds: normalizeMissionIdList(circular.targetMissionIds),
+    readMissionIds: normalizeMissionIdList(circular.readMissionIds),
+    completedMissionIds: normalizeMissionIdList(circular.completedMissionIds),
+    missionResponses: normalizeCircularResponses(circular.missionResponses)
+  }));
   if (user.role === "admin" || user.role === "planning" || user.role === "leadership") {
-    return state.circulars.map((circular) => ({
-      ...circular,
-      targetMissionIds: normalizeMissionIdList(circular.targetMissionIds),
-      readMissionIds: normalizeMissionIdList(circular.readMissionIds),
-      completedMissionIds: normalizeMissionIdList(circular.completedMissionIds)
-    }));
+    return normalizedCirculars;
   }
   if (user.role === "department") {
     const missionIds = state.missions.filter((mission) => mission.departmentId === user.departmentId).map((mission) => mission.id);
-    return state.circulars.filter((circular) => normalizeMissionIdList(circular.targetMissionIds).some((id) => missionIds.includes(id)));
+    return normalizedCirculars.filter((circular) => circular.targetMissionIds.some((id) => missionIds.includes(id)));
   }
-  return state.circulars.filter((circular) => normalizeMissionIdList(circular.targetMissionIds).includes(user.missionId));
+  return normalizedCirculars.filter((circular) => circular.targetMissionIds.includes(user.missionId));
 }
 
 function getVisibleMeetings(user = getSessionUser()) {
@@ -877,13 +921,129 @@ function getCircularCompletion(circular) {
   };
 }
 
+function getCircularPriorityTone(priority) {
+  if (priority === "عالية") return "danger";
+  if (priority === "متوسطة") return "warning";
+  return "info";
+}
+
+function getCircularUrgency(circular) {
+  const stats = getCircularCompletion(circular);
+  if (circular.status === "مغلق") return { label: "مغلق", tone: "success" };
+  if (stats.total > 0 && stats.pending === 0) return { label: "مكتمل التنفيذ", tone: "success" };
+  const dueDate = String(circular.dueDate || "");
+  if (!dueDate) return { label: "بدون موعد", tone: "info" };
+  const today = new Date().toISOString().slice(0, 10);
+  const diffDays = Math.ceil((new Date(dueDate) - new Date(today)) / 86400000);
+  if (diffDays < 0 && stats.pending > 0) return { label: "متأخر", tone: "danger" };
+  if (diffDays <= 3 && stats.pending > 0) return { label: "قريب الاستحقاق", tone: "warning" };
+  return { label: "نشط", tone: "info" };
+}
+
+function getCircularMissionStatus(circular, missionId) {
+  const response = (circular.missionResponses || []).find((item) => item.missionId === missionId) || null;
+  const read = normalizeMissionIdList(circular.readMissionIds).includes(missionId);
+  const completed = normalizeMissionIdList(circular.completedMissionIds).includes(missionId);
+  const urgency = getCircularUrgency(circular);
+  if (completed) {
+    return {
+      label: "منجز",
+      tone: "success",
+      detail: response?.note || "تم تأكيد تنفيذ المطلوب من البعثة."
+    };
+  }
+  if (circular.status === "مغلق") {
+    return {
+      label: "مغلق دون إنجاز",
+      tone: "danger",
+      detail: circular.closureNote || "أغلق التعميم قبل اكتمال تنفيذ هذه البعثة."
+    };
+  }
+  if (urgency.label === "متأخر") {
+    return {
+      label: "متأخر",
+      tone: "danger",
+      detail: read ? "اطّلعت البعثة على التعميم ولم تؤكد التنفيذ حتى الآن." : "لم تؤكد البعثة القراءة أو الإنجاز حتى تجاوز الموعد."
+    };
+  }
+  if (read) {
+    return {
+      label: "قيد التنفيذ",
+      tone: "warning",
+      detail: "أكدت البعثة قراءة التعميم وما زال التنفيذ مفتوحًا."
+    };
+  }
+  if (urgency.label === "قريب الاستحقاق") {
+    return {
+      label: "قريب الاستحقاق",
+      tone: "warning",
+      detail: "لم تبدأ المعالجة بعد مع اقتراب نهاية المهلة."
+    };
+  }
+  return {
+    label: "وارد جديد",
+    tone: "info",
+    detail: "التعميم وارد للبعثة وبانتظار القراءة والتنفيذ."
+  };
+}
+
+function getCircularMissionIdsForUser(circular, user = getSessionUser()) {
+  const missionIds = normalizeMissionIdList(circular.targetMissionIds);
+  if (!user) return [];
+  if (user.role === "mission") return missionIds.filter((missionId) => missionId === user.missionId);
+  if (user.role === "department") {
+    return missionIds.filter((missionId) => getMissionById(missionId)?.departmentId === user.departmentId);
+  }
+  return missionIds;
+}
+
+function getCircularRecipientRows(circular, user = getSessionUser()) {
+  return getCircularMissionIdsForUser(circular, user).map((missionId) => {
+    const mission = getMissionById(missionId);
+    const response = (circular.missionResponses || []).find((item) => item.missionId === missionId) || null;
+    return {
+      missionId,
+      missionName: mission?.name || "-",
+      departmentName: getDepartmentName(mission?.departmentId),
+      status: getCircularMissionStatus(circular, missionId),
+      response
+    };
+  });
+}
+
+function getCircularExecutiveMetrics(user = getSessionUser()) {
+  const circulars = getVisibleCirculars(user);
+  const activeCirculars = circulars.filter((circular) => circular.status === "نشط");
+  return {
+    total: circulars.length,
+    active: activeCirculars.length,
+    overdue: activeCirculars.filter((circular) => getCircularUrgency(circular).label === "متأخر").length,
+    dueSoon: activeCirculars.filter((circular) => getCircularUrgency(circular).label === "قريب الاستحقاق").length,
+    highPriority: activeCirculars.filter((circular) => circular.priority === "عالية").length
+  };
+}
+
+function getSortedCircularsForDisplay(circulars) {
+  const urgencyWeight = { "متأخر": 4, "قريب الاستحقاق": 3, "نشط": 2, "مكتمل التنفيذ": 1, "مغلق": 0 };
+  const priorityWeight = { "عالية": 3, "متوسطة": 2, "عادية": 1 };
+  return [...circulars].sort((a, b) => {
+    const urgencyA = urgencyWeight[getCircularUrgency(a).label] ?? 1;
+    const urgencyB = urgencyWeight[getCircularUrgency(b).label] ?? 1;
+    if (urgencyB !== urgencyA) return urgencyB - urgencyA;
+    const priorityA = priorityWeight[a.priority] ?? 2;
+    const priorityB = priorityWeight[b.priority] ?? 2;
+    if (priorityB !== priorityA) return priorityB - priorityA;
+    return String(a.dueDate || "").localeCompare(String(b.dueDate || ""));
+  });
+}
+
 function getCircularActions(circular, user = getSessionUser()) {
   if (!user) return [];
   const actions = [];
   const targetMissionIds = normalizeMissionIdList(circular.targetMissionIds);
   const readMissionIds = normalizeMissionIdList(circular.readMissionIds);
   const completedMissionIds = normalizeMissionIdList(circular.completedMissionIds);
-  if (user.role === "mission" && targetMissionIds.includes(user.missionId)) {
+  if (user.role === "mission" && circular.status === "نشط" && targetMissionIds.includes(user.missionId)) {
     if (!readMissionIds.includes(user.missionId)) {
       actions.push({ key: "mark-read", label: "تأكيد القراءة" });
     }
@@ -1911,6 +2071,96 @@ function renderReportActionDialog() {
   `;
 }
 
+function openCircularActionDialog(circularId, actionKey) {
+  const circular = state.circulars.find((item) => item.id === circularId);
+  const user = getSessionUser();
+  if (!circular || !user) return;
+  const allowedAction = getCircularActions(circular, user).find((action) => action.key === actionKey);
+  if (!allowedAction) {
+    addAlert("danger", "تعذر تنفيذ الإجراء", "هذا الإجراء غير متاح لهذا الحساب أو لم يعد متوافقًا مع حالة التعميم الحالية.");
+    saveState();
+    renderApp();
+    return;
+  }
+  if (actionKey === "mark-read") {
+    handleCircularAction(circularId, actionKey);
+    return;
+  }
+  const currentResponse = (circular.missionResponses || []).find((item) => item.missionId === user.missionId) || null;
+  state.circularActionDialog = {
+    circularId,
+    actionKey,
+    executionNote: currentResponse?.note || "",
+    evidenceRef: currentResponse?.evidenceRef || "",
+    closureNote: circular.closureNote || ""
+  };
+  saveState();
+  renderApp();
+}
+
+function closeCircularActionDialog() {
+  state.circularActionDialog = null;
+  saveState();
+  renderApp();
+}
+
+function renderCircularActionDialog() {
+  const dialog = state.circularActionDialog;
+  if (!dialog) return "";
+  const circular = state.circulars.find((item) => item.id === dialog.circularId);
+  if (!circular) return "";
+  const isComplete = dialog.actionKey === "mark-complete";
+  const isClose = dialog.actionKey === "close";
+  const stats = getCircularCompletion(circular);
+  const urgency = getCircularUrgency(circular);
+  return `
+    <div class="modal-backdrop">
+      <div class="modal-card">
+        <div class="modal-head">
+          <div>
+            <span class="tag ${urgency.tone}">${urgency.label}</span>
+            <div class="section-title">${isComplete ? "تأكيد إنجاز التعميم" : "إغلاق التعميم"}</div>
+            <p class="muted">${isComplete
+              ? "دوّن نتيجة التنفيذ بصورة مختصرة ومهنية حتى تظهر في سجل متابعة التعميم للجهات المشرفة."
+              : "أدخل مبرر الإغلاق، خصوصًا إذا كانت هناك بعثات لم تستكمل التنفيذ بعد."}</p>
+          </div>
+          <button class="modal-close" type="button" data-close-circular-dialog aria-label="إغلاق">×</button>
+        </div>
+        <div class="detail-card modal-reference-card">
+          <div class="detail-row"><span>عنوان التعميم</span><span>${circular.title}</span></div>
+          <div class="detail-row"><span>نوع التعميم</span><span>${circular.category || "تنفيذي"}</span></div>
+          <div class="detail-row"><span>الأولوية</span><span>${circular.priority || "متوسطة"}</span></div>
+          <div class="detail-row"><span>المتبقي من البعثات</span><span>${stats.pending} من أصل ${stats.total}</span></div>
+        </div>
+        <form id="circular-action-form" class="form-grid">
+          <input type="hidden" name="circularId" value="${dialog.circularId}">
+          <input type="hidden" name="actionKey" value="${dialog.actionKey}">
+          ${isComplete ? `
+            <label class="field full">
+              <span>نتيجة التنفيذ</span>
+              <textarea name="executionNote" required>${dialog.executionNote || ""}</textarea>
+            </label>
+            <label class="field full">
+              <span>مرجع أو مرفق داعم</span>
+              <input name="evidenceRef" value="${dialog.evidenceRef || ""}" placeholder="اسم ملف أو مرجع مختصر إن وجد">
+            </label>
+          ` : ""}
+          ${isClose ? `
+            <label class="field full">
+              <span>ملاحظة الإغلاق</span>
+              <textarea name="closureNote" ${stats.pending > 0 ? "required" : ""}>${dialog.closureNote || ""}</textarea>
+            </label>
+          ` : ""}
+          <div class="field full modal-actions">
+            <button class="btn primary" type="submit">${isComplete ? "حفظ الإنجاز" : "تأكيد الإغلاق"}</button>
+            <button class="btn secondary" type="button" data-close-circular-dialog>إلغاء</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+}
+
 function renderApp() {
   const user = getSessionUser();
   root.innerHTML = user ? renderSystem(user) : renderLogin();
@@ -2023,6 +2273,7 @@ function renderSystem(user) {
         </main>
       </div>
       ${renderReportActionDialog()}
+      ${renderCircularActionDialog()}
       ${renderIntellectualFooter()}
     </div>
   `;
@@ -2723,21 +2974,30 @@ function renderReportDetails(report, user) {
 }
 
 function renderCircularsPage(user) {
-  const circulars = getVisibleCirculars(user);
+  const circulars = getSortedCircularsForDisplay(getVisibleCirculars(user));
   const editingCircular = circulars.find((item) => item.id === state.editingCircularId) || null;
+  const metrics = getCircularExecutiveMetrics(user);
+  const canIssueCircular = user.role === "planning" || user.role === "admin";
   return `
     <section class="panel">
       <div class="topbar">
         <div>
           <span class="tag info">التعاميم</span>
           <h1 class="page-title">إدارة التعاميم</h1>
-          <p class="muted">إصدار وتتبع التعاميم وقراءة الجهات المستهدفة ونسب الإنجاز والتأخر.</p>
+          <p class="muted">إصدار التعاميم، توضيح المطلوب التنفيذي، ومتابعة القراءة والتنفيذ بحسب البعثة والدائرة والجهات القيادية.</p>
         </div>
       </div>
     </section>
+    <section class="stats-grid circular-stat-strip">
+      <article class="metric-card"><span>إجمالي التعاميم في النطاق</span><strong>${metrics.total}</strong></article>
+      <article class="metric-card"><span>التعاميم النشطة</span><strong>${metrics.active}</strong></article>
+      <article class="metric-card"><span>المتأخرة</span><strong>${metrics.overdue}</strong></article>
+      <article class="metric-card"><span>قريبة الاستحقاق</span><strong>${metrics.dueSoon}</strong></article>
+      <article class="metric-card"><span>عالية الأولوية</span><strong>${metrics.highPriority}</strong></article>
+    </section>
     <section class="two-col">
       <div class="panel">
-        ${(user.role === "planning" || user.role === "admin") ? `
+        ${canIssueCircular ? `
           <div class="detail-card">
             <div class="section-title">${editingCircular ? "تعديل التعميم" : "إصدار تعميم جديد"}</div>
             <form id="circular-form" class="form-grid">
@@ -2749,6 +3009,18 @@ function renderCircularsPage(user) {
                 <span>الموعد النهائي</span>
                 <input type="date" name="dueDate" value="${editingCircular ? editingCircular.dueDate : ""}" required>
               </label>
+              <label class="field">
+                <span>نوع التعميم</span>
+                <select name="category" required>
+                  ${["توجيهي", "تنفيذي", "إداري", "عاجل"].map((item) => `<option value="${item}" ${editingCircular?.category === item || (!editingCircular && item === "تنفيذي") ? "selected" : ""}>${item}</option>`).join("")}
+                </select>
+              </label>
+              <label class="field">
+                <span>الأولوية</span>
+                <select name="priority" required>
+                  ${["عالية", "متوسطة", "عادية"].map((item) => `<option value="${item}" ${editingCircular?.priority === item || (!editingCircular && item === "متوسطة") ? "selected" : ""}>${item}</option>`).join("")}
+                </select>
+              </label>
               <label class="field full">
                 <span>ملخص التعميم</span>
                 <textarea name="summary" placeholder="موجز يوضح الغرض من التعميم وما هو المطلوب من البعثات.">${editingCircular ? (editingCircular.summary || "") : ""}</textarea>
@@ -2756,6 +3028,14 @@ function renderCircularsPage(user) {
               <label class="field full">
                 <span>نص التعميم / المطلوب التنفيذي</span>
                 <textarea name="body" placeholder="اكتب هنا متن التعميم أو التعليمات المطلوب تنفيذها بصورة واضحة ومباشرة.">${editingCircular ? (editingCircular.body || "") : ""}</textarea>
+              </label>
+              <label class="field full">
+                <span>الإجراء المطلوب من البعثات</span>
+                <textarea name="actionRequired" placeholder="حدد الإجراء التنفيذي المطلوب، مثل: رفع إفادة، تحديث قاعدة بيانات، موافاة الوزارة بملاحظات..." required>${editingCircular ? (editingCircular.actionRequired || "") : ""}</textarea>
+              </label>
+              <label class="field full">
+                <span>اسم المرفق المرجعي</span>
+                <input name="attachmentName" value="${editingCircular ? (editingCircular.attachmentName || "") : ""}" placeholder="اسم ملف أو مرجع مختصر إذا كان هناك تعميم مرفق">
               </label>
               <label class="field full">
                 <span>البعثات المستهدفة</span>
@@ -2776,35 +3056,71 @@ function renderCircularsPage(user) {
           </div>
         ` : ""}
         <div class="section-title">سجل التعاميم</div>
-        <div class="detail-list">
+        <div class="detail-list circular-record-stack">
           ${circulars.map((circular) => {
             const stats = getCircularCompletion(circular);
             const actions = getCircularActions(circular, user);
+            const urgency = getCircularUrgency(circular);
+            const ownStatus = user.role === "mission" ? getCircularMissionStatus(circular, user.missionId) : null;
             return `
-            <div class="detail-card">
+            <div class="detail-card circular-record-card">
               <div class="record-top">
                 <div>
                   <strong>${circular.title}</strong>
-                  <div class="record-meta">الموعد النهائي ${formatDate(circular.dueDate)}</div>
+                  <div class="record-meta">الجهة المصدرة: ${circular.issuedBy || "الوزارة"} | الموعد النهائي ${formatDate(circular.dueDate)}</div>
                 </div>
                 <span class="tag ${circular.status === "نشط" ? "warning" : "success"}">${circular.status}</span>
               </div>
               <div class="request-chip-row">
+                <span class="tag info">${circular.category || "تنفيذي"}</span>
+                <span class="tag ${getCircularPriorityTone(circular.priority)}">${circular.priority || "متوسطة"} الأولوية</span>
+                <span class="tag ${urgency.tone}">${urgency.label}</span>
                 <span class="tag info">موجّه إلى ${circular.targetMissionIds.length} بعثات</span>
                 ${user.role === "mission" ? `<span class="tag success">وارد إلى ${getMissionName(user.missionId)}</span>` : ""}
               </div>
               ${circular.summary ? `<p class="record-desc">${circular.summary}</p>` : ""}
-              ${circular.body ? `
-                <div class="detail-card circular-body-card">
-                  <div class="section-title">نص التعميم</div>
-                  <p class="detail-note">${circular.body}</p>
+              <div class="circular-body-stack">
+                ${circular.body ? `
+                  <div class="detail-card circular-body-card">
+                    <div class="section-title">نص التعميم</div>
+                    <p class="detail-note">${circular.body}</p>
+                  </div>
+                ` : ""}
+                ${circular.actionRequired ? `
+                  <div class="detail-card circular-body-card">
+                    <div class="section-title">الإجراء المطلوب</div>
+                    <p class="detail-note">${circular.actionRequired}</p>
+                  </div>
+                ` : ""}
+              </div>
+              <div class="circular-kpi-strip">
+                <div class="circular-mini-kpi">
+                  <span>تأكيد القراءة</span>
+                  <strong>${stats.read}/${stats.total}</strong>
                 </div>
-              ` : ""}
+                <div class="circular-mini-kpi">
+                  <span>تأكيد الإنجاز</span>
+                  <strong>${stats.completed}/${stats.total}</strong>
+                </div>
+                <div class="circular-mini-kpi">
+                  <span>المتبقي</span>
+                  <strong>${stats.pending}</strong>
+                </div>
+              </div>
               <div class="detail-row"><span>تاريخ الإصدار</span><span>${formatDate(circular.issuedAt || circular.dueDate)}</span></div>
-              <div class="detail-row"><span>قرأ التعميم</span><span>${stats.read}/${stats.total}</span></div>
-              <div class="detail-row"><span>أنجز التعميم</span><span>${stats.completed}/${stats.total}</span></div>
+              <div class="detail-row"><span>المرفق المرجعي</span><span>${circular.attachmentName || "لا يوجد"}</span></div>
+              ${circular.status === "مغلق" && circular.closureNote ? `<div class="detail-row"><span>ملاحظة الإغلاق</span><span>${circular.closureNote}</span></div>` : ""}
               <div class="progress"><span style="width:${stats.completePercent}%"></span></div>
               <p class="record-desc">المتبقي ${stats.pending} بعثات | غير المقروء ${stats.unread}</p>
+              ${ownStatus ? `
+                <div class="detail-card circular-status-card">
+                  <div class="record-top">
+                    <strong>حالة بعثتك</strong>
+                    <span class="tag ${ownStatus.tone}">${ownStatus.label}</span>
+                  </div>
+                  <p class="detail-note">${ownStatus.detail}</p>
+                </div>
+              ` : ""}
               ${canEditCircular(circular, user) ? `<div class="inline-actions"><button class="btn secondary circular-edit" data-circular-id="${circular.id}">تعديل التعميم</button></div>` : ""}
               ${actions.length ? `<div class="inline-actions">${actions.map((action) => `<button class="btn primary circular-action" data-circular-id="${circular.id}" data-action="${action.key}">${action.label}</button>`).join("")}</div>` : ""}
             </div>
@@ -2813,23 +3129,52 @@ function renderCircularsPage(user) {
         </div>
       </div>
       <div class="panel">
-        <div class="section-title">المسار التشغيلي</div>
+        <div class="section-title">متابعة التنفيذ</div>
         <div class="detail-list">
-          ${circulars.map((circular) => `
-            <div class="detail-card">
-              <strong>${circular.title}</strong>
+          ${circulars.map((circular) => {
+            const urgency = getCircularUrgency(circular);
+            const recipientRows = getCircularRecipientRows(circular, user);
+            return `
+            <div class="detail-card circular-monitor-card">
+              <div class="record-top">
+                <div>
+                  <strong>${circular.title}</strong>
+                  <div class="record-meta">${circular.category || "تنفيذي"} | ${circular.priority || "متوسطة"} الأولوية</div>
+                </div>
+                <span class="tag ${urgency.tone}">${urgency.label}</span>
+              </div>
+              <div class="circular-recipient-list">
+                ${recipientRows.map((row) => `
+                  <div class="circular-recipient-row">
+                    <div class="circular-recipient-main">
+                      <strong>${row.missionName}</strong>
+                      <span class="circular-recipient-meta">${row.departmentName}</span>
+                    </div>
+                    <div class="circular-status-stack">
+                      <span class="tag ${row.status.tone}">${row.status.label}</span>
+                      <span class="mini">${row.response?.note || row.status.detail}</span>
+                      ${row.response?.evidenceRef ? `<span class="mini">مرجع: ${row.response.evidenceRef}</span>` : ""}
+                    </div>
+                  </div>
+                `).join("") || `<div class="empty">لا توجد بعثات في نطاق هذا الحساب داخل هذا التعميم.</div>`}
+              </div>
+              <div class="section-title">آخر المعالجات</div>
               <div class="detail-list">
-                ${(circular.workflowHistory || []).slice(0, 4).map((item) => `
+                ${((circular.processingLog || []).length ? circular.processingLog : circular.workflowHistory || []).slice(0, 4).map((item) => `
                   <div class="timeline-entry">
-                    <strong>${item.action}</strong>
+                    <strong>${item.action || item.actor}</strong>
                     <span>${item.actor}</span>
-                    <span>${item.stage}</span>
+                    ${item.missionId ? `<span>${getMissionName(item.missionId)}</span>` : ""}
+                    ${item.stage ? `<span>${item.stage}</span>` : ""}
+                    ${item.result ? `<span>${item.result}</span>` : ""}
+                    ${item.evidenceRef ? `<span>مرجع: ${item.evidenceRef}</span>` : ""}
                     <span>${item.at}</span>
                   </div>
                 `).join("") || '<div class="empty">لا يوجد سجل حركة.</div>'}
               </div>
             </div>
-          `).join("")}
+          `;
+          }).join("") || `<div class="empty">لا توجد متابعات تنفيذية في نطاق هذا الحساب.</div>`}
         </div>
       </div>
     </section>
@@ -3508,6 +3853,7 @@ function bindEvents() {
     state.sessionUserId = null;
     state.activeView = "dashboard";
     state.reportActionDialog = null;
+    state.circularActionDialog = null;
     saveState();
     renderApp();
   });
@@ -3898,6 +4244,10 @@ function bindEvents() {
 
   document.querySelectorAll(".circular-action").forEach((button) => {
     button.addEventListener("click", () => {
+      if (button.dataset.action === "mark-complete" || button.dataset.action === "close") {
+        openCircularActionDialog(button.dataset.circularId, button.dataset.action);
+        return;
+      }
       handleCircularAction(button.dataset.circularId, button.dataset.action);
     });
   });
@@ -3908,6 +4258,13 @@ function bindEvents() {
       saveState();
       renderApp();
     });
+  });
+
+  const circularActionForm = document.getElementById("circular-action-form");
+  if (circularActionForm) circularActionForm.addEventListener("submit", handleCircularActionFormSubmit);
+
+  document.querySelectorAll("[data-close-circular-dialog]").forEach((button) => {
+    button.addEventListener("click", closeCircularActionDialog);
   });
 
   document.querySelectorAll(".meeting-action").forEach((button) => {
@@ -3982,6 +4339,7 @@ function handleLogin(event) {
   state.sessionUserId = user.id;
   state.activeView = "dashboard";
   state.reportActionDialog = null;
+  state.circularActionDialog = null;
   logAudit(user.name, "تسجيل الدخول", "جلسة النظام", user.role === "mission" ? getMissionName(user.missionId) : user.role === "department" ? getDepartmentName(user.departmentId) : "وزارة");
   saveState();
   renderApp();
@@ -4237,6 +4595,12 @@ function handleCircularSubmit(event) {
   }
 
   const editingCircular = state.circulars.find((item) => item.id === state.editingCircularId);
+  if (editingCircular && !canEditCircular(editingCircular, user)) {
+    addAlert("danger", "تعذر تعديل التعميم", "لا تملك هذه الجهة صلاحية تعديل هذا التعميم أو أنه أُغلق بالفعل.");
+    saveState();
+    renderApp();
+    return;
+  }
   const circular = editingCircular || {
     id: `circ-${Date.now()}`,
     issuedBy: user.name,
@@ -4245,12 +4609,33 @@ function handleCircularSubmit(event) {
     readMissionIds: [],
     completedMissionIds: [],
     workflowHistory: [],
-    processingLog: []
+    processingLog: [],
+    missionResponses: []
   };
+  const category = String(form.get("category") || "تنفيذي");
+  const priority = String(form.get("priority") || "متوسطة");
+  const actionRequired = String(form.get("actionRequired") || "").trim();
+  const attachmentName = String(form.get("attachmentName") || "").trim();
+  const normalizedCategory = ["توجيهي", "تنفيذي", "إداري", "عاجل"].includes(category) ? category : "تنفيذي";
+  const normalizedPriority = ["عالية", "متوسطة", "عادية"].includes(priority) ? priority : "متوسطة";
+  if (!actionRequired) {
+    addAlert("danger", "تعذر إصدار التعميم", "يجب تحديد الإجراء المطلوب من البعثات بصورة صريحة قبل إصدار التعميم.");
+    saveState();
+    renderApp();
+    return;
+  }
   circular.title = String(form.get("title"));
+  circular.category = normalizedCategory;
+  circular.priority = normalizedPriority;
   circular.summary = summary;
   circular.body = body;
+  circular.actionRequired = actionRequired;
+  circular.attachmentName = attachmentName;
   circular.targetMissionIds = targetMissionIds;
+  circular.readMissionIds = normalizeMissionIdList(circular.readMissionIds).filter((missionId) => targetMissionIds.includes(missionId));
+  circular.completedMissionIds = normalizeMissionIdList(circular.completedMissionIds).filter((missionId) => targetMissionIds.includes(missionId));
+  circular.missionResponses = normalizeCircularResponses(circular.missionResponses).filter((entry) => targetMissionIds.includes(entry.missionId));
+  circular.processingLog = (Array.isArray(circular.processingLog) ? circular.processingLog : []).filter((entry) => !entry.missionId || targetMissionIds.includes(resolveMissionId(entry.missionId)));
   circular.dueDate = dueDate;
   circular.workflowHistory.unshift({
     actor: user.name,
@@ -4579,13 +4964,35 @@ function handleReportAction(reportId, actionKey, nextStage, actionPayload = null
   renderApp();
 }
 
-function handleCircularAction(circularId, actionKey) {
+function handleCircularActionFormSubmit(event) {
+  event.preventDefault();
+  const form = new FormData(event.currentTarget);
+  handleCircularAction(
+    String(form.get("circularId") || ""),
+    String(form.get("actionKey") || ""),
+    {
+      executionNote: String(form.get("executionNote") || "").trim(),
+      evidenceRef: String(form.get("evidenceRef") || "").trim(),
+      closureNote: String(form.get("closureNote") || "").trim()
+    }
+  );
+}
+
+function handleCircularAction(circularId, actionKey, actionPayload = null) {
   const circular = state.circulars.find((item) => item.id === circularId);
   const user = getSessionUser();
   if (!circular || !user) return;
   circular.targetMissionIds = normalizeMissionIdList(circular.targetMissionIds);
   circular.readMissionIds = normalizeMissionIdList(circular.readMissionIds);
   circular.completedMissionIds = normalizeMissionIdList(circular.completedMissionIds);
+  circular.missionResponses = normalizeCircularResponses(circular.missionResponses);
+  const allowedAction = getCircularActions(circular, user).find((action) => action.key === actionKey);
+  if (!allowedAction) {
+    addAlert("danger", "تعذر تنفيذ الإجراء", "هذا الإجراء غير متاح لهذا الحساب أو لم يعد متوافقًا مع حالة التعميم الحالية.");
+    saveState();
+    renderApp();
+    return;
+  }
 
   if (actionKey === "mark-read" && user.role === "mission" && circular.targetMissionIds.includes(user.missionId) && !circular.readMissionIds.includes(user.missionId)) {
     circular.readMissionIds.push(user.missionId);
@@ -4600,13 +5007,31 @@ function handleCircularAction(circularId, actionKey) {
   }
 
   if (actionKey === "mark-complete" && user.role === "mission" && circular.targetMissionIds.includes(user.missionId) && !circular.completedMissionIds.includes(user.missionId)) {
+    const executionNote = String(actionPayload?.executionNote || "").trim();
+    if (!executionNote) {
+      addAlert("danger", "تعذر حفظ الإنجاز", "يجب إدخال نتيجة تنفيذ واضحة قبل اعتماد إنجاز التعميم.");
+      saveState();
+      renderApp();
+      return;
+    }
+    const evidenceRef = String(actionPayload?.evidenceRef || "").trim();
     if (!circular.readMissionIds.includes(user.missionId)) {
       circular.readMissionIds.push(user.missionId);
     }
     circular.completedMissionIds.push(user.missionId);
+    circular.missionResponses = circular.missionResponses.filter((item) => item.missionId !== user.missionId);
+    circular.missionResponses.unshift({
+      missionId: user.missionId,
+      note: executionNote,
+      evidenceRef,
+      completedAt: new Date().toLocaleString("ar-YE"),
+      actor: user.name
+    });
     circular.processingLog.unshift({
       actor: user.name,
-      result: "تم تنفيذ المطلوب",
+      missionId: user.missionId,
+      result: executionNote,
+      evidenceRef,
       at: new Date().toLocaleString("ar-YE")
     });
     circular.workflowHistory.unshift({
@@ -4615,18 +5040,37 @@ function handleCircularAction(circularId, actionKey) {
       stage: circular.status,
       at: new Date().toLocaleString("ar-YE")
     });
+    state.circularActionDialog = null;
     addAlert("success", "تم إنجاز التعميم", `${user.name} أكد تنفيذ المطلوب في التعميم "${circular.title}".`);
     logAudit(user.name, "إنجاز تعميم", circular.title, getMissionName(user.missionId));
   }
 
   if (actionKey === "close" && canSubmitCircular(user)) {
+    const stats = getCircularCompletion(circular);
+    const closureNote = String(actionPayload?.closureNote || "").trim();
+    if (stats.pending > 0 && !closureNote) {
+      addAlert("danger", "تعذر إغلاق التعميم", "يجب إدخال ملاحظة إغلاق توضح سبب الإغلاق مع بقاء بعثات لم تنجز التعميم.");
+      saveState();
+      renderApp();
+      return;
+    }
     circular.status = "مغلق";
+    circular.closedAt = new Date().toISOString().slice(0, 10);
+    circular.closureNote = closureNote;
+    if (closureNote) {
+      circular.processingLog.unshift({
+        actor: user.name,
+        result: `إغلاق التعميم: ${closureNote}`,
+        at: new Date().toLocaleString("ar-YE")
+      });
+    }
     circular.workflowHistory.unshift({
       actor: user.name,
       action: "إغلاق التعميم",
       stage: "مغلق",
       at: new Date().toLocaleString("ar-YE")
     });
+    state.circularActionDialog = null;
     addAlert("success", "تم إغلاق التعميم", `${user.name} أغلق التعميم "${circular.title}".`);
     logAudit(user.name, "إغلاق تعميم", circular.title, "وزارة");
   }
