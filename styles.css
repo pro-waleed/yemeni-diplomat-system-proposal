@@ -54,6 +54,10 @@ textarea {
   gap: 14px;
 }
 
+.document-shell {
+  width: min(1180px, calc(100% - 28px));
+}
+
 .login-shell {
   width: 100%;
   margin: 0;
@@ -1056,6 +1060,71 @@ textarea {
   margin-top: 16px;
 }
 
+.document-hero {
+  background:
+    linear-gradient(135deg, rgba(15, 118, 110, 0.1), rgba(255, 255, 255, 0.9)),
+    var(--surface);
+}
+
+.document-hero-head,
+.document-link-row,
+.timeline-grid,
+.document-links-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.document-hero-head {
+  grid-template-columns: auto 1fr;
+  align-items: start;
+}
+
+.document-hero-copy {
+  display: grid;
+  gap: 10px;
+}
+
+.document-link-row {
+  grid-template-columns: repeat(2, minmax(0, max-content));
+  justify-content: start;
+}
+
+.decision-table-wrap {
+  overflow-x: auto;
+  border-radius: 22px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.decision-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 720px;
+}
+
+.decision-table th,
+.decision-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+  text-align: right;
+  vertical-align: top;
+}
+
+.decision-table th {
+  font-family: "Cairo", sans-serif;
+  background: rgba(15, 118, 110, 0.08);
+}
+
+.timeline-grid,
+.document-links-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.doc-link-card {
+  text-decoration: none;
+  color: inherit;
+}
+
 .report-detail-hero {
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(240px, 0.85fr);
@@ -1419,7 +1488,9 @@ textarea {
   .workspace-card-grid,
   .workspace-kpi-grid,
   .entity-kpi-grid,
-  .circular-kpi-strip {
+  .circular-kpi-strip,
+  .timeline-grid,
+  .document-links-grid {
     grid-template-columns: 1fr;
   }
 
@@ -1489,6 +1560,11 @@ textarea {
 
   .reports-stat-strip {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .document-hero-head,
+  .document-link-row {
+    grid-template-columns: 1fr;
   }
 
   .report-registry-strip {
