@@ -4,6 +4,7 @@ const API_TIMEOUT_MS = 2500;
 const SHARED_STATE_KEYS = [
   "departments",
   "missions",
+  "missionMembers",
   "coreUsers",
   "reportRequests",
   "reports",
@@ -79,6 +80,48 @@ const CANONICAL_MISSIONS = [
   { id: "mission-havana", name: "بعثة هافانا", departmentId: "dept-americas", username: "havana", password: "Havana@2026" },
   { id: "mission-washington", name: "بعثة واشنطن", departmentId: "dept-americas", username: "washington", password: "Washington@2026" }
 ];
+
+const REPORT_STAGE_PENDING_CHIEF_APPROVAL = "بانتظار اعتماد رئيس البعثة";
+const REPORT_STAGE_SUBMITTED = "مرفوع من البعثة";
+const REPORT_STAGE_UNDER_DEPARTMENT_REVIEW = "قيد مراجعة الدائرة";
+const REPORT_STAGE_RETURNED = "أعيد للبعثة للاستكمال";
+const REPORT_STAGE_APPROVED = "معتمد من التخطيط";
+const REPORT_STAGE_ARCHIVED = "مغلق ومؤرشف";
+
+function buildChiefMemberFromMission(mission) {
+  return {
+    id: `member-chief-${mission.id}`,
+    missionId: mission.id,
+    name: `رئيس ${mission.name}`,
+    title: "رئيس البعثة",
+    missionRole: "chief",
+    username: mission.username,
+    password: mission.password,
+    status: "active",
+    createdAt: "2026-03-15 09:00"
+  };
+}
+
+function buildDefaultMissionMember(mission) {
+  return {
+    id: `member-officer-${mission.id}`,
+    missionId: mission.id,
+    name: `مسؤول التقارير في ${mission.name}`,
+    title: "مسؤول التقارير والتعاميم",
+    missionRole: "member",
+    username: `${mission.username}_rep`,
+    password: "Member@2026",
+    status: "active",
+    createdAt: "2026-03-15 09:05"
+  };
+}
+
+function createMissionMemberSeeds(missions = CANONICAL_MISSIONS) {
+  return missions.flatMap((mission) => [
+    buildChiefMemberFromMission(mission),
+    buildDefaultMissionMember(mission)
+  ]);
+}
 
 const LEGACY_DEPARTMENT_ID_MAP = {
   "dept-arabia": "dept-gulf"
@@ -298,9 +341,11 @@ const seedState = () => ({
   editingCircularId: null,
   editingMeetingId: null,
   editingPlanId: null,
+  editingMissionMemberId: null,
   loginError: "",
   departments: CANONICAL_DEPARTMENTS,
   missions: CANONICAL_MISSIONS,
+  missionMembers: createMissionMemberSeeds(),
   coreUsers: [
     { id: "admin-user", role: "admin", name: "مدير النظام", username: "admin", password: "Admin@2026" },
     { id: "planning-user", role: "planning", name: "إدارة التخطيط", username: "planning", password: "Planning@2026" },
@@ -524,6 +569,7 @@ function extractRuntimeState(source = seedState()) {
     editingCircularId: source.editingCircularId || null,
     editingMeetingId: source.editingMeetingId || null,
     editingPlanId: source.editingPlanId || null,
+    editingMissionMemberId: source.editingMissionMemberId || null,
     loginError: source.loginError || "",
     alerts: Array.isArray(source.alerts) ? source.alerts : seedState().alerts
   };
@@ -581,6 +627,37 @@ function loadState() {
       departmentId: LEGACY_DEPARTMENT_ID_MAP[mission.departmentId] || mission.departmentId
     }));
   parsed.missions = [...canonicalMissions, ...customMissions];
+  const seededMissionMembers = createMissionMemberSeeds(parsed.missions);
+  const parsedMissionMembers = Array.isArray(parsed.missionMembers) ? parsed.missionMembers : [];
+  parsed.missionMembers = seededMissionMembers.map((seedMember) => {
+    const existing = parsedMissionMembers.find((member) => member.id === seedMember.id || member.username === seedMember.username);
+    return {
+      ...seedMember,
+      ...(existing || {}),
+      id: seedMember.id,
+      missionId: seedMember.missionId,
+      missionRole: seedMember.missionRole,
+      username: existing?.username || seedMember.username,
+      password: existing?.password || seedMember.password,
+      status: existing?.status || "active",
+      title: existing?.title || seedMember.title,
+      name: existing?.name || seedMember.name
+    };
+  });
+  const customMissionMembers = parsedMissionMembers
+    .filter((member) => member.missionId && !seededMissionMembers.some((item) => item.id === member.id))
+    .map((member) => ({
+      ...member,
+      status: member.status || "active",
+      missionRole: member.missionRole === "chief" ? "chief" : "member",
+      title: member.title || (member.missionRole === "chief" ? "رئيس البعثة" : "عضو البعثة"),
+      createdAt: member.createdAt || "2026-03-15 09:00"
+    }));
+  parsed.missionMembers = [...parsed.missionMembers, ...customMissionMembers];
+  const legacySessionMissionId = resolveMissionId(String(parsed.sessionUserId || "").replace(/^user-/, ""), parsed.missions);
+  if (legacySessionMissionId && !parsed.missionMembers.some((member) => `user-${member.id}` === parsed.sessionUserId)) {
+    parsed.sessionUserId = `user-member-chief-${legacySessionMissionId}`;
+  }
   parsed.reportRequests = Array.isArray(parsed.reportRequests) ? parsed.reportRequests : seeded.reportRequests;
   parsed.editingReportId = parsed.editingReportId || null;
   parsed.reportActionDialog = parsed.reportActionDialog && typeof parsed.reportActionDialog === "object" ? parsed.reportActionDialog : null;
@@ -600,6 +677,7 @@ function loadState() {
   parsed.editingCircularId = parsed.editingCircularId || null;
   parsed.editingMeetingId = parsed.editingMeetingId || null;
   parsed.editingPlanId = parsed.editingPlanId || null;
+  parsed.editingMissionMemberId = parsed.editingMissionMemberId || null;
   parsed.reportRequests = parsed.reportRequests.map((request) => ({
     ...request,
     requestFamily: request.requestFamily || inferReportFamily(request),
@@ -628,7 +706,9 @@ function loadState() {
     completedMissionIds: normalizeMissionIdList(circular.completedMissionIds, parsed.missions),
     workflowHistory: Array.isArray(circular.workflowHistory) ? circular.workflowHistory : [],
     processingLog: Array.isArray(circular.processingLog) ? circular.processingLog : [],
-    missionResponses: normalizeCircularResponses(circular.missionResponses, parsed.missions)
+    missionResponses: normalizeCircularResponses(circular.missionResponses, parsed.missions),
+    missionResponseDrafts: normalizeCircularDrafts(circular.missionResponseDrafts, parsed.missions),
+    missionReadLog: normalizeMissionReadLog(circular.missionReadLog, parsed.missions)
   }));
   parsed.meetings = (Array.isArray(parsed.meetings) ? parsed.meetings : seedState().meetings).map((meeting) => ({
     ...meeting,
@@ -673,6 +753,16 @@ function loadState() {
     reviewNotes: report.reviewNotes || "",
     qualityScores: normalizeQualityScores(report.qualityScores),
     submittedOn: report.submittedOn || "",
+    preparedByMemberId: report.preparedByMemberId || "",
+    preparedByName: report.preparedByName || "",
+    preparedAt: report.preparedAt || report.createdAt || "",
+    lastUpdatedByMemberId: report.lastUpdatedByMemberId || "",
+    lastUpdatedByName: report.lastUpdatedByName || report.preparedByName || "",
+    updatedAt: report.updatedAt || report.createdAt || "",
+    missionApprovalStatus: report.missionApprovalStatus || (report.workflowStage === REPORT_STAGE_PENDING_CHIEF_APPROVAL ? "بانتظار اعتماد رئيس البعثة" : report.chiefApprovedByName ? "اعتمد رئيس البعثة" : ""),
+    chiefApprovedByMemberId: report.chiefApprovedByMemberId || "",
+    chiefApprovedByName: report.chiefApprovedByName || "",
+    chiefApprovedAt: report.chiefApprovedAt || "",
     thematicSituation: report.thematicSituation || "",
     thematicDevelopments: report.thematicDevelopments || "",
     thematicStakeholders: report.thematicStakeholders || "",
@@ -686,7 +776,7 @@ function loadState() {
     activityMediaEcho: report.activityMediaEcho || "",
     activityDiplomaticImpact: report.activityDiplomaticImpact || "",
     activityFollowupOwner: report.activityFollowupOwner || "",
-    workflowStage: report.workflowStage || "مرفوع من البعثة",
+    workflowStage: report.workflowStage || REPORT_STAGE_SUBMITTED,
     workflowHistory: Array.isArray(report.workflowHistory) ? report.workflowHistory : []
   }));
   return parsed;
@@ -807,16 +897,53 @@ function getAllUsers() {
     password: dept.password,
     departmentId: dept.id
   }));
-  const missions = state.missions.map((mission) => ({
-    id: `user-${mission.id}`,
+  const missionMembers = (Array.isArray(state.missionMembers) ? state.missionMembers : [])
+    .filter((member) => member.status !== "deleted")
+    .map((member) => ({
+    id: `user-${member.id}`,
     role: "mission",
-    name: mission.name,
-    username: mission.username,
-    password: mission.password,
-    missionId: mission.id,
-    departmentId: mission.departmentId
+    name: member.name,
+    username: member.username,
+    password: member.password,
+    title: member.title || (member.missionRole === "chief" ? "رئيس البعثة" : "عضو البعثة"),
+    missionMemberId: member.id,
+    missionRole: member.missionRole === "chief" ? "chief" : "member",
+    missionId: member.missionId,
+    departmentId: getMissionById(member.missionId)?.departmentId || ""
   }));
-  return [...core, ...departments, ...missions];
+  return [...core, ...departments, ...missionMembers];
+}
+
+function getMissionMemberById(id) {
+  return (state.missionMembers || []).find((member) => member.id === id) || null;
+}
+
+function getMissionMembers(missionId, { includeInactive = false } = {}) {
+  return (state.missionMembers || [])
+    .filter((member) => member.missionId === missionId && (includeInactive || member.status !== "deleted"))
+    .sort((a, b) => {
+      if (a.missionRole === "chief" && b.missionRole !== "chief") return -1;
+      if (a.missionRole !== "chief" && b.missionRole === "chief") return 1;
+      return a.name.localeCompare(b.name, "ar");
+    });
+}
+
+function getMissionChief(missionId) {
+  return getMissionMembers(missionId).find((member) => member.missionRole === "chief") || null;
+}
+
+function isMissionChief(user = getSessionUser()) {
+  return Boolean(user && user.role === "mission" && user.missionRole === "chief");
+}
+
+function getMissionActorName(user = getSessionUser()) {
+  if (!user) return "";
+  if (user.role !== "mission") return user.name;
+  return `${user.name} - ${getMissionName(user.missionId)}`;
+}
+
+function canManageMissionMembers(user = getSessionUser(), missionId = user?.missionId) {
+  return Boolean(user && user.role === "mission" && user.missionId === missionId && isMissionChief(user));
 }
 
 function resolveMissionId(reference, sourceMissions = null) {
@@ -857,7 +984,9 @@ function normalizeCircularResponses(values, sourceMissions = null) {
       note: String(entry?.note || entry?.result || "").trim(),
       evidenceRef: String(entry?.evidenceRef || entry?.attachmentName || "").trim(),
       completedAt: String(entry?.completedAt || entry?.at || "").trim(),
-      actor: String(entry?.actor || "").trim()
+      actor: String(entry?.actor || "").trim(),
+      approvedBy: String(entry?.approvedBy || "").trim(),
+      preparedBy: String(entry?.preparedBy || "").trim()
     };
     if (existingIndex >= 0) {
       normalized[existingIndex] = nextEntry;
@@ -866,6 +995,42 @@ function normalizeCircularResponses(values, sourceMissions = null) {
     }
   });
   return normalized;
+}
+
+function normalizeCircularDrafts(values, sourceMissions = null) {
+  if (!Array.isArray(values)) return [];
+  return values
+    .map((entry) => {
+      const missionId = resolveMissionId(entry?.missionId || entry?.missionName || "", sourceMissions);
+      if (!missionId) return null;
+      return {
+        id: String(entry?.id || `draft-${missionId}`),
+        missionId,
+        note: String(entry?.note || "").trim(),
+        evidenceRef: String(entry?.evidenceRef || "").trim(),
+        preparedBy: String(entry?.preparedBy || entry?.actor || "").trim(),
+        preparedByMemberId: String(entry?.preparedByMemberId || "").trim(),
+        preparedAt: String(entry?.preparedAt || entry?.at || "").trim(),
+        status: entry?.status === "pending-chief-approval" ? "pending-chief-approval" : "pending-chief-approval"
+      };
+    })
+    .filter(Boolean);
+}
+
+function normalizeMissionReadLog(values, sourceMissions = null) {
+  if (!Array.isArray(values)) return [];
+  return values
+    .map((entry) => {
+      const missionId = resolveMissionId(entry?.missionId || entry?.missionName || "", sourceMissions);
+      if (!missionId) return null;
+      return {
+        missionId,
+        actor: String(entry?.actor || "").trim(),
+        actorMemberId: String(entry?.actorMemberId || "").trim(),
+        at: String(entry?.at || "").trim()
+      };
+    })
+    .filter(Boolean);
 }
 
 function getSessionUser() {
@@ -886,6 +1051,19 @@ function getMissionName(id) {
 
 function getDepartmentName(id) {
   return getDepartmentById(id)?.name || "-";
+}
+
+function isInternalMissionReportStage(stage = "") {
+  return stage === REPORT_STAGE_PENDING_CHIEF_APPROVAL;
+}
+
+function isExternallyVisibleReportStage(stage = "") {
+  return [
+    REPORT_STAGE_SUBMITTED,
+    REPORT_STAGE_UNDER_DEPARTMENT_REVIEW,
+    REPORT_STAGE_APPROVED,
+    REPORT_STAGE_ARCHIVED
+  ].includes(stage);
 }
 
 function getGroupedMissions(missions) {
@@ -958,7 +1136,8 @@ function getDemoAccounts() {
     { roleLabel: "إدارة التخطيط", scope: "وزارة", username: "planning", password: "Planning@2026" },
     { roleLabel: "القيادة العليا", scope: "وزارة", username: "leadership", password: "Leadership@2026" },
     { roleLabel: "دائرة الجزيرة والخليج", scope: "دائرة", username: "gulf_dept", password: "Gulf@2026" },
-    { roleLabel: "بعثة الرياض", scope: "بعثة", username: "riyadh", password: "Riyadh@2026" }
+    { roleLabel: "رئيس بعثة الرياض", scope: "بعثة", username: "riyadh", password: "Riyadh@2026" },
+    { roleLabel: "عضو بعثة الرياض", scope: "بعثة", username: "riyadh_rep", password: "Member@2026" }
   ];
 }
 
@@ -970,9 +1149,12 @@ function getViewBadge(view, user = getSessionUser()) {
   if (view === "plans") return String(getVisiblePlans(user).length);
   if (view === "training") return String(getVisibleTrainings(user).length);
   if (view === "requests") return String(getVisibleRequests(user).length);
-  if (view === "entities") return String(user.role === "department"
-    ? state.missions.filter((mission) => mission.departmentId === user.departmentId).length
-    : state.missions.length);
+  if (view === "entities") {
+    if (user.role === "mission") return "1";
+    return String(user.role === "department"
+      ? state.missions.filter((mission) => mission.departmentId === user.departmentId).length
+      : state.missions.length);
+  }
   if (view === "management") return String(state.missions.length);
   if (view === "governance") return String(state.auditLog.length);
   return "";
@@ -1093,13 +1275,17 @@ function visibleViews(user) {
   if (user.role === "planning") return ["dashboard", "reports", "circulars", "meetings", "plans", "training", "entities", "requests", "governance"];
   if (user.role === "leadership") return ["dashboard", "reports", "circulars", "meetings", "plans", "entities", "requests", "governance"];
   if (user.role === "department") return ["dashboard", "reports", "circulars", "meetings", "plans", "entities", "requests"];
-  return ["dashboard", "reports", "circulars", "plans", "training", "requests"];
+  return ["dashboard", "entities", "reports", "circulars", "plans", "training", "requests"];
 }
 
 function getVisibleReports(user = getSessionUser()) {
   if (!user) return [];
-  if (user.role === "admin" || user.role === "planning" || user.role === "leadership") return state.reports;
-  if (user.role === "department") return state.reports.filter((report) => report.departmentId === user.departmentId);
+  if (user.role === "admin" || user.role === "planning" || user.role === "leadership") {
+    return state.reports.filter((report) => !isInternalMissionReportStage(report.workflowStage));
+  }
+  if (user.role === "department") {
+    return state.reports.filter((report) => report.departmentId === user.departmentId && !isInternalMissionReportStage(report.workflowStage));
+  }
   if (user.role === "mission") return state.reports.filter((report) => report.missionId === user.missionId);
   return [];
 }
@@ -1441,8 +1627,13 @@ function getCircularUrgency(circular) {
   return { label: "نشط", tone: "info" };
 }
 
+function getPendingCircularDraft(circular, missionId) {
+  return (circular.missionResponseDrafts || []).find((item) => item.missionId === missionId && item.status === "pending-chief-approval") || null;
+}
+
 function getCircularMissionStatus(circular, missionId) {
   const response = (circular.missionResponses || []).find((item) => item.missionId === missionId) || null;
+  const draft = getPendingCircularDraft(circular, missionId);
   const read = normalizeMissionIdList(circular.readMissionIds).includes(missionId);
   const completed = normalizeMissionIdList(circular.completedMissionIds).includes(missionId);
   const urgency = getCircularUrgency(circular);
@@ -1450,7 +1641,16 @@ function getCircularMissionStatus(circular, missionId) {
     return {
       label: "منجز",
       tone: "success",
-      detail: response?.note || "تم تأكيد تنفيذ المطلوب من البعثة."
+      detail: response?.approvedBy
+        ? `${response.actor || response.preparedBy || "عضو البعثة"} نفذ المطلوب، واعتمده ${response.approvedBy}.`
+        : (response?.note || "تم تأكيد تنفيذ المطلوب من البعثة.")
+    };
+  }
+  if (draft) {
+    return {
+      label: "بانتظار اعتماد رئيس البعثة",
+      tone: "warning",
+      detail: `${draft.preparedBy || "أحد أعضاء البعثة"} أعد إفادة تنفيذ داخلية وهي بانتظار اعتماد رئيس البعثة قبل الإرسال.`
     };
   }
   if (circular.status === "مغلق") {
@@ -1502,12 +1702,14 @@ function getCircularRecipientRows(circular, user = getSessionUser()) {
   return getCircularMissionIdsForUser(circular, user).map((missionId) => {
     const mission = getMissionById(missionId);
     const response = (circular.missionResponses || []).find((item) => item.missionId === missionId) || null;
+    const draft = getPendingCircularDraft(circular, missionId);
     return {
       missionId,
       missionName: mission?.name || "-",
       departmentName: getDepartmentName(mission?.departmentId),
       status: getCircularMissionStatus(circular, missionId),
-      response
+      response,
+      draft
     };
   });
 }
@@ -1588,12 +1790,17 @@ function getCircularActions(circular, user = getSessionUser()) {
   const targetMissionIds = normalizeMissionIdList(circular.targetMissionIds);
   const readMissionIds = normalizeMissionIdList(circular.readMissionIds);
   const completedMissionIds = normalizeMissionIdList(circular.completedMissionIds);
+  const pendingDraft = user.role === "mission" ? getPendingCircularDraft(circular, user.missionId) : null;
   if (user.role === "mission" && circular.status === "نشط" && targetMissionIds.includes(user.missionId)) {
     if (!readMissionIds.includes(user.missionId)) {
       actions.push({ key: "mark-read", label: "تأكيد القراءة" });
     }
     if (!completedMissionIds.includes(user.missionId)) {
-      actions.push({ key: "mark-complete", label: "تأكيد الإنجاز" });
+      if (isMissionChief(user) && pendingDraft) {
+        actions.push({ key: "approve-draft", label: "اعتماد إرسال إفادة التنفيذ" });
+      } else {
+        actions.push({ key: "mark-complete", label: isMissionChief(user) ? "تأكيد الإنجاز وإرساله" : (pendingDraft ? "تحديث الإفادة الداخلية" : "رفع إفادة داخلية") });
+      }
     }
   }
   if (canSubmitCircular(user) && circular.status === "نشط") {
@@ -1604,10 +1811,10 @@ function getCircularActions(circular, user = getSessionUser()) {
 
 function getCompletion(request) {
   const submittedMissionIds = [...new Set(state.reports
-    .filter((report) => report.requestId === request.id && report.workflowStage !== "أعيد للبعثة للاستكمال")
+    .filter((report) => report.requestId === request.id && isExternallyVisibleReportStage(report.workflowStage))
     .map((report) => report.missionId))];
   const approvedMissionIds = [...new Set(state.reports
-    .filter((report) => report.requestId === request.id && (report.workflowStage === "معتمد من التخطيط" || report.workflowStage === "مغلق ومؤرشف"))
+    .filter((report) => report.requestId === request.id && (report.workflowStage === REPORT_STAGE_APPROVED || report.workflowStage === REPORT_STAGE_ARCHIVED))
     .map((report) => report.missionId))];
   const done = submittedMissionIds.length;
   const total = request.targetMissionIds.length;
@@ -1621,9 +1828,9 @@ function getCompletion(request) {
 }
 
 function stageTone(stage) {
-  if (stage === "مغلق ومؤرشف" || stage === "معتمد من التخطيط") return "success";
-  if (stage === "قيد مراجعة الدائرة") return "warning";
-  if (stage === "أعيد للبعثة للاستكمال") return "danger";
+  if (stage === REPORT_STAGE_ARCHIVED || stage === REPORT_STAGE_APPROVED) return "success";
+  if (stage === REPORT_STAGE_UNDER_DEPARTMENT_REVIEW || stage === REPORT_STAGE_PENDING_CHIEF_APPROVAL) return "warning";
+  if (stage === REPORT_STAGE_RETURNED) return "danger";
   return "info";
 }
 
@@ -1868,12 +2075,12 @@ function getMissionRequestStatus(requestId, missionId) {
   const approved = state.reports.some((report) => (
     report.requestId === requestId &&
     report.missionId === missionId &&
-    (report.workflowStage === "معتمد من التخطيط" || report.workflowStage === "مغلق ومؤرشف")
+    (report.workflowStage === REPORT_STAGE_APPROVED || report.workflowStage === REPORT_STAGE_ARCHIVED)
   ));
   const submitted = state.reports.some((report) => (
     report.requestId === requestId &&
     report.missionId === missionId &&
-    report.workflowStage !== "أعيد للبعثة للاستكمال"
+    isExternallyVisibleReportStage(report.workflowStage)
   ));
   const overdue = !approved && !submitted && request?.dueDate && request.dueDate < today;
   return {
@@ -1980,10 +2187,10 @@ function getRegistryReports(user = getSessionUser()) {
 }
 
 function getReportRegistryBucket(report) {
-  if (report.workflowStage === "أعيد للبعثة للاستكمال") return "attention";
-  if (report.workflowStage === "مرفوع من البعثة" || report.workflowStage === "قيد مراجعة الدائرة") return "attention";
-  if (report.workflowStage === "معتمد من التخطيط") return "approved";
-  if (report.workflowStage === "مغلق ومؤرشف") return "archived";
+  if (report.workflowStage === REPORT_STAGE_RETURNED) return "attention";
+  if (report.workflowStage === REPORT_STAGE_PENDING_CHIEF_APPROVAL || report.workflowStage === REPORT_STAGE_SUBMITTED || report.workflowStage === REPORT_STAGE_UNDER_DEPARTMENT_REVIEW) return "attention";
+  if (report.workflowStage === REPORT_STAGE_APPROVED) return "approved";
+  if (report.workflowStage === REPORT_STAGE_ARCHIVED) return "archived";
   return "other";
 }
 
@@ -1992,7 +2199,7 @@ function getReportRegistryGroups(reports) {
     {
       key: "attention",
       label: "تقارير قيد المتابعة",
-      description: "تشمل التقارير المرفوعة حديثًا أو قيد مراجعة الدائرة أو المعادة للاستكمال.",
+      description: "تشمل التقارير المحالة لاعتماد رئيس البعثة أو المرفوعة حديثًا أو قيد مراجعة الدائرة أو المعادة للاستكمال.",
       tone: "warning",
       items: reports.filter((report) => getReportRegistryBucket(report) === "attention")
     },
@@ -2052,10 +2259,11 @@ function getReportReadinessSummary(report) {
 
 function getMissionReportProfile(missionId) {
   const reports = state.reports.filter((report) => report.missionId === missionId);
-  const approved = reports.filter((report) => report.workflowStage === "معتمد من التخطيط" || report.workflowStage === "مغلق ومؤرشف");
-  const returned = reports.filter((report) => report.workflowStage === "أعيد للبعثة للاستكمال");
-  const pendingDepartment = reports.filter((report) => report.workflowStage === "قيد مراجعة الدائرة");
-  const draftLike = reports.filter((report) => report.workflowStage === "مرفوع من البعثة");
+  const approved = reports.filter((report) => report.workflowStage === REPORT_STAGE_APPROVED || report.workflowStage === REPORT_STAGE_ARCHIVED);
+  const returned = reports.filter((report) => report.workflowStage === REPORT_STAGE_RETURNED);
+  const pendingDepartment = reports.filter((report) => report.workflowStage === REPORT_STAGE_UNDER_DEPARTMENT_REVIEW);
+  const draftLike = reports.filter((report) => report.workflowStage === REPORT_STAGE_SUBMITTED);
+  const pendingChiefApproval = reports.filter((report) => report.workflowStage === REPORT_STAGE_PENDING_CHIEF_APPROVAL);
   const qualityValues = approved.map((report) => getReportQualitySummary(report).average).filter(Boolean);
   const averageQuality = qualityValues.length ? (qualityValues.reduce((sum, value) => sum + value, 0) / qualityValues.length).toFixed(1) : "0.0";
   const latestReport = [...reports].sort((a, b) => String(b.submittedOn || b.activityDate || "").localeCompare(String(a.submittedOn || a.activityDate || "")))[0] || null;
@@ -2078,11 +2286,99 @@ function getMissionReportProfile(missionId) {
     returnedCount: returned.length,
     pendingDepartmentCount: pendingDepartment.length,
     draftCount: draftLike.length,
+    pendingChiefApprovalCount: pendingChiefApproval.length,
     averageQuality,
     latestReport,
     overdueRequests,
     pendingRequests,
     qualityTrend
+  };
+}
+
+function getMissionFamilyReports(missionId, family) {
+  return state.reports
+    .filter((report) => report.missionId === missionId && inferReportFamily(report) === family)
+    .sort((a, b) => String(b.updatedAt || b.submittedOn || b.activityDate || b.createdAt || "").localeCompare(String(a.updatedAt || a.submittedOn || a.activityDate || a.createdAt || "")));
+}
+
+function getMissionRecentAuditEntries(missionId, limit = 8) {
+  const missionName = getMissionName(missionId);
+  return (state.auditLog || [])
+    .filter((entry) => (entry.scope === missionName || entry.target === missionName) && getAuditCategory(entry.action) !== "session")
+    .slice(0, limit);
+}
+
+function getMissionCircularActionSnapshot(circular, missionId) {
+  const response = (circular.missionResponses || []).find((item) => item.missionId === missionId) || null;
+  if (response) {
+    return {
+      label: response.approvedBy
+        ? `نفذ ${response.actor || response.preparedBy || "عضو البعثة"} المطلوب واعتمده ${response.approvedBy}`
+        : `نفذ ${response.actor || response.preparedBy || "عضو البعثة"} المطلوب`,
+      note: response.note || "تم تسجيل إفادة التنفيذ رسميًا.",
+      at: response.completedAt || "-"
+    };
+  }
+  const draft = getPendingCircularDraft(circular, missionId);
+  if (draft) {
+    return {
+      label: `أعد ${draft.preparedBy || "عضو البعثة"} إفادة داخلية`,
+      note: draft.note || "إفادة التنفيذ بانتظار اعتماد رئيس البعثة.",
+      at: draft.preparedAt || "-"
+    };
+  }
+  const readEntry = (normalizeMissionReadLog(circular.missionReadLog) || []).find((item) => item.missionId === missionId) || null;
+  if (readEntry) {
+    return {
+      label: `قرأ ${readEntry.actor || "عضو البعثة"} التعميم`,
+      note: "تم فتح التعميم داخل البعثة ولم تُرسل إفادة التنفيذ بعد.",
+      at: readEntry.at || "-"
+    };
+  }
+  return {
+    label: "لم يبدأ الإجراء بعد",
+    note: "التعميم وارد للبعثة وبانتظار القراءة أو الإجراء التنفيذي.",
+    at: "-"
+  };
+}
+
+function getMissionCircularProfile(missionId) {
+  const circulars = state.circulars
+    .filter((circular) => normalizeMissionIdList(circular.targetMissionIds).includes(missionId))
+    .map((circular) => {
+      const status = getCircularMissionStatus(circular, missionId);
+      const action = getMissionCircularActionSnapshot(circular, missionId);
+      return {
+        circular,
+        status,
+        action,
+        draft: getPendingCircularDraft(circular, missionId),
+        response: (circular.missionResponses || []).find((item) => item.missionId === missionId) || null
+      };
+    })
+    .sort((a, b) => String(b.circular.dueDate || "").localeCompare(String(a.circular.dueDate || "")));
+  return {
+    circulars,
+    total: circulars.length,
+    overdueCount: circulars.filter((item) => item.status.label === "متأخر").length,
+    completedCount: circulars.filter((item) => item.status.label === "منجز").length,
+    pendingChiefApprovalCount: circulars.filter((item) => item.status.label === "بانتظار اعتماد رئيس البعثة").length,
+    activeCount: circulars.filter((item) => item.circular.status === "نشط").length
+  };
+}
+
+function getMissionFileProfile(missionId) {
+  return {
+    mission: getMissionById(missionId),
+    chief: getMissionChief(missionId),
+    members: getMissionMembers(missionId),
+    reportProfile: getMissionReportProfile(missionId),
+    circularProfile: getMissionCircularProfile(missionId),
+    activityReports: getMissionFamilyReports(missionId, "activity"),
+    thematicReports: getMissionFamilyReports(missionId, "thematic"),
+    periodicReports: getMissionFamilyReports(missionId, "periodic"),
+    recentAuditEntries: getMissionRecentAuditEntries(missionId),
+    plan: state.plans.find((plan) => plan.ownerType === "mission" && plan.ownerId === missionId) || null
   };
 }
 
@@ -2136,10 +2432,11 @@ function getReportsExecutiveMetrics(user = getSessionUser()) {
   const delayedMission = [...missionProfiles].sort((a, b) => b.profile.overdueRequests.length - a.profile.overdueRequests.length)[0] || null;
   const topDepartment = [...departmentProfiles].sort((a, b) => Number(b.profile.averageQuality) - Number(a.profile.averageQuality))[0] || null;
   const stageDistribution = [
-    { label: "مرفوع من البعثة", count: reports.filter((report) => report.workflowStage === "مرفوع من البعثة").length },
-    { label: "قيد مراجعة الدائرة", count: reports.filter((report) => report.workflowStage === "قيد مراجعة الدائرة").length },
-    { label: "معتمد من التخطيط", count: reports.filter((report) => report.workflowStage === "معتمد من التخطيط").length },
-    { label: "مغلق ومؤرشف", count: reports.filter((report) => report.workflowStage === "مغلق ومؤرشف").length }
+    { label: REPORT_STAGE_PENDING_CHIEF_APPROVAL, count: reports.filter((report) => report.workflowStage === REPORT_STAGE_PENDING_CHIEF_APPROVAL).length },
+    { label: REPORT_STAGE_SUBMITTED, count: reports.filter((report) => report.workflowStage === REPORT_STAGE_SUBMITTED).length },
+    { label: REPORT_STAGE_UNDER_DEPARTMENT_REVIEW, count: reports.filter((report) => report.workflowStage === REPORT_STAGE_UNDER_DEPARTMENT_REVIEW).length },
+    { label: REPORT_STAGE_APPROVED, count: reports.filter((report) => report.workflowStage === REPORT_STAGE_APPROVED).length },
+    { label: REPORT_STAGE_ARCHIVED, count: reports.filter((report) => report.workflowStage === REPORT_STAGE_ARCHIVED).length }
   ];
   const familyDistribution = [
     { label: "زمني", count: reports.filter((report) => inferReportFamily(report) === "periodic").length },
@@ -2191,15 +2488,15 @@ function getReportStageCount(reports, stage) {
 
 function renderReportsHero(reports, filteredReports, user) {
   const periodicReports = reports.filter((report) => inferReportFamily(report) === "periodic");
-  const approvedReports = reports.filter((report) => report.workflowStage === "معتمد من التخطيط" || report.workflowStage === "مغلق ومؤرشف");
-  const pendingReview = reports.filter((report) => report.workflowStage === "مرفوع من البعثة" || report.workflowStage === "قيد مراجعة الدائرة");
+  const approvedReports = reports.filter((report) => report.workflowStage === REPORT_STAGE_APPROVED || report.workflowStage === REPORT_STAGE_ARCHIVED);
+  const pendingReview = reports.filter((report) => [REPORT_STAGE_PENDING_CHIEF_APPROVAL, REPORT_STAGE_SUBMITTED, REPORT_STAGE_UNDER_DEPARTMENT_REVIEW].includes(report.workflowStage));
   const executive = getReportsExecutiveMetrics(user);
   return `
     <section class="reports-hero">
       <article class="reports-hero-main">
         <span class="tag info">منصة التقارير</span>
         <h1 class="page-title">وحدة التقارير الدبلوماسية</h1>
-        <p class="muted">${user.role === "mission" ? "ارفع تقارير الأنشطة والتقارير الموضوعية مباشرة من البعثة، وارفع التقارير الزمنية استجابة للطلبات الرسمية الواردة فقط." : "تابع دورة حياة التقارير من الرفع حتى المراجعة والاعتماد والأرشفة، مع فصل واضح بين التقارير الزمنية والموضوعية وتقارير الأنشطة."}</p>
+        <p class="muted">${user.role === "mission" ? "أعد التقرير داخل البعثة، ثم أحله إلى رئيس البعثة لاعتماده قبل الإرسال الخارجي. بعد ذلك فقط يبدأ مسار الدائرة والتخطيط بحسب نوع التقرير." : "تابع دورة حياة التقارير من الإعداد الداخلي داخل البعثة، ثم اعتماد رئيس البعثة، ثم مراجعة الدائرة، ثم اعتماد التخطيط، ثم الأرشفة المؤسسية."}</p>
         <div class="reports-stat-strip">
           <div class="reports-stat-card">
             <span>إجمالي التقارير</span>
@@ -2313,18 +2610,22 @@ function renderReportsHero(reports, filteredReports, user) {
         <div class="workflow-rail">
           <div class="workflow-step active">
             <strong>1. الإنشاء</strong>
-            <span>البعثة تنشئ التقرير</span>
+            <span>عضو البعثة يجهز التقرير أو رئيس البعثة يعده مباشرة</span>
           </div>
           <div class="workflow-step active">
-            <strong>2. مراجعة الدائرة</strong>
-            <span>فحص أولي وملاحظات</span>
+            <strong>2. اعتماد رئيس البعثة</strong>
+            <span>لا يخرج التقرير خارج البعثة قبل التعميد</span>
           </div>
           <div class="workflow-step active">
-            <strong>3. اعتماد التخطيط</strong>
-            <span>تقييم الجودة والاعتماد</span>
+            <strong>3. مراجعة الدائرة</strong>
+            <span>فحص أولي وملاحظات تخصصية</span>
           </div>
           <div class="workflow-step active">
-            <strong>4. السجل المؤسسي</strong>
+            <strong>4. اعتماد التخطيط</strong>
+            <span>تقييم الجودة والاعتماد المؤسسي</span>
+          </div>
+          <div class="workflow-step active">
+            <strong>5. السجل المؤسسي</strong>
             <span>أرشفة التقرير ضمن ملف البعثة</span>
           </div>
         </div>
@@ -2357,6 +2658,7 @@ function renderReportRecordCard(report, selected) {
           <span class="tag ${readiness.percent === 100 ? "success" : "warning"}">${readiness.percent}%</span>
         </div>
         <div class="report-record-footer">
+          <span class="mini">${report.lastUpdatedByName ? `نفذه ${report.lastUpdatedByName}` : `أعده ${report.preparedByName || "غير محدد"}`}</span>
           <span class="mini">${report.submittedOn ? `رفع في ${formatDate(report.submittedOn)}` : "لم يسجل تاريخ رفع"}</span>
           <span class="mini">${quality.average ? `جودة ${quality.average}/5` : "بانتظار التقييم"}</span>
           <span class="mini">${readiness.detail}</span>
@@ -2633,7 +2935,7 @@ function syncRequestCompletion(requestId, missionId) {
   const hasValidReport = state.reports.some((report) => (
     report.requestId === requestId &&
     report.missionId === missionId &&
-    report.workflowStage !== "أعيد للبعثة للاستكمال"
+    isExternallyVisibleReportStage(report.workflowStage)
   ));
 
   if (hasValidReport && !request.completedMissionIds.includes(missionId)) {
@@ -2648,22 +2950,25 @@ function syncRequestCompletion(requestId, missionId) {
 function getAllowedReportActions(report, user = getSessionUser()) {
   if (!user) return [];
   const actions = [];
-  if (user.role === "mission" && user.missionId === report.missionId && report.workflowStage === "أعيد للبعثة للاستكمال") {
-    actions.push({ key: "resubmit", label: "إعادة رفع التقرير", nextStage: "مرفوع من البعثة" });
+  if (user.role === "mission" && user.missionId === report.missionId && isMissionChief(user) && report.workflowStage === REPORT_STAGE_PENDING_CHIEF_APPROVAL) {
+    actions.push({ key: "approve-internal", label: "اعتماد رئيس البعثة وإرسال التقرير", nextStage: REPORT_STAGE_SUBMITTED });
   }
-  if (user.role === "department" && user.departmentId === report.departmentId && report.workflowStage === "مرفوع من البعثة") {
-    actions.push({ key: "review", label: "بدء مراجعة الدائرة", nextStage: "قيد مراجعة الدائرة" });
-    actions.push({ key: "return", label: "إعادة للبعثة", nextStage: "أعيد للبعثة للاستكمال" });
+  if (user.role === "mission" && user.missionId === report.missionId && report.workflowStage === REPORT_STAGE_RETURNED) {
+    actions.push({ key: "resubmit", label: isMissionChief(user) ? "اعتماد رئيس البعثة وإعادة الإرسال" : "إحالة التعديل لرئيس البعثة", nextStage: isMissionChief(user) ? REPORT_STAGE_SUBMITTED : REPORT_STAGE_PENDING_CHIEF_APPROVAL });
   }
-  if (user.role === "department" && user.departmentId === report.departmentId && report.workflowStage === "قيد مراجعة الدائرة") {
-    actions.push({ key: "return", label: "إعادة للبعثة", nextStage: "أعيد للبعثة للاستكمال" });
+  if (user.role === "department" && user.departmentId === report.departmentId && report.workflowStage === REPORT_STAGE_SUBMITTED) {
+    actions.push({ key: "review", label: "بدء مراجعة الدائرة", nextStage: REPORT_STAGE_UNDER_DEPARTMENT_REVIEW });
+    actions.push({ key: "return", label: "إعادة للبعثة", nextStage: REPORT_STAGE_RETURNED });
   }
-  if ((user.role === "planning" || user.role === "admin") && report.workflowStage === "قيد مراجعة الدائرة") {
-    actions.push({ key: "approve", label: "اعتماد من التخطيط", nextStage: "معتمد من التخطيط" });
-    actions.push({ key: "return", label: "إعادة للبعثة", nextStage: "أعيد للبعثة للاستكمال" });
+  if (user.role === "department" && user.departmentId === report.departmentId && report.workflowStage === REPORT_STAGE_UNDER_DEPARTMENT_REVIEW) {
+    actions.push({ key: "return", label: "إعادة للبعثة", nextStage: REPORT_STAGE_RETURNED });
   }
-  if ((user.role === "planning" || user.role === "admin") && report.workflowStage === "معتمد من التخطيط") {
-    actions.push({ key: "archive", label: "إغلاق وأرشفة", nextStage: "مغلق ومؤرشف" });
+  if ((user.role === "planning" || user.role === "admin") && report.workflowStage === REPORT_STAGE_UNDER_DEPARTMENT_REVIEW) {
+    actions.push({ key: "approve", label: "اعتماد من التخطيط", nextStage: REPORT_STAGE_APPROVED });
+    actions.push({ key: "return", label: "إعادة للبعثة", nextStage: REPORT_STAGE_RETURNED });
+  }
+  if ((user.role === "planning" || user.role === "admin") && report.workflowStage === REPORT_STAGE_APPROVED) {
+    actions.push({ key: "archive", label: "إغلاق وأرشفة", nextStage: REPORT_STAGE_ARCHIVED });
   }
   return actions;
 }
@@ -2672,7 +2977,7 @@ function canEditReport(report, user = getSessionUser()) {
   if (!report || !user) return false;
   return user.role === "mission"
     && user.missionId === report.missionId
-    && (report.workflowStage === "مرفوع من البعثة" || report.workflowStage === "أعيد للبعثة للاستكمال");
+    && (report.workflowStage === REPORT_STAGE_PENDING_CHIEF_APPROVAL || report.workflowStage === REPORT_STAGE_RETURNED);
 }
 
 function canEditCircular(circular, user = getSessionUser()) {
@@ -2852,12 +3157,13 @@ function openCircularActionDialog(circularId, actionKey) {
     handleCircularAction(circularId, actionKey);
     return;
   }
+  const draft = user.role === "mission" ? getPendingCircularDraft(circular, user.missionId) : null;
   const currentResponse = (circular.missionResponses || []).find((item) => item.missionId === user.missionId) || null;
   state.circularActionDialog = {
     circularId,
     actionKey,
-    executionNote: currentResponse?.note || "",
-    evidenceRef: currentResponse?.evidenceRef || "",
+    executionNote: draft?.note || currentResponse?.note || "",
+    evidenceRef: draft?.evidenceRef || currentResponse?.evidenceRef || "",
     closureNote: circular.closureNote || ""
   };
   saveState();
@@ -2875,8 +3181,10 @@ function renderCircularActionDialog() {
   if (!dialog) return "";
   const circular = state.circulars.find((item) => item.id === dialog.circularId);
   if (!circular) return "";
-  const isComplete = dialog.actionKey === "mark-complete";
+  const user = getSessionUser();
+  const isComplete = dialog.actionKey === "mark-complete" || dialog.actionKey === "approve-draft";
   const isClose = dialog.actionKey === "close";
+  const isApproveDraft = dialog.actionKey === "approve-draft";
   const stats = getCircularCompletion(circular);
   const urgency = getCircularUrgency(circular);
   return `
@@ -2885,9 +3193,13 @@ function renderCircularActionDialog() {
         <div class="modal-head">
           <div>
             <span class="tag ${urgency.tone}">${urgency.label}</span>
-            <div class="section-title">${isComplete ? "تأكيد إنجاز التعميم" : "إغلاق التعميم"}</div>
+            <div class="section-title">${isClose ? "إغلاق التعميم" : isApproveDraft ? "اعتماد رئيس البعثة لإفادة التنفيذ" : isMissionChief(user) ? "تأكيد إنجاز التعميم" : "رفع إفادة تنفيذ داخلية"}</div>
             <p class="muted">${isComplete
-              ? "دوّن نتيجة التنفيذ بصورة مختصرة ومهنية حتى تظهر في سجل متابعة التعميم للجهات المشرفة."
+              ? isApproveDraft
+                ? "راجع الإفادة التي أعدها عضو البعثة، ويمكنك تنقيحها ثم اعتمادها لتصبح مرئية للجهات المشرفة."
+                : isMissionChief(user)
+                  ? "دوّن نتيجة التنفيذ بصورة مختصرة ومهنية ثم أرسلها مباشرة ضمن سجل متابعة التعميم."
+                  : "أدخل إفادة التنفيذ الداخلية، وستنتقل إلى رئيس البعثة لاعتمادها قبل الإرسال الخارجي."
               : "أدخل مبرر الإغلاق، خصوصًا إذا كانت هناك بعثات لم تستكمل التنفيذ بعد."}</p>
           </div>
           <button class="modal-close" type="button" data-close-circular-dialog aria-label="إغلاق">×</button>
@@ -2918,7 +3230,7 @@ function renderCircularActionDialog() {
             </label>
           ` : ""}
           <div class="field full modal-actions">
-            <button class="btn primary" type="submit">${isComplete ? "حفظ الإنجاز" : "تأكيد الإغلاق"}</button>
+            <button class="btn primary" type="submit">${isClose ? "تأكيد الإغلاق" : isApproveDraft ? "اعتماد وإرسال الإفادة" : isMissionChief(user) ? "إرسال تأكيد الإنجاز" : "إحالة الإفادة لرئيس البعثة"}</button>
             <button class="btn secondary" type="button" data-close-circular-dialog>إلغاء</button>
           </div>
         </form>
@@ -3328,6 +3640,12 @@ function renderReportsPage(user) {
 
 function renderMissionReportForm(user) {
   const requests = getVisibleRequests(user).filter((item) => item.status === "نشط");
+  const missionMembers = getMissionMembers(user.missionId);
+  const chief = getMissionChief(user.missionId);
+  const isChief = isMissionChief(user);
+  const pendingChiefReports = state.reports
+    .filter((item) => item.missionId === user.missionId && item.workflowStage === REPORT_STAGE_PENDING_CHIEF_APPROVAL)
+    .sort((a, b) => String(b.updatedAt || b.createdAt || "").localeCompare(String(a.updatedAt || a.createdAt || "")));
   const editingReport = state.reports.find((item) => item.id === state.editingReportId && item.missionId === user.missionId) || null;
   const indicatorSource = normalizeBilateralIndicators(editingReport?.bilateralIndicators);
   const currentFamily = editingReport ? inferReportFamily(editingReport) : "activity";
@@ -3345,10 +3663,43 @@ function renderMissionReportForm(user) {
       <div class="report-form-header">
         <div>
           <div class="section-title">${editingReport ? "تعديل التقرير" : "إعداد تقرير جديد"}</div>
-          <p class="muted">صُمم نموذج الإدخال ليقودك خطوة بخطوة بحسب عائلة التقرير، مع إبراز الفروق بين النشاط والموضوعي والزمني.</p>
+          <p class="muted">صُمم نموذج الإدخال ليقودك خطوة بخطوة بحسب عائلة التقرير، مع إبراز الفروق بين النشاط والموضوعي والزمني، وربط كل إعداد داخلي باسم العضو المنفذ ثم تعميد رئيس البعثة قبل الإرسال الخارجي.</p>
         </div>
-        <span class="tag info">${editingReport ? "وضع التعديل" : "وضع الإنشاء"}</span>
+        <span class="tag info">${editingReport ? "وضع التعديل" : isChief ? "اعتماد وإرسال" : "إعداد داخلي"}</span>
       </div>
+      <div class="workspace-note-grid">
+        <div class="detail-card">
+          <strong>قائد المسار داخل البعثة</strong>
+          <p class="detail-note">${chief ? `${chief.name} | ${chief.title}` : "لم يُحدد رئيس البعثة بعد."}</p>
+        </div>
+        <div class="detail-card">
+          <strong>فريق البعثة</strong>
+          <p class="detail-note">${missionMembers.length} عضوًا نشطًا داخل ملف البعثة، وتُسجل جميع الأعمال باسم العضو المنفذ.</p>
+        </div>
+        <div class="detail-card">
+          <strong>آلية الإرسال</strong>
+          <p class="detail-note">${isChief ? "يمكنك اعتماد التقرير وإرساله مباشرة إلى المسار المؤسسي." : "سيُحال التقرير إلى رئيس البعثة لاعتماده قبل أن يظهر للدائرة أو لإدارة التخطيط."}</p>
+        </div>
+      </div>
+      ${isChief ? `
+        <div class="detail-card mission-approval-queue">
+          <div class="record-top">
+            <div>
+              <div class="section-title">تقارير بانتظار اعتماد رئيس البعثة</div>
+              <p class="detail-note">هذه التقارير أعدها أعضاء البعثة داخليًا ولن تُرسل خارجيًا قبل تعميدك لها.</p>
+            </div>
+            <span class="tag ${pendingChiefReports.length ? "warning" : "success"}">${pendingChiefReports.length}</span>
+          </div>
+          <div class="detail-list">
+            ${pendingChiefReports.map((report) => `
+              <div class="detail-row">
+                <span>${report.title}</span>
+                <span>${report.preparedByName || "عضو غير محدد"} | ${report.type}</span>
+              </div>
+            `).join("") || `<div class="empty">لا توجد تقارير بانتظار اعتمادك حاليًا.</div>`}
+          </div>
+        </div>
+      ` : ""}
       ${requests.length ? `
         <div class="report-incoming-card">
           <div class="section-title">الطلبات الواردة للبعثة</div>
@@ -3364,7 +3715,7 @@ function renderMissionReportForm(user) {
       ` : `
         <div class="detail-note">لا توجد حاليًا طلبات تقارير نشطة موجّهة إلى هذه البعثة.</div>
       `}
-      <div class="detail-note">التقارير الزمنية تُرفع استجابة لطلب رسمي فقط، بينما يمكن للبعثة إنشاء تقارير الأنشطة والتقارير الموضوعية مباشرة أو استجابة لطلب من الدائرة أو الجهات القيادية. التسلسل المعتمد هنا هو: إنشاء من البعثة، ثم مراجعة الدائرة، ثم اعتماد التخطيط، ثم الإضافة إلى سجل تقارير البعثة.</div>
+      <div class="detail-note">التقارير الزمنية تُرفع استجابة لطلب رسمي فقط، بينما يمكن للبعثة إنشاء تقارير الأنشطة والتقارير الموضوعية مباشرة أو استجابة لطلب من الدائرة أو الجهات القيادية. التسلسل المعتمد هنا هو: إعداد من عضو البعثة أو رئيسها، ثم اعتماد رئيس البعثة، ثم مراجعة الدائرة، ثم اعتماد التخطيط، ثم الإضافة إلى سجل تقارير البعثة.</div>
       <form id="report-form" class="report-form-workspace">
         <div class="report-step-strip">
           ${REPORT_FORM_STEPS.map((step) => `<button class="report-step-chip ${activeStep === step.key ? "active" : ""}" type="button" data-report-form-step="${step.key}">${step.label}</button>`).join("")}
@@ -3721,7 +4072,7 @@ function renderMissionReportForm(user) {
         <section class="report-form-panel ${activeStep === "review" ? "active" : ""}" data-report-form-panel="review">
           <div class="report-form-intro-card">
             <div class="section-title">المراجعة النهائية</div>
-            <p class="muted">راجع الملخص التنفيذي وتأكد من اكتمال البيانات الأساسية والمرفقات قبل رفع التقرير إلى الدائرة المعنية.</p>
+            <p class="muted">راجع الملخص التنفيذي وتأكد من اكتمال البيانات الأساسية والمرفقات قبل إحالة التقرير إلى رئيس البعثة أو اعتماده وإرساله إلى الدائرة المعنية.</p>
           </div>
           <div class="report-family-section" data-family="periodic">
             <div class="report-review-checklist" id="periodic-review-checklist">
@@ -3759,7 +4110,7 @@ function renderMissionReportForm(user) {
               <textarea name="summary" required>${editingReport ? editingReport.summary : ""}</textarea>
             </label>
             <div class="field full report-submit-row">
-              <button class="btn primary" type="submit">${editingReport ? "حفظ التعديلات" : "رفع التقرير"}</button>
+              <button class="btn primary" type="submit">${editingReport ? (isChief ? "حفظ واعتماد التعديلات" : "حفظ وإحالة لرئيس البعثة") : (isChief ? "اعتماد وإرسال التقرير" : "إحالة التقرير لرئيس البعثة")}</button>
               ${editingReport ? `<button class="btn secondary cancel-edit" type="button" data-kind="report">إلغاء التعديل</button>` : ""}
             </div>
           </div>
@@ -3784,6 +4135,7 @@ function renderReportDetails(report, user) {
           <div class="request-chip-row">
             <span class="tag info">${getReportOriginLabel(report)}</span>
             <span class="tag ${readiness.percent === 100 ? "success" : "warning"}">${readiness.label}: ${readiness.percent}%</span>
+            ${report.missionApprovalStatus ? `<span class="tag ${report.chiefApprovedByName ? "success" : "warning"}">${report.missionApprovalStatus}</span>` : ""}
             ${report.attachmentName ? `<span class="tag info">المرفق: ${report.attachmentName}</span>` : ""}
           </div>
         </div>
@@ -3823,6 +4175,9 @@ function renderReportDetails(report, user) {
               <div class="detail-row"><span>الدائرة</span><span>${getDepartmentName(report.departmentId)}</span></div>
               <div class="detail-row"><span>نوع التقرير</span><span>${report.type}</span></div>
               <div class="detail-row"><span>الطلب المرتبط</span><span>${request ? request.title : "لا يوجد"}</span></div>
+              <div class="detail-row"><span>أعده</span><span>${report.preparedByName || "لم يسجل بعد"}</span></div>
+              <div class="detail-row"><span>آخر تعديل داخلي</span><span>${report.lastUpdatedByName ? `${report.lastUpdatedByName} | ${report.updatedAt || "-"}` : "لا توجد تحديثات داخلية"}</span></div>
+              <div class="detail-row"><span>اعتماد رئيس البعثة</span><span>${report.chiefApprovedByName ? `${report.chiefApprovedByName} | ${report.chiefApprovedAt || "-"}` : report.missionApprovalStatus || "بانتظار اعتماد رئيس البعثة"}</span></div>
               ${report.submittedOn ? `<div class="detail-row"><span>تاريخ الرفع</span><span>${formatDate(report.submittedOn)}</span></div>` : ""}
             </div>
             <div class="detail-card">
@@ -4704,7 +5059,252 @@ function renderTrainingPage(user) {
   `;
 }
 
+function renderMissionMemberManagement(profile, user) {
+  const editingMember = state.editingMissionMemberId
+    ? getMissionMemberById(state.editingMissionMemberId)
+    : null;
+  const editableMember = editingMember && editingMember.missionId === user.missionId && editingMember.missionRole !== "chief"
+    ? editingMember
+    : null;
+  const members = profile.members.filter((member) => member.missionRole !== "chief");
+  return `
+    <div class="detail-card mission-file-team-card">
+      <div class="record-top">
+        <div>
+          <div class="section-title">فريق البعثة</div>
+          <p class="detail-note">يدير رئيس البعثة الفريق الداخلي ويعتمد الأعمال قبل خروجها من ملف البعثة.</p>
+        </div>
+        <span class="tag info">${profile.members.length} أعضاء نشطون</span>
+      </div>
+      <div class="entity-disclosure-grid mission-team-grid">
+        <div class="detail-card">
+          <div class="section-title">رئيس البعثة</div>
+          ${profile.chief ? `
+            <div class="detail-list">
+              <div class="detail-row"><span>الاسم</span><span>${profile.chief.name}</span></div>
+              <div class="detail-row"><span>الصفة</span><span>${profile.chief.title}</span></div>
+              <div class="detail-row"><span>اسم المستخدم</span><span>${profile.chief.username}</span></div>
+            </div>
+          ` : `<div class="empty">لم يتم تعريف رئيس البعثة بعد.</div>`}
+        </div>
+        <div class="detail-card">
+          <div class="section-title">أعضاء البعثة</div>
+          <div class="detail-list">
+            ${members.length ? members.map((member) => `
+              <div class="timeline-entry mission-member-entry">
+                <strong>${member.name}</strong>
+                <span>${member.title}</span>
+                <span>اسم المستخدم: ${member.username}</span>
+                <div class="inline-actions">
+                  <button class="btn secondary mission-member-edit" type="button" data-member-id="${member.id}">تعديل</button>
+                  <button class="btn secondary mission-member-delete" type="button" data-member-id="${member.id}">حذف</button>
+                </div>
+              </div>
+            `).join("") : `<div class="empty">لا يوجد أعضاء إضافيون في ملف البعثة حتى الآن.</div>`}
+          </div>
+        </div>
+      </div>
+      <form id="mission-member-form" class="form-grid mission-member-form">
+        <input type="hidden" name="memberId" value="${editableMember?.id || ""}">
+        <label class="field">
+          <span>اسم العضو</span>
+          <input name="name" value="${editableMember?.name || ""}" required>
+        </label>
+        <label class="field">
+          <span>الصفة / المهمة</span>
+          <input name="title" value="${editableMember?.title || ""}" placeholder="مثل: مسؤول شؤون سياسية" required>
+        </label>
+        <label class="field">
+          <span>اسم المستخدم</span>
+          <input name="username" value="${editableMember?.username || ""}" required>
+        </label>
+        <label class="field">
+          <span>كلمة المرور</span>
+          <input name="password" value="${editableMember?.password || ""}" required>
+        </label>
+        <div class="field full">
+          <button class="btn primary" type="submit">${editableMember ? "حفظ تعديل العضو" : "إضافة عضو جديد"}</button>
+          ${editableMember ? `<button class="btn secondary cancel-edit" type="button" data-kind="mission-member">إلغاء التعديل</button>` : ""}
+        </div>
+      </form>
+    </div>
+  `;
+}
+
+function renderMissionCircularBoard(profile) {
+  return `
+    <div class="detail-card mission-file-circular-card">
+      <div class="record-top">
+        <div>
+          <div class="section-title">التعاميم والإجراءات المتخذة</div>
+          <p class="detail-note">يظهر هنا آخر ما تم داخل البعثة تجاه كل تعميم، مع إبراز ما ينتظر اعتماد رئيس البعثة.</p>
+        </div>
+        <div class="entity-tag-stack">
+          <span class="tag warning">بانتظار اعتماد الرئيس ${profile.circularProfile.pendingChiefApprovalCount}</span>
+          <span class="tag ${profile.circularProfile.overdueCount ? "danger" : "success"}">${profile.circularProfile.overdueCount ? `متأخر ${profile.circularProfile.overdueCount}` : "لا تأخير"}</span>
+        </div>
+      </div>
+      <div class="detail-list mission-action-list">
+        ${profile.circularProfile.circulars.length ? profile.circularProfile.circulars.slice(0, 6).map((item) => `
+          <div class="timeline-entry mission-action-entry">
+            <strong>${item.circular.title}</strong>
+            <span>${item.status.label} | الموعد ${formatDate(item.circular.dueDate)}</span>
+            <span>${item.action.label}</span>
+            <span>${item.action.note}</span>
+            <span>${item.action.at !== "-" ? item.action.at : "لم يسجل توقيت بعد"}</span>
+          </div>
+        `).join("") : `<div class="empty">لا توجد تعاميم واردة لهذه البعثة حتى الآن.</div>`}
+      </div>
+    </div>
+  `;
+}
+
+function renderMissionRecentActivity(profile) {
+  const recentActivityReports = profile.activityReports.slice(0, 4);
+  return `
+    <div class="entity-disclosure-grid mission-workboard-grid">
+      <div class="detail-card">
+        <div class="record-top">
+          <div class="section-title">تقارير البعثة</div>
+          <span class="tag info">${profile.reportProfile.reports.length}</span>
+        </div>
+        <div class="detail-list">
+          <div class="detail-row"><span>بانتظار اعتماد رئيس البعثة</span><span>${profile.reportProfile.pendingChiefApprovalCount}</span></div>
+          <div class="detail-row"><span>قيد مراجعة الدائرة</span><span>${profile.reportProfile.pendingDepartmentCount}</span></div>
+          <div class="detail-row"><span>معتمدة</span><span>${profile.reportProfile.approvedCount}</span></div>
+          <div class="detail-row"><span>أعيدت للاستكمال</span><span>${profile.reportProfile.returnedCount}</span></div>
+        </div>
+        <div class="detail-list">
+          ${profile.reportProfile.reports.length ? profile.reportProfile.reports.slice(0, 3).map((report) => `
+            <div class="timeline-entry">
+              <strong>${report.title}</strong>
+              <span>${report.type} | ${report.workflowStage}</span>
+              <span>${report.lastUpdatedByName ? `آخر تنفيذ ${report.lastUpdatedByName}` : `أعده ${report.preparedByName || "غير محدد"}`}</span>
+            </div>
+          `).join("") : `<div class="empty">لا توجد تقارير مسجلة في ملف البعثة حتى الآن.</div>`}
+        </div>
+      </div>
+      <div class="detail-card">
+        <div class="record-top">
+          <div class="section-title">الأنشطة الحديثة</div>
+          <span class="tag info">${profile.activityReports.length}</span>
+        </div>
+        <div class="detail-list">
+          ${recentActivityReports.length ? recentActivityReports.map((report) => `
+            <div class="timeline-entry">
+              <strong>${report.title}</strong>
+              <span>${report.activityCategory || "نشاط عام"} | ${report.workflowStage}</span>
+              <span>${report.preparedByName ? `أعده ${report.preparedByName}` : "لم يسجل المنفذ"}</span>
+            </div>
+          `).join("") : `<div class="empty">لا توجد تقارير أنشطة في ملف البعثة حتى الآن.</div>`}
+        </div>
+      </div>
+      <div class="detail-card">
+        <div class="record-top">
+          <div class="section-title">آخر عمليات الفريق</div>
+          <span class="tag info">${profile.recentAuditEntries.length}</span>
+        </div>
+        <div class="detail-list">
+          ${profile.recentAuditEntries.length ? profile.recentAuditEntries.map((entry) => `
+            <div class="timeline-entry">
+              <strong>${entry.action}</strong>
+              <span>${entry.actor}</span>
+              <span>${entry.target}</span>
+              <span>${entry.at}</span>
+            </div>
+          `).join("") : `<div class="empty">لا توجد عمليات مسجلة لفريق البعثة حتى الآن.</div>`}
+        </div>
+      </div>
+      <div class="detail-card">
+        <div class="record-top">
+          <div class="section-title">الخطة والتقدم العام</div>
+          <span class="tag ${profile.plan ? getPlanStatusTone(profile.plan.status) : "info"}">${profile.plan?.status || "لا توجد خطة"}</span>
+        </div>
+        <div class="detail-list">
+          <div class="detail-row"><span>الخطة النشطة</span><span>${profile.plan?.title || "لا توجد خطة مرتبطة بالبعثة"}</span></div>
+          <div class="detail-row"><span>نسبة الإنجاز</span><span>${profile.plan ? `${profile.plan.progress}%` : "-"}</span></div>
+          <div class="detail-row"><span>متوسط الجودة</span><span>${profile.reportProfile.averageQuality}/5</span></div>
+          <div class="detail-row"><span>اتجاه الجودة</span><span>${profile.reportProfile.qualityTrend}</span></div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderMissionFilePage(user) {
+  const profile = getMissionFileProfile(user.missionId);
+  const mission = profile.mission;
+  if (!mission) {
+    return `
+      <section class="panel">
+        <div class="empty">تعذر تحميل ملف البعثة الحالي.</div>
+      </section>
+    `;
+  }
+  return `
+    <section class="panel workspace-hero-card mission-file-hero">
+      <div class="topbar">
+        <div>
+          <span class="tag info">ملف البعثة</span>
+          <h1 class="page-title">${mission.name}</h1>
+          <p class="muted">ملف تشغيلي موحد للبعثة يربط الفريق الداخلي بالتقارير والتعاميم والأنشطة، ويضمن أن كل إرسال خارجي يمر عبر اعتماد رئيس البعثة.</p>
+        </div>
+        <div class="entity-tag-stack">
+          <span class="tag info">${getDepartmentName(mission.departmentId)}</span>
+          <span class="tag success">${profile.chief?.name || "رئيس البعثة غير معرف"}</span>
+        </div>
+      </div>
+      <div class="entity-overview-strip workspace-overview-strip">
+        <div class="report-mini-kpi">
+          <span>الفريق النشط</span>
+          <strong>${profile.members.length}</strong>
+        </div>
+        <div class="report-mini-kpi">
+          <span>بانتظار اعتماد رئيس البعثة</span>
+          <strong>${profile.reportProfile.pendingChiefApprovalCount + profile.circularProfile.pendingChiefApprovalCount}</strong>
+        </div>
+        <div class="report-mini-kpi">
+          <span>التقارير المعتمدة</span>
+          <strong>${profile.reportProfile.approvedCount}</strong>
+        </div>
+        <div class="report-mini-kpi">
+          <span>التعاميم الواردة</span>
+          <strong>${profile.circularProfile.total}</strong>
+        </div>
+      </div>
+    </section>
+    <section class="two-col mission-file-layout">
+      <div class="panel">
+        ${canManageMissionMembers(user, mission.id) ? renderMissionMemberManagement(profile, user) : `
+          <div class="detail-card mission-file-team-card">
+            <div class="record-top">
+              <div>
+                <div class="section-title">فريق البعثة</div>
+                <p class="detail-note">يعرض الملف التشكيل الداخلي الحالي للبعثة مع إبراز رئيس البعثة وأعضاء الفريق.</p>
+              </div>
+              <span class="tag info">${profile.members.length} أعضاء نشطون</span>
+            </div>
+            <div class="detail-list">
+              ${profile.members.map((member) => `
+                <div class="detail-row">
+                  <span>${member.name}</span>
+                  <span>${member.title}</span>
+                </div>
+              `).join("")}
+            </div>
+          </div>
+        `}
+        ${renderMissionCircularBoard(profile)}
+      </div>
+      <div class="panel">
+        ${renderMissionRecentActivity(profile)}
+      </div>
+    </section>
+  `;
+}
+
 function renderEntitiesPage(user) {
+  if (user.role === "mission") return renderMissionFilePage(user);
   const missions = user.role === "department"
     ? state.missions.filter((mission) => mission.departmentId === user.departmentId)
     : state.missions;
@@ -4880,7 +5480,10 @@ function renderEntitiesPage(user) {
         ${visibleMissionGroups.map((group) => {
           const groupProfiles = group.missions.map((mission) => ({
             mission,
-            profile: getMissionReportProfile(mission.id)
+            profile: getMissionReportProfile(mission.id),
+            chief: getMissionChief(mission.id),
+            memberCount: getMissionMembers(mission.id).length,
+            circularProfile: getMissionCircularProfile(mission.id)
           }));
           const groupAverageQuality = groupProfiles.length
             ? (groupProfiles.reduce((sum, item) => sum + Number(item.profile.averageQuality || 0), 0) / groupProfiles.length).toFixed(1)
@@ -4911,6 +5514,7 @@ function renderEntitiesPage(user) {
                         <div class="entity-summary-meta">
                           <span>${item.profile.reports.length} تقرير</span>
                           <span>${item.profile.pendingRequests.length} طلب قيد المتابعة</span>
+                          <span>${item.memberCount} أعضاء</span>
                         </div>
                       </div>
                       <div class="entity-tag-stack">
@@ -4941,8 +5545,11 @@ function renderEntitiesPage(user) {
                         <div class="detail-card">
                           <div class="section-title">ملخص تشغيلي</div>
                           <div class="detail-list">
+                            <div class="detail-row"><span>رئيس البعثة</span><span>${item.chief?.name || "غير معرف"}</span></div>
+                            <div class="detail-row"><span>الفريق النشط</span><span>${item.memberCount}</span></div>
                             <div class="detail-row"><span>إجمالي التقارير</span><span>${item.profile.reports.length}</span></div>
-                            <div class="detail-row"><span>عدد التعاميم</span><span>${state.circulars.filter((circular) => normalizeMissionIdList(circular.targetMissionIds).includes(item.mission.id)).length}</span></div>
+                            <div class="detail-row"><span>عدد التعاميم</span><span>${item.circularProfile.total}</span></div>
+                            <div class="detail-row"><span>بانتظار اعتماد الرئيس</span><span>${item.profile.pendingChiefApprovalCount + item.circularProfile.pendingChiefApprovalCount}</span></div>
                             <div class="detail-row"><span>حالة الخطة</span><span>${state.plans.find((plan) => plan.ownerId === item.mission.id)?.status || "لا توجد خطة"}</span></div>
                             <div class="detail-row"><span>طلبات التقرير قيد المتابعة</span><span>${item.profile.pendingRequests.length}</span></div>
                           </div>
@@ -5585,7 +6192,7 @@ function roleLabel(user) {
   if (user.role === "planning") return "إدارة التخطيط";
   if (user.role === "leadership") return "القيادة العليا";
   if (user.role === "department") return `مدير دائرة - ${getDepartmentName(user.departmentId)}`;
-  return `بعثة - ${getMissionName(user.missionId)}`;
+  return `${user.missionRole === "chief" ? "رئيس بعثة" : "عضو بعثة"} - ${getMissionName(user.missionId)}`;
 }
 
 function bindEvents() {
@@ -6382,7 +6989,7 @@ function bindEvents() {
 
   document.querySelectorAll(".circular-action").forEach((button) => {
     button.addEventListener("click", () => {
-      if (button.dataset.action === "mark-complete" || button.dataset.action === "close") {
+      if (button.dataset.action === "mark-complete" || button.dataset.action === "approve-draft" || button.dataset.action === "close") {
         openCircularActionDialog(button.dataset.circularId, button.dataset.action);
         return;
       }
@@ -6445,8 +7052,26 @@ function bindEvents() {
       if (button.dataset.kind === "circular") state.editingCircularId = null;
       if (button.dataset.kind === "meeting") state.editingMeetingId = null;
       if (button.dataset.kind === "plan") state.editingPlanId = null;
+      if (button.dataset.kind === "mission-member") state.editingMissionMemberId = null;
       saveState();
       renderApp();
+    });
+  });
+
+  const missionMemberForm = document.getElementById("mission-member-form");
+  if (missionMemberForm) missionMemberForm.addEventListener("submit", handleMissionMemberSubmit);
+
+  document.querySelectorAll(".mission-member-edit").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.editingMissionMemberId = button.dataset.memberId;
+      saveState();
+      renderApp();
+    });
+  });
+
+  document.querySelectorAll(".mission-member-delete").forEach((button) => {
+    button.addEventListener("click", () => {
+      handleMissionMemberDelete(button.dataset.memberId);
     });
   });
 }
@@ -6475,7 +7100,7 @@ function handleLogin(event) {
   }
   state.loginError = "";
   state.sessionUserId = user.id;
-  state.activeView = "dashboard";
+  state.activeView = user.role === "mission" ? "entities" : "dashboard";
   state.reportActionDialog = null;
   state.circularActionDialog = null;
   logAudit(user.name, "تسجيل الدخول", "جلسة النظام", user.role === "mission" ? getMissionName(user.missionId) : user.role === "department" ? getDepartmentName(user.departmentId) : "وزارة");
@@ -6584,12 +7209,17 @@ function handleReportSubmit(event) {
       return;
     }
   }
+  const nowLocale = new Date().toLocaleString("ar-YE");
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const actorName = getMissionActorName(user);
+  const chiefSubmitting = isMissionChief(user);
+  const nextStage = chiefSubmitting ? REPORT_STAGE_SUBMITTED : REPORT_STAGE_PENDING_CHIEF_APPROVAL;
   const report = editingReport || {
     id: `report-${Date.now()}`,
     missionId: user.missionId,
     departmentId: user.departmentId,
-    workflowStage: "مرفوع من البعثة",
-    createdAt: new Date().toLocaleString("ar-YE"),
+    workflowStage: nextStage,
+    createdAt: nowLocale,
     workflowHistory: []
   };
   const bilateralIndicators = BILATERAL_INDICATOR_FIELDS.reduce((acc, field) => {
@@ -6636,8 +7266,8 @@ function handleReportSubmit(event) {
     coverageFrom: periodicDraft.coverageFrom,
     coverageTo: periodicDraft.coverageTo,
     bilateralIndicators,
-    submittedOn: new Date().toISOString().slice(0, 10),
-    reviewNotes: editingReport && editingReport.workflowStage !== "أعيد للبعثة للاستكمال" ? editingReport.reviewNotes || "" : "",
+    submittedOn: chiefSubmitting ? todayIso : "",
+    reviewNotes: editingReport && editingReport.workflowStage !== REPORT_STAGE_RETURNED ? editingReport.reviewNotes || "" : "",
     qualityScores: editingReport ? normalizeQualityScores(editingReport.qualityScores) : normalizeQualityScores({}),
     thematicSituation: String(form.get("thematicSituation") || ""),
     thematicDevelopments: String(form.get("thematicDevelopments") || ""),
@@ -6645,9 +7275,27 @@ function handleReportSubmit(event) {
     thematicImplications: String(form.get("thematicImplications") || ""),
     thematicRisks: String(form.get("thematicRisks") || ""),
     thematicMissionAction: String(form.get("thematicMissionAction") || ""),
-    thematicRecommendations: String(form.get("thematicRecommendations") || "")
+    thematicRecommendations: String(form.get("thematicRecommendations") || ""),
+    workflowStage: nextStage,
+    preparedByMemberId: editingReport?.preparedByMemberId || user.missionMemberId || "",
+    preparedByName: editingReport?.preparedByName || user.name,
+    preparedAt: editingReport?.preparedAt || nowLocale,
+    lastUpdatedByMemberId: user.missionMemberId || "",
+    lastUpdatedByName: user.name,
+    updatedAt: nowLocale,
+    missionApprovalStatus: chiefSubmitting ? "اعتمد رئيس البعثة" : "بانتظار اعتماد رئيس البعثة",
+    chiefApprovedByMemberId: chiefSubmitting ? (user.missionMemberId || "") : "",
+    chiefApprovedByName: chiefSubmitting ? user.name : "",
+    chiefApprovedAt: chiefSubmitting ? nowLocale : ""
   });
-  addWorkflowEntry(report, user.name, editingReport ? "تعديل التقرير" : "رفع التقرير", report.workflowStage);
+  addWorkflowEntry(
+    report,
+    actorName,
+    chiefSubmitting
+      ? (editingReport ? "اعتماد تعديلات التقرير وإرساله" : "اعتماد التقرير وإرساله")
+      : (editingReport ? "إحالة التعديلات لاعتماد رئيس البعثة" : "إحالة التقرير لاعتماد رئيس البعثة"),
+    report.workflowStage
+  );
   if (!editingReport) {
     state.reports.unshift(report);
   }
@@ -6655,8 +7303,21 @@ function handleReportSubmit(event) {
   state.editingReportId = null;
   if (previousRequestId && previousRequestId !== report.requestId) syncRequestCompletion(previousRequestId, report.missionId);
   if (report.requestId) syncRequestCompletion(report.requestId, report.missionId);
-  addAlert("success", "تم رفع تقرير جديد", `رفعت ${user.name} التقرير "${report.title}" وأصبح مرئيًا للجهات المخولة.`);
-  logAudit(user.name, editingReport ? "تعديل تقرير" : "رفع تقرير", report.title, getMissionName(report.missionId));
+  addAlert(
+    chiefSubmitting ? "success" : "info",
+    chiefSubmitting ? "تم إرسال التقرير" : "تمت إحالة التقرير داخليًا",
+    chiefSubmitting
+      ? `${user.name} اعتمد التقرير "${report.title}" وأرسله إلى المسار المؤسسي المعتمد.`
+      : `${user.name} أعد التقرير "${report.title}" وأحاله إلى رئيس البعثة لاعتماده قبل الإرسال الخارجي.`
+  );
+  logAudit(
+    actorName,
+    chiefSubmitting
+      ? (editingReport ? "اعتماد تعديلات تقرير وإرسالها" : "اعتماد تقرير وإرساله")
+      : (editingReport ? "إعداد تعديل تقرير داخلي" : "إعداد تقرير داخلي"),
+    report.title,
+    getMissionName(report.missionId)
+  );
   saveState();
   renderApp();
 }
@@ -6957,6 +7618,89 @@ function handleDepartmentSubmit(event) {
   renderApp();
 }
 
+function handleMissionMemberSubmit(event) {
+  event.preventDefault();
+  const user = getSessionUser();
+  if (!canManageMissionMembers(user)) {
+    addAlert("danger", "تعذر إدارة عضو البعثة", "إدارة أعضاء البعثة محصورة برئيس البعثة داخل بعثته.");
+    saveState();
+    renderApp();
+    return;
+  }
+  const form = new FormData(event.currentTarget);
+  const memberId = String(form.get("memberId") || "");
+  const name = String(form.get("name") || "").trim();
+  const title = String(form.get("title") || "").trim();
+  const username = String(form.get("username") || "").trim();
+  const password = String(form.get("password") || "").trim();
+  const existingMember = memberId ? getMissionMemberById(memberId) : null;
+  if (existingMember && (existingMember.missionId !== user.missionId || existingMember.missionRole === "chief")) {
+    addAlert("danger", "تعذر إدارة عضو البعثة", "لا يمكن تعديل هذا السجل من ملف البعثة الحالي.");
+    state.editingMissionMemberId = null;
+    saveState();
+    renderApp();
+    return;
+  }
+  if (!name || !title || !username || !password) {
+    addAlert("danger", "تعذر حفظ بيانات العضو", "يجب استكمال الاسم والصفة واسم المستخدم وكلمة المرور.");
+    saveState();
+    renderApp();
+    return;
+  }
+  const duplicateUsername = getAllUsers().find((item) => item.username === username && (!existingMember || item.id !== `user-${existingMember.id}`));
+  if (duplicateUsername) {
+    addAlert("danger", "تعذر حفظ بيانات العضو", "اسم المستخدم مستخدم بالفعل داخل النظام.");
+    saveState();
+    renderApp();
+    return;
+  }
+  if (existingMember) {
+    existingMember.name = name;
+    existingMember.title = title;
+    existingMember.username = username;
+    existingMember.password = password;
+    existingMember.updatedAt = new Date().toLocaleString("ar-YE");
+    addAlert("success", "تم تحديث عضو البعثة", `جرى تحديث بيانات ${name} داخل ${getMissionName(user.missionId)}.`);
+    logAudit(getMissionActorName(user), "تعديل عضو بعثة", name, getMissionName(user.missionId));
+  } else {
+    state.missionMembers.unshift({
+      id: `member-${Date.now()}`,
+      missionId: user.missionId,
+      missionRole: "member",
+      name,
+      title,
+      username,
+      password,
+      status: "active",
+      createdAt: new Date().toLocaleString("ar-YE")
+    });
+    addAlert("success", "تمت إضافة عضو بعثة", `أضيف ${name} إلى فريق ${getMissionName(user.missionId)} وأصبح له حساب دخول مستقل.`);
+    logAudit(getMissionActorName(user), "إضافة عضو بعثة", name, getMissionName(user.missionId));
+  }
+  state.editingMissionMemberId = null;
+  saveState();
+  renderApp();
+}
+
+function handleMissionMemberDelete(memberId) {
+  const user = getSessionUser();
+  const member = getMissionMemberById(memberId);
+  if (!user || !member) return;
+  if (!canManageMissionMembers(user, member.missionId) || member.missionRole === "chief") {
+    addAlert("danger", "تعذر حذف عضو البعثة", "لا يمكن حذف هذا العضو من الحساب الحالي.");
+    saveState();
+    renderApp();
+    return;
+  }
+  member.status = "deleted";
+  member.deletedAt = new Date().toLocaleString("ar-YE");
+  state.editingMissionMemberId = null;
+  addAlert("warning", "تم حذف عضو البعثة", `جرى تعطيل حساب ${member.name} من ملف ${getMissionName(member.missionId)}.`);
+  logAudit(getMissionActorName(user), "حذف عضو بعثة", member.name, getMissionName(member.missionId));
+  saveState();
+  renderApp();
+}
+
 function handleMissionSubmit(event) {
   event.preventDefault();
   const user = getSessionUser();
@@ -6968,6 +7712,7 @@ function handleMissionSubmit(event) {
   }
   const form = new FormData(event.currentTarget);
   const username = String(form.get("username")).trim();
+  const defaultMemberUsername = `${username}_rep`;
   const departmentId = String(form.get("departmentId"));
   if (!getDepartmentById(departmentId)) {
     addAlert("danger", "تعذر إضافة البعثة", "الدائرة المختارة غير صحيحة أو لم تعد موجودة.");
@@ -6981,14 +7726,25 @@ function handleMissionSubmit(event) {
     renderApp();
     return;
   }
-  state.missions.push({
+  if (getAllUsers().some((item) => item.username === defaultMemberUsername)) {
+    addAlert("danger", "تعذر إضافة البعثة", "اسم مستخدم العضو الافتراضي المشتق من البعثة مستخدم بالفعل، يرجى اختيار اسم مختلف.");
+    saveState();
+    renderApp();
+    return;
+  }
+  const mission = {
     id: `mission-${Date.now()}`,
     name: String(form.get("name")),
     departmentId,
     username,
     password: String(form.get("password"))
-  });
-  addAlert("success", "تمت إضافة بعثة", "أضيفت بعثة جديدة وربطت بالدائرة المختارة مع حساب دخول خاص.");
+  };
+  state.missions.push(mission);
+  state.missionMembers.push(
+    buildChiefMemberFromMission(mission),
+    buildDefaultMissionMember(mission)
+  );
+  addAlert("success", "تمت إضافة بعثة", "أضيفت بعثة جديدة وربطت بالدائرة المختارة مع حساب رئيس بعثة وعضو افتراضي جاهزين للاستخدام.");
   logAudit(user.name, "إضافة بعثة", String(form.get("name")), getDepartmentName(departmentId));
   saveState();
   renderApp();
@@ -7067,6 +7823,7 @@ function handleReportAction(reportId, actionKey, nextStage, actionPayload = null
   const report = state.reports.find((item) => item.id === reportId);
   const user = getSessionUser();
   if (!report || !user) return;
+  const actorName = getMissionActorName(user);
   const allowedAction = getAllowedReportActions(report, user).find((action) => action.key === actionKey && action.nextStage === nextStage);
   if (!allowedAction) {
     addAlert("danger", "تعذر تنفيذ الإجراء", "هذا الإجراء غير مسموح به من هذا الحساب أو لا يتوافق مع المرحلة الحالية للتقرير.");
@@ -7075,6 +7832,7 @@ function handleReportAction(reportId, actionKey, nextStage, actionPayload = null
     return;
   }
   const labels = {
+    "approve-internal": "اعتماد رئيس البعثة وإرسال التقرير",
     review: "بدء مراجعة الدائرة",
     return: "إعادة التقرير للبعثة",
     approve: "اعتماد التقرير",
@@ -7114,14 +7872,31 @@ function handleReportAction(reportId, actionKey, nextStage, actionPayload = null
     };
     report.reviewNotes = note || report.reviewNotes || "تمت المراجعة والاعتماد بعد استكمال المتطلبات.";
   }
+  if (actionKey === "approve-internal" || (actionKey === "resubmit" && isMissionChief(user))) {
+    report.submittedOn = new Date().toISOString().slice(0, 10);
+    report.missionApprovalStatus = "اعتمد رئيس البعثة";
+    report.chiefApprovedByMemberId = user.missionMemberId || "";
+    report.chiefApprovedByName = user.name;
+    report.chiefApprovedAt = new Date().toLocaleString("ar-YE");
+  }
+  if (actionKey === "resubmit" && !isMissionChief(user)) {
+    report.missionApprovalStatus = "بانتظار اعتماد رئيس البعثة";
+    report.lastUpdatedByMemberId = user.missionMemberId || "";
+    report.lastUpdatedByName = user.name;
+    report.updatedAt = new Date().toLocaleString("ar-YE");
+    report.submittedOn = "";
+    report.chiefApprovedByMemberId = "";
+    report.chiefApprovedByName = "";
+    report.chiefApprovedAt = "";
+  }
   report.workflowStage = allowedAction.nextStage;
   if (report.requestId) {
     syncRequestCompletion(report.requestId, report.missionId);
   }
   state.reportActionDialog = null;
-  addWorkflowEntry(report, user.name, labels[actionKey] || "تحديث المسار", allowedAction.nextStage);
-  addAlert(allowedAction.nextStage === "أعيد للبعثة للاستكمال" ? "warning" : "info", "تحديث مسار التقرير", `انتقل التقرير "${report.title}" إلى مرحلة "${allowedAction.nextStage}".`);
-  logAudit(user.name, labels[actionKey] || "تحديث المسار", report.title, getMissionName(report.missionId));
+  addWorkflowEntry(report, actorName, labels[actionKey] || "تحديث المسار", allowedAction.nextStage);
+  addAlert(allowedAction.nextStage === REPORT_STAGE_RETURNED ? "warning" : "info", "تحديث مسار التقرير", `انتقل التقرير "${report.title}" إلى مرحلة "${allowedAction.nextStage}".`);
+  logAudit(actorName, labels[actionKey] || "تحديث المسار", report.title, getMissionName(report.missionId));
   saveState();
   renderApp();
 }
@@ -7148,6 +7923,8 @@ function handleCircularAction(circularId, actionKey, actionPayload = null) {
   circular.readMissionIds = normalizeMissionIdList(circular.readMissionIds);
   circular.completedMissionIds = normalizeMissionIdList(circular.completedMissionIds);
   circular.missionResponses = normalizeCircularResponses(circular.missionResponses);
+  circular.missionResponseDrafts = normalizeCircularDrafts(circular.missionResponseDrafts);
+  circular.missionReadLog = normalizeMissionReadLog(circular.missionReadLog);
   const allowedAction = getCircularActions(circular, user).find((action) => action.key === actionKey);
   if (!allowedAction) {
     addAlert("danger", "تعذر تنفيذ الإجراء", "هذا الإجراء غير متاح لهذا الحساب أو لم يعد متوافقًا مع حالة التعميم الحالية.");
@@ -7155,17 +7932,24 @@ function handleCircularAction(circularId, actionKey, actionPayload = null) {
     renderApp();
     return;
   }
+  const actorName = getMissionActorName(user);
 
   if (actionKey === "mark-read" && user.role === "mission" && circular.targetMissionIds.includes(user.missionId) && !circular.readMissionIds.includes(user.missionId)) {
     circular.readMissionIds.push(user.missionId);
-    circular.workflowHistory.unshift({
+    circular.missionReadLog.unshift({
+      missionId: user.missionId,
       actor: user.name,
+      actorMemberId: user.missionMemberId || "",
+      at: new Date().toLocaleString("ar-YE")
+    });
+    circular.workflowHistory.unshift({
+      actor: actorName,
       action: "تأكيد قراءة التعميم",
       stage: circular.status,
       at: new Date().toLocaleString("ar-YE")
     });
     addAlert("info", "تم تأكيد قراءة التعميم", `${user.name} أكد قراءة التعميم "${circular.title}".`);
-    logAudit(user.name, "قراءة تعميم", circular.title, getMissionName(user.missionId));
+    logAudit(actorName, "قراءة تعميم", circular.title, getMissionName(user.missionId));
   }
 
   if (actionKey === "mark-complete" && user.role === "mission" && circular.targetMissionIds.includes(user.missionId) && !circular.completedMissionIds.includes(user.missionId)) {
@@ -7180,6 +7964,31 @@ function handleCircularAction(circularId, actionKey, actionPayload = null) {
     if (!circular.readMissionIds.includes(user.missionId)) {
       circular.readMissionIds.push(user.missionId);
     }
+    if (!isMissionChief(user)) {
+      circular.missionResponseDrafts = circular.missionResponseDrafts.filter((item) => item.missionId !== user.missionId);
+      circular.missionResponseDrafts.unshift({
+        id: `draft-${circular.id}-${user.missionId}`,
+        missionId: user.missionId,
+        note: executionNote,
+        evidenceRef,
+        preparedBy: user.name,
+        preparedByMemberId: user.missionMemberId || "",
+        preparedAt: new Date().toLocaleString("ar-YE"),
+        status: "pending-chief-approval"
+      });
+      circular.workflowHistory.unshift({
+        actor: actorName,
+        action: "إعداد إفادة تنفيذ داخلية",
+        stage: circular.status,
+        at: new Date().toLocaleString("ar-YE")
+      });
+      state.circularActionDialog = null;
+      addAlert("info", "تمت إحالة الإفادة لرئيس البعثة", `${user.name} أعد إفادة تنفيذ داخلية للتعميم "${circular.title}" وهي الآن بانتظار اعتماد رئيس البعثة.`);
+      logAudit(actorName, "إعداد إفادة تنفيذ داخلية", circular.title, getMissionName(user.missionId));
+      saveState();
+      renderApp();
+      return;
+    }
     circular.completedMissionIds.push(user.missionId);
     circular.missionResponses = circular.missionResponses.filter((item) => item.missionId !== user.missionId);
     circular.missionResponses.unshift({
@@ -7187,24 +7996,79 @@ function handleCircularAction(circularId, actionKey, actionPayload = null) {
       note: executionNote,
       evidenceRef,
       completedAt: new Date().toLocaleString("ar-YE"),
-      actor: user.name
+      actor: user.name,
+      approvedBy: user.name,
+      preparedBy: user.name
     });
     circular.processingLog.unshift({
       actor: user.name,
+      approvedBy: user.name,
       missionId: user.missionId,
       result: executionNote,
       evidenceRef,
       at: new Date().toLocaleString("ar-YE")
     });
     circular.workflowHistory.unshift({
-      actor: user.name,
-      action: "تأكيد إنجاز التعميم",
+      actor: actorName,
+      action: "اعتماد وإنجاز التعميم",
       stage: circular.status,
       at: new Date().toLocaleString("ar-YE")
     });
     state.circularActionDialog = null;
-    addAlert("success", "تم إنجاز التعميم", `${user.name} أكد تنفيذ المطلوب في التعميم "${circular.title}".`);
-    logAudit(user.name, "إنجاز تعميم", circular.title, getMissionName(user.missionId));
+    addAlert("success", "تم إنجاز التعميم", `${user.name} اعتمد تنفيذ المطلوب في التعميم "${circular.title}" وأرسله رسميًا.`);
+    logAudit(actorName, "اعتماد وإنجاز تعميم", circular.title, getMissionName(user.missionId));
+  }
+
+  if (actionKey === "approve-draft" && user.role === "mission" && isMissionChief(user)) {
+    const draft = getPendingCircularDraft(circular, user.missionId);
+    if (!draft) {
+      addAlert("danger", "تعذر اعتماد الإفادة", "لا توجد إفادة داخلية معلقة لاعتماد رئيس البعثة لهذا التعميم.");
+      saveState();
+      renderApp();
+      return;
+    }
+    const executionNote = String(actionPayload?.executionNote || draft.note || "").trim();
+    if (!executionNote) {
+      addAlert("danger", "تعذر اعتماد الإفادة", "يجب إدخال نتيجة تنفيذ واضحة قبل اعتماد الإفادة.");
+      saveState();
+      renderApp();
+      return;
+    }
+    const evidenceRef = String(actionPayload?.evidenceRef || draft.evidenceRef || "").trim();
+    if (!circular.readMissionIds.includes(user.missionId)) {
+      circular.readMissionIds.push(user.missionId);
+    }
+    if (!circular.completedMissionIds.includes(user.missionId)) {
+      circular.completedMissionIds.push(user.missionId);
+    }
+    circular.missionResponseDrafts = circular.missionResponseDrafts.filter((item) => item.missionId !== user.missionId);
+    circular.missionResponses = circular.missionResponses.filter((item) => item.missionId !== user.missionId);
+    circular.missionResponses.unshift({
+      missionId: user.missionId,
+      note: executionNote,
+      evidenceRef,
+      completedAt: new Date().toLocaleString("ar-YE"),
+      actor: draft.preparedBy || user.name,
+      approvedBy: user.name,
+      preparedBy: draft.preparedBy || user.name
+    });
+    circular.processingLog.unshift({
+      actor: draft.preparedBy || user.name,
+      approvedBy: user.name,
+      missionId: user.missionId,
+      result: executionNote,
+      evidenceRef,
+      at: new Date().toLocaleString("ar-YE")
+    });
+    circular.workflowHistory.unshift({
+      actor: actorName,
+      action: "اعتماد رئيس البعثة لإفادة التنفيذ",
+      stage: circular.status,
+      at: new Date().toLocaleString("ar-YE")
+    });
+    state.circularActionDialog = null;
+    addAlert("success", "تم اعتماد الإفادة", `${user.name} اعتمد إفادة تنفيذ التعميم "${circular.title}" وأصبحت مسجلة رسميًا.`);
+    logAudit(actorName, "اعتماد إفادة تنفيذ تعميم", circular.title, getMissionName(user.missionId));
   }
 
   if (actionKey === "close" && canSubmitCircular(user)) {

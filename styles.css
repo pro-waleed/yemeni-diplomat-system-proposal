@@ -1060,6 +1060,41 @@ textarea {
   margin-top: 16px;
 }
 
+.mission-file-hero {
+  background:
+    linear-gradient(135deg, rgba(15, 118, 110, 0.08), rgba(255, 255, 255, 0.9)),
+    var(--surface);
+}
+
+.mission-file-layout,
+.mission-team-grid,
+.mission-workboard-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.mission-team-grid,
+.mission-workboard-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.mission-member-form,
+.mission-action-list {
+  margin-top: 16px;
+}
+
+.mission-member-entry,
+.mission-action-entry {
+  display: grid;
+  gap: 8px;
+}
+
+.mission-file-team-card,
+.mission-file-circular-card {
+  display: grid;
+  gap: 14px;
+}
+
 .document-hero {
   background:
     linear-gradient(135deg, rgba(15, 118, 110, 0.1), rgba(255, 255, 255, 0.9)),
@@ -1485,6 +1520,8 @@ textarea {
   .entity-overview-strip,
   .entity-disclosure-grid,
   .entity-group-grid,
+  .mission-team-grid,
+  .mission-workboard-grid,
   .workspace-card-grid,
   .workspace-kpi-grid,
   .entity-kpi-grid,
