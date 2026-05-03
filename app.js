@@ -2,6 +2,7 @@ const STORAGE_KEY = "yemeni_diplomat_system_v3";
 const API_BASE_PATH = "/api";
 const API_TIMEOUT_MS = 2500;
 const SHARED_STATE_KEYS = [
+  "sharedMeta",
   "departments",
   "missions",
   "missionMembers",
@@ -301,6 +302,14 @@ const REPORT_FORM_STEPS = [
   { key: "review", label: "المراجعة النهائية" }
 ];
 
+function createSharedMeta(meta = {}) {
+  const revision = Number.isInteger(meta?.revision) && meta.revision >= 0 ? meta.revision : 0;
+  return {
+    revision,
+    persistedAt: typeof meta?.persistedAt === "string" ? meta.persistedAt : ""
+  };
+}
+
 const seedState = () => ({
   sessionUserId: null,
   activeView: "dashboard",
@@ -343,6 +352,7 @@ const seedState = () => ({
   editingPlanId: null,
   editingMissionMemberId: null,
   loginError: "",
+  sharedMeta: createSharedMeta(),
   departments: CANONICAL_DEPARTMENTS,
   missions: CANONICAL_MISSIONS,
   missionMembers: createMissionMemberSeeds(),
@@ -728,6 +738,7 @@ function loadState() {
   parsed.trainings = Array.isArray(parsed.trainings) ? parsed.trainings : seedState().trainings;
   parsed.auditLog = Array.isArray(parsed.auditLog) ? parsed.auditLog : seedState().auditLog;
   parsed.alerts = Array.isArray(parsed.alerts) ? parsed.alerts : seedState().alerts;
+  parsed.sharedMeta = createSharedMeta(parsed.sharedMeta);
   parsed.reports = parsed.reports.map((report) => ({
     ...report,
     departmentId: parsed.missions.find((mission) => mission.id === report.missionId)?.departmentId || LEGACY_DEPARTMENT_ID_MAP[report.departmentId] || report.departmentId,
@@ -798,10 +809,22 @@ async function requestRemote(path, options = {}) {
       },
       signal: controller.signal
     });
-    if (!response.ok) {
-      throw new Error(`Request failed with status ${response.status}`);
+    const raw = await response.text();
+    let payload = null;
+    if (raw) {
+      try {
+        payload = JSON.parse(raw);
+      } catch (error) {
+        payload = raw;
+      }
     }
-    return response.status === 204 ? null : response.json();
+    if (!response.ok) {
+      const error = new Error(typeof payload === "object" && payload?.error ? payload.error : `Request failed with status ${response.status}`);
+      error.status = response.status;
+      error.payload = payload;
+      throw error;
+    }
+    return response.status === 204 ? null : payload;
   } finally {
     clearTimeout(timeoutId);
   }
@@ -831,14 +854,36 @@ async function flushRemoteSync() {
   const payload = queuedRemotePayload;
   queuedRemotePayload = "";
   try {
-    await requestRemote(`${API_BASE_PATH}/state`, {
+    const response = await requestRemote(`${API_BASE_PATH}/state`, {
       method: "PUT",
       body: JSON.stringify({ state: JSON.parse(payload) })
     });
+    if (response?.state && typeof response.state === "object") {
+      setStateFromSharedSource(response.state);
+      renderApp();
+    }
   } catch (error) {
-    console.warn("Remote sync failed. Falling back to browser-local mode.", error);
-    runtimeDataMode = "browser-local";
-    queuedRemotePayload = "";
+    if (error?.status === 409 && error?.payload?.state && typeof error.payload.state === "object") {
+      setStateFromSharedSource(error.payload.state);
+      addAlert(
+        "warning",
+        "تعارض في الحفظ المشترك",
+        "حفظت جهة أخرى نسخة أحدث من البيانات المشتركة قبل اكتمال هذا الحفظ، لذلك أعاد النظام تحميل النسخة الأحدث. يرجى مراجعة آخر تعديل وإعادة تطبيقه عند الحاجة."
+      );
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      renderApp();
+    } else {
+      console.warn("Remote sync failed. Falling back to browser-local mode.", error);
+      runtimeDataMode = "browser-local";
+      addAlert(
+        "warning",
+        "تعذر الاتصال بالمزامنة المشتركة",
+        "تعذر الوصول إلى الخادم المشترك، لذلك انتقل النظام مؤقتًا إلى الوضع المحلي داخل هذا المتصفح. يمكن المتابعة محليًا ثم إعادة المحاولة بعد التأكد من تشغيل الخادم."
+      );
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      renderApp();
+      queuedRemotePayload = "";
+    }
   } finally {
     remoteSyncInFlight = false;
     if (queuedRemotePayload) scheduleRemoteSync(queuedRemotePayload);

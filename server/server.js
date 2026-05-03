@@ -6,8 +6,11 @@ const path = require("node:path");
 const PORT = Number(process.env.PORT || 8787);
 const HOST = process.env.HOST || "127.0.0.1";
 const ROOT_DIR = path.resolve(__dirname, "..");
-const DATA_DIR = path.join(__dirname, "data");
-const STATE_FILE = path.join(DATA_DIR, "shared-state.json");
+const CONFIGURED_STATE_FILE = process.env.STATE_FILE ? path.resolve(process.env.STATE_FILE) : "";
+const DATA_DIR = process.env.DATA_DIR
+  ? path.resolve(process.env.DATA_DIR)
+  : (CONFIGURED_STATE_FILE ? path.dirname(CONFIGURED_STATE_FILE) : path.join(__dirname, "data"));
+const STATE_FILE = CONFIGURED_STATE_FILE || path.join(DATA_DIR, "shared-state.json");
 const PUBLIC_FILES = new Set(["/", "/index.html", "/app.js", "/styles.css"]);
 
 const CONTENT_TYPES = {
@@ -48,7 +51,7 @@ async function ensureDataDir() {
 async function readSharedState() {
   try {
     const content = await fsp.readFile(STATE_FILE, "utf8");
-    return JSON.parse(content);
+    return normalizeSharedState(JSON.parse(content));
   } catch (error) {
     if (error.code === "ENOENT") return null;
     throw error;
@@ -57,7 +60,28 @@ async function readSharedState() {
 
 async function writeSharedState(state) {
   await ensureDataDir();
-  await fsp.writeFile(STATE_FILE, JSON.stringify(state, null, 2), "utf8");
+  await fsp.writeFile(STATE_FILE, JSON.stringify(normalizeSharedState(state), null, 2), "utf8");
+}
+
+function createSharedMeta(meta = {}) {
+  const revision = Number.isInteger(meta?.revision) && meta.revision >= 0 ? meta.revision : 0;
+  return {
+    revision,
+    persistedAt: typeof meta?.persistedAt === "string" ? meta.persistedAt : ""
+  };
+}
+
+function normalizeSharedState(state) {
+  if (!state || typeof state !== "object") return null;
+  return {
+    ...state,
+    missionMembers: Array.isArray(state.missionMembers) ? state.missionMembers : [],
+    sharedMeta: createSharedMeta(state.sharedMeta)
+  };
+}
+
+function getStateRevision(state) {
+  return createSharedMeta(state?.sharedMeta).revision;
 }
 
 function isValidSharedState(state) {
@@ -65,6 +89,7 @@ function isValidSharedState(state) {
   const requiredArrayKeys = [
     "departments",
     "missions",
+    "missionMembers",
     "coreUsers",
     "reportRequests",
     "reports",
@@ -74,7 +99,7 @@ function isValidSharedState(state) {
     "trainings",
     "auditLog"
   ];
-  return requiredArrayKeys.every((key) => Array.isArray(state[key]));
+  return requiredArrayKeys.every((key) => Array.isArray(state[key])) && Boolean(state.sharedMeta && typeof state.sharedMeta === "object");
 }
 
 async function readRequestBody(request) {
@@ -150,7 +175,7 @@ async function handleApi(request, response) {
 
   if (request.url === "/api/state" && request.method === "GET") {
     const state = await readSharedState();
-    sendJson(response, 200, { state });
+    sendJson(response, 200, { state, revision: getStateRevision(state) });
     return;
   }
 
@@ -158,13 +183,39 @@ async function handleApi(request, response) {
     try {
       const body = await readRequestBody(request);
       const payload = JSON.parse(body || "{}");
-      const sharedState = payload?.state;
-      if (!isValidSharedState(sharedState)) {
+      const rawSharedState = payload?.state;
+      if (!isValidSharedState(rawSharedState)) {
         sendJson(response, 400, { ok: false, error: "Invalid shared state payload." });
         return;
       }
-      await writeSharedState(sharedState);
-      sendJson(response, 200, { ok: true, persistedAt: new Date().toISOString() });
+      const sharedState = normalizeSharedState(rawSharedState);
+      const currentState = await readSharedState();
+      const currentRevision = getStateRevision(currentState);
+      const incomingRevision = getStateRevision(sharedState);
+      if (incomingRevision !== currentRevision) {
+        sendJson(response, 409, {
+          ok: false,
+          error: "Shared state revision mismatch.",
+          revision: currentRevision,
+          state: currentState
+        });
+        return;
+      }
+      const persistedAt = new Date().toISOString();
+      const persistedState = normalizeSharedState({
+        ...sharedState,
+        sharedMeta: createSharedMeta({
+          revision: currentRevision + 1,
+          persistedAt
+        })
+      });
+      await writeSharedState(persistedState);
+      sendJson(response, 200, {
+        ok: true,
+        persistedAt,
+        revision: persistedState.sharedMeta.revision,
+        state: persistedState
+      });
     } catch (error) {
       console.error("State write error:", error);
       sendJson(response, 500, { ok: false, error: "Failed to persist state." });

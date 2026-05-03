@@ -31,12 +31,10 @@ jobs:
           node-version: 22
 
       - name: Validate JavaScript syntax
-        run: |
-          node --check app.js
-          node --check server/server.js
+        run: npm run check
 
       - name: Run smoke checks
-        run: node scripts/smoke-checks.js
+        run: npm run smoke
 
   deploy:
     needs: validate
