@@ -310,6 +310,18 @@ function createSharedMeta(meta = {}) {
   };
 }
 
+function mergeSeededCollection(seededItems = [], existingItems = [], getKey = (item) => item?.id) {
+  const seeded = Array.isArray(seededItems) ? seededItems : [];
+  const existing = Array.isArray(existingItems) ? existingItems : [];
+  const merged = seeded.map((seedItem) => {
+    const seedKey = getKey(seedItem);
+    const existingItem = existing.find((item) => getKey(item) === seedKey);
+    return existingItem ? { ...seedItem, ...existingItem } : seedItem;
+  });
+  const customItems = existing.filter((item) => !seeded.some((seedItem) => getKey(seedItem) === getKey(item)));
+  return [...merged, ...customItems];
+}
+
 const seedState = () => ({
   sessionUserId: null,
   activeView: "dashboard",
@@ -375,6 +387,36 @@ const seedState = () => ({
       dueDate: "2026-06-30",
       targetMissionIds: CANONICAL_MISSIONS.map((mission) => mission.id),
       completedMissionIds: ["mission-cairo", "mission-riyadh", "mission-paris"],
+      status: "نشط"
+    },
+    {
+      id: "request-gulf-thematic-2026",
+      title: "طلب تقرير موضوعي حول أولويات العلاقات مع دول الخليج",
+      type: "موضوعي",
+      requestFamily: "thematic",
+      thematicTrack: "سياسي",
+      createdBy: "دائرة الجزيرة والخليج",
+      createdByRole: "department",
+      requestedByDepartmentId: "dept-gulf",
+      priority: "متوسطة",
+      dueDate: "2026-05-20",
+      targetMissionIds: ["mission-riyadh", "mission-abu-dhabi", "mission-doha", "mission-manama", "mission-muscat", "mission-kuwait", "mission-baghdad"],
+      completedMissionIds: ["mission-riyadh"],
+      status: "نشط"
+    },
+    {
+      id: "request-activity-digital-2026",
+      title: "طلب إفادة نشاط حول التحول الرقمي والخدمات القنصلية",
+      type: "نشاط",
+      requestFamily: "activity",
+      thematicTrack: "",
+      createdBy: "إدارة التخطيط",
+      createdByRole: "planning",
+      requestedByDepartmentId: "",
+      priority: "عالية",
+      dueDate: "2026-05-14",
+      targetMissionIds: ["mission-riyadh", "mission-cairo", "mission-washington"],
+      completedMissionIds: [],
       status: "نشط"
     }
   ],
@@ -442,6 +484,139 @@ const seedState = () => ({
         { actor: "دائرة الوطن العربي", action: "بدء مراجعة الدائرة", stage: "قيد مراجعة الدائرة", at: "2026-03-10 11:00" },
         { actor: "إدارة التخطيط", action: "اعتماد التقرير", stage: "معتمد من التخطيط", at: "2026-03-11 08:30" }
       ]
+    },
+    {
+      id: "report-2",
+      missionId: "mission-riyadh",
+      departmentId: "dept-gulf",
+      title: "تقرير نصف سنوي عن مسارات التنسيق السياسي والاقتصادي",
+      type: "نصف سنوي",
+      thematicTrack: "سياسي / اقتصادي",
+      requestId: "request-h1-2026",
+      summary: "تقرير موجز عن الاتصالات الرسمية ومبادرات التعاون الاقتصادي والفرص المفتوحة خلال النصف الأول.",
+      reportFamily: "periodic",
+      supportCooperation: "متابعة 3 ملفات تعاون اقتصادي، وتنسيق سياسي دوري مع الجهات الرسمية.",
+      activeAgreements: "اتفاقيات تعاون قائمة في مجالات التنسيق السياسي والخدمات القنصلية والاستثمار.",
+      agreementsNeedingActivation: "مذكرة تفاهم اقتصادية تحتاج إلى متابعة فنية مع الجهات المختصة.",
+      completedActivities: "تنفيذ لقاءات دورية مع الجهات الرسمية وتنظيم فعالية تعريفية بفرص الاستثمار.",
+      pendingActivities: "استكمال ترتيبات زيارة فنية مشتركة ومتابعة فرص التعاون المؤسسي.",
+      relationshipOutlook: "العلاقات مرشحة لمزيد من التنامي مع وجود فرص عملية لتعزيز الشراكة الاقتصادية.",
+      visitsFromYemen: "زيارات تنسيقية قصيرة من وفود فنية خلال الفترة.",
+      visitsFromHostCountry: "اتصالات تحضيرية لزيارات متبادلة رفيعة خلال النصف الثاني.",
+      communityUpdate: "استقرار عام في شؤون الجالية مع متابعة ملفات محددة ذات أولوية.",
+      communityStats: "إحصاءات تشغيلية محدثة عن الجالية والمراجعين.",
+      reportingYear: "2026",
+      coverageFrom: "2026-01-01",
+      coverageTo: "2026-06-30",
+      bilateralIndicators: {
+        political: { trend: "تنامي", note: "وتيرة اتصالات رسمية منتظمة ورسائل تعاون واضحة." },
+        economic: { trend: "تنامي", note: "فرص استثمارية واتصالات مع القطاع الخاص والجهات الاقتصادية." }
+      },
+      qualityScores: { timeliness: 5, completeness: 4, analysis: 4 },
+      workflowStage: "معتمد من التخطيط",
+      preparedByMemberId: "member-chief-mission-riyadh",
+      preparedByName: "رئيس بعثة الرياض",
+      chiefApprovedByMemberId: "member-chief-mission-riyadh",
+      chiefApprovedByName: "رئيس بعثة الرياض",
+      chiefApprovedAt: "2026-03-14 09:40",
+      submittedOn: "2026-03-14",
+      createdAt: "2026-03-14 08:50",
+      updatedAt: "2026-03-15 10:10",
+      workflowHistory: [
+        { actor: "بعثة الرياض", action: "إعداد التقرير", stage: "بانتظار اعتماد رئيس البعثة", at: "2026-03-14 08:50" },
+        { actor: "رئيس بعثة الرياض", action: "اعتماد وإرسال التقرير", stage: "مرفوع من البعثة", at: "2026-03-14 09:40" },
+        { actor: "دائرة الجزيرة والخليج", action: "مراجعة التقرير", stage: "قيد مراجعة الدائرة", at: "2026-03-14 13:10" },
+        { actor: "إدارة التخطيط", action: "اعتماد التقرير", stage: "معتمد من التخطيط", at: "2026-03-15 10:10" }
+      ]
+    },
+    {
+      id: "report-3",
+      missionId: "mission-riyadh",
+      departmentId: "dept-gulf",
+      title: "تقرير موضوعي حول أولويات التنسيق السياسي والاقتصادي مع المملكة",
+      type: "موضوعي",
+      thematicTrack: "سياسي",
+      requestId: "request-gulf-thematic-2026",
+      reportFamily: "thematic",
+      summary: "قراءة مركزة للمسارات السياسية والاقتصادية ذات الأولوية في المرحلة الحالية ومتطلبات المتابعة خلال الربع القادم.",
+      thematicSituation: "توجد مساحة عملية لتكثيف التنسيق السياسي والاقتصادي مع أهمية تسريع الاستجابات الفنية.",
+      thematicDevelopments: "اتصالات رسمية ولقاءات قطاعية أظهرت فرصًا واضحة للدفع بملفات التعاون الثنائي.",
+      thematicStakeholders: "وزارة الخارجية، الجهات الاقتصادية، وغرف التجارة والجهات الشريكة ذات الصلة.",
+      thematicImplications: "يساعد تحريك هذه الملفات على تعزيز الحضور المؤسسي ورفع كفاءة المتابعة الثنائية.",
+      thematicRisks: "بطء الاستجابات الفنية وتعدد مسارات التنسيق قد يحدان من سرعة الإنجاز.",
+      thematicMissionAction: "إعداد مذكرة متابعة داخلية وتجهيز مسار تنسيقي لعرضه على رئيس البعثة.",
+      thematicRecommendations: "تحديد أولويات المتابعة خلال 60 يومًا مع توزيع المسؤوليات بين الفريق.",
+      workflowStage: "بانتظار اعتماد رئيس البعثة",
+      preparedByMemberId: "member-officer-mission-riyadh",
+      preparedByName: "مسؤول التقارير في بعثة الرياض",
+      createdAt: "2026-05-07 10:15",
+      updatedAt: "2026-05-07 11:05",
+      workflowHistory: [
+        { actor: "مسؤول التقارير في بعثة الرياض", action: "إعداد التقرير داخليًا", stage: "بانتظار اعتماد رئيس البعثة", at: "2026-05-07 11:05" }
+      ]
+    },
+    {
+      id: "report-4",
+      missionId: "mission-abu-dhabi",
+      departmentId: "dept-gulf",
+      title: "تقرير نشاط حول المشاركة في المنتدى الاستثماري الخليجي",
+      type: "نشاط",
+      reportFamily: "activity",
+      summary: "إفادة عن مشاركة البعثة في المنتدى الاستثماري الخليجي وما نتج عنها من اتصالات وفرص متابعة.",
+      beforeGoals: "تعزيز الحضور الاقتصادي للبعثة وربط الجهات اليمنية المعنية بفرص استثمارية واعدة.",
+      beforeExpected: "لقاءات مباشرة مع جهات استثمارية وتحديد فرص متابعة قابلة للتحويل إلى ملفات عمل.",
+      activityCategory: "اقتصادي",
+      activityPartners: "الجهات المنظمة للمنتدى، غرف التجارة، وهيئات الاستثمار.",
+      activityOutputs: "تنفيذ لقاءات مع جهات استثمارية وإعداد مذكرة فرص أولية.",
+      activityMediaEcho: "تغطية مؤسسية محدودة داخل المنصات الرسمية للحدث.",
+      activityDiplomaticImpact: "فتح قناة متابعة اقتصادية مباشرة وربط الملف مع أولويات الدائرة المعنية.",
+      activityFollowupOwner: "القسم الاقتصادي في البعثة",
+      afterResults: "إعداد قائمة فرص أولية وجدولة متابعات مع الشركاء المعنيين.",
+      afterRecommendations: "استمرار التنسيق مع الدائرة والجهات الاقتصادية في صنعاء لترتيب المتابعة الفنية.",
+      workflowStage: "قيد مراجعة الدائرة",
+      preparedByMemberId: "member-chief-mission-abu-dhabi",
+      preparedByName: "رئيس بعثة أبوظبي",
+      chiefApprovedByMemberId: "member-chief-mission-abu-dhabi",
+      chiefApprovedByName: "رئيس بعثة أبوظبي",
+      chiefApprovedAt: "2026-05-05 09:20",
+      createdAt: "2026-05-05 08:30",
+      updatedAt: "2026-05-05 11:15",
+      workflowHistory: [
+        { actor: "بعثة أبوظبي", action: "إعداد التقرير", stage: "بانتظار اعتماد رئيس البعثة", at: "2026-05-05 08:30" },
+        { actor: "رئيس بعثة أبوظبي", action: "اعتماد وإرسال التقرير", stage: "مرفوع من البعثة", at: "2026-05-05 09:20" },
+        { actor: "دائرة الجزيرة والخليج", action: "بدء مراجعة الدائرة", stage: "قيد مراجعة الدائرة", at: "2026-05-05 11:15" }
+      ]
+    },
+    {
+      id: "report-5",
+      missionId: "mission-washington",
+      departmentId: "dept-americas",
+      title: "تقرير موضوعي حول الخطاب الإعلامي تجاه اليمن في مراكز الأبحاث",
+      type: "موضوعي",
+      thematicTrack: "إعلامي",
+      reportFamily: "thematic",
+      summary: "تقرير أولي رُدَّ للاستكمال بعد ملاحظات على التوثيق والتحليل المقارن.",
+      thematicSituation: "حضور الملف اليمني قائم لكنه يحتاج قراءة أكثر مقارنة بين مراكز الأبحاث والمنصات المؤثرة.",
+      thematicDevelopments: "نشر مواد تحليلية متفرقة تستدعي تجميعًا أدق ومتابعة نوعية.",
+      thematicStakeholders: "مراكز أبحاث، مؤسسات إعلامية، وجهات تحليلية مؤثرة.",
+      thematicImplications: "ينعكس الخطاب البحثي والإعلامي على فهم صناع القرار والمهتمين للملف اليمني.",
+      thematicRisks: "ضعف التوثيق المقارن قد يؤدي إلى استنتاجات غير كافية لمرحلة القرار.",
+      thematicMissionAction: "إعادة بناء الملحق التحليلي وإضافة إحالات أكثر دقة على المواد المرجعية.",
+      thematicRecommendations: "تعزيز الرصد المقارن وربطه برسائل البعثة الإعلامية.",
+      reviewNotes: "يرجى تدعيم التقرير بجدول مقارنة بين أبرز المراكز وإضافة توصيات أكثر عملية قابلة للتنفيذ.",
+      workflowStage: "أعيد للبعثة للاستكمال",
+      preparedByMemberId: "member-chief-mission-washington",
+      preparedByName: "رئيس بعثة واشنطن",
+      chiefApprovedByMemberId: "member-chief-mission-washington",
+      chiefApprovedByName: "رئيس بعثة واشنطن",
+      chiefApprovedAt: "2026-05-01 13:40",
+      createdAt: "2026-04-30 15:10",
+      updatedAt: "2026-05-02 09:45",
+      workflowHistory: [
+        { actor: "بعثة واشنطن", action: "إعداد التقرير", stage: "بانتظار اعتماد رئيس البعثة", at: "2026-04-30 15:10" },
+        { actor: "رئيس بعثة واشنطن", action: "اعتماد وإرسال التقرير", stage: "مرفوع من البعثة", at: "2026-05-01 13:40" },
+        { actor: "دائرة الأمريكتين", action: "إعادة التقرير للبعثة", stage: "أعيد للبعثة للاستكمال", at: "2026-05-02 09:45" }
+      ]
     }
   ],
   circulars: [
@@ -469,6 +644,70 @@ const seedState = () => ({
       missionResponses: [
         { missionId: "mission-riyadh", note: "تم تحديث قائمة الاتصال الرسمية وإرفاق النسخة المعتمدة.", evidenceRef: "riyadh-contacts-update.xlsx", completedAt: "2026-03-18 10:20", actor: "بعثة الرياض" }
       ]
+    },
+    {
+      id: "circ-2",
+      title: "تعميم عاجل بشأن توحيد الرسائل الإعلامية حول موسم الحج",
+      category: "عاجل",
+      priority: "عالية",
+      summary: "يطلب من البعثات المعنية تحديث نقاط الحديث والرسائل الإعلامية المرتبطة بخدمات الحجاج اليمنيين.",
+      body: "يرجى مراجعة الرسائل الإعلامية المعتمدة وتكييفها مع المستجدات الحالية ورفع إفادة داخلية بالنسخة النهائية المعدلة قبل الإرسال الرسمي.",
+      actionRequired: "إعداد إفادة داخلية تتضمن النسخة المحدثة للرسائل الإعلامية ثم إحالتها لاعتماد رئيس البعثة.",
+      attachmentName: "hajj-media-key-messages.docx",
+      issuedBy: "إدارة التخطيط",
+      targetMissionIds: ["mission-riyadh", "mission-cairo", "mission-amman", "mission-washington"],
+      dueDate: "2026-05-12",
+      status: "نشط",
+      readMissionIds: ["mission-riyadh"],
+      completedMissionIds: [],
+      workflowHistory: [
+        { actor: "إدارة التخطيط", action: "إصدار التعميم", stage: "نشط", at: "2026-05-07 09:15" }
+      ],
+      missionResponseDrafts: [
+        {
+          id: "draft-circ-2-mission-riyadh",
+          missionId: "mission-riyadh",
+          note: "أعدت البعثة مسودة الرسائل الإعلامية المحدثة وتنتظر اعتماد رئيس البعثة.",
+          evidenceRef: "riyadh-hajj-messages-draft.docx",
+          preparedByMemberId: "member-officer-mission-riyadh",
+          preparedByName: "مسؤول التقارير في بعثة الرياض",
+          status: "pending-chief-approval",
+          createdAt: "2026-05-07 11:20"
+        }
+      ],
+      missionReadLog: [
+        { missionId: "mission-riyadh", actor: "مسؤول التقارير في بعثة الرياض", at: "2026-05-07 10:40" }
+      ]
+    },
+    {
+      id: "circ-3",
+      title: "تعميم توجيهي بشأن تحديث أولويات ملفات التعاون الأكاديمي",
+      category: "توجيهي",
+      priority: "متوسطة",
+      summary: "إحاطة توجيهية لتحديث أولويات التعاون الأكاديمي والثقافي وإغلاق الدورة السابقة بعد اكتمال الإفادات الأساسية.",
+      body: "يرجى اعتماد ما ورد في المرفق مرجعًا للعمل خلال المرحلة المقبلة، مع الاكتفاء بالإحاطة في البعثات التي سبق أن استكملت الإفادات المطلوبة.",
+      actionRequired: "الإحاطة بالموجهات وتضمينها في خطط المتابعة القادمة حيث يلزم.",
+      attachmentName: "academic-cooperation-priorities.pdf",
+      issuedBy: "إدارة التخطيط",
+      targetMissionIds: ["mission-cairo", "mission-paris", "mission-london", "mission-washington"],
+      dueDate: "2026-04-25",
+      status: "مغلق",
+      readMissionIds: ["mission-cairo", "mission-paris", "mission-london", "mission-washington"],
+      completedMissionIds: ["mission-cairo", "mission-paris"],
+      closureNote: "أغلق التعميم بعد تحقق الغرض التوجيهي واكتمال الإفادات الأساسية من البعثات ذات الأولوية.",
+      closedAt: "2026-04-28",
+      workflowHistory: [
+        { actor: "إدارة التخطيط", action: "إصدار التعميم", stage: "نشط", at: "2026-04-20 09:30" },
+        { actor: "إدارة التخطيط", action: "إغلاق التعميم", stage: "مغلق", at: "2026-04-28 14:00" }
+      ],
+      processingLog: [
+        { actor: "بعثة القاهرة", missionId: "mission-cairo", result: "تمت الإحاطة وإدراج التوجيهات ضمن خطة المتابعة القادمة.", evidenceRef: "cairo-academic-note.pdf", at: "2026-04-24 12:10" },
+        { actor: "بعثة باريس", missionId: "mission-paris", result: "استكمال الإفادة المرجعية وإرسالها وفق المطلوب.", evidenceRef: "paris-academic-brief.pdf", at: "2026-04-25 15:30" }
+      ],
+      missionResponses: [
+        { missionId: "mission-cairo", note: "تمت الإحاطة وإدراج التوجيهات ضمن خطة المتابعة القادمة.", evidenceRef: "cairo-academic-note.pdf", completedAt: "2026-04-24 12:10", actor: "بعثة القاهرة" },
+        { missionId: "mission-paris", note: "استكمال الإفادة المرجعية وإرسالها وفق المطلوب.", evidenceRef: "paris-academic-brief.pdf", completedAt: "2026-04-25 15:30", actor: "بعثة باريس" }
+      ]
     }
   ],
   meetings: [
@@ -485,6 +724,20 @@ const seedState = () => ({
       workflowHistory: [
         { actor: "إدارة التخطيط", action: "تسجيل محضر الاجتماع", at: "2026-03-15 10:00" }
       ]
+    },
+    {
+      id: "meet-2",
+      title: "اجتماع تنسيق الاستعداد للعرض أمام اللجنة الفنية",
+      ownerRole: "planning",
+      departmentId: "dept-gulf",
+      summary: "مراجعة الرسائل الأساسية، جاهزية الشاشات، وتحديد أدوار العرض بين الوحدات المعنية.",
+      tasks: [
+        { id: "task-3", title: "تدقيق سيناريو بعثة الرياض", assignee: "بعثة الرياض", status: "قيد التنفيذ", priority: "عالية" },
+        { id: "task-4", title: "استكمال مراجعة طلبات التقارير", assignee: "دائرة الجزيرة والخليج", status: "متأخر", priority: "عالية" }
+      ],
+      workflowHistory: [
+        { actor: "إدارة التخطيط", action: "تسجيل محضر الاجتماع", at: "2026-05-06 13:20" }
+      ]
     }
   ],
   plans: [
@@ -500,6 +753,20 @@ const seedState = () => ({
       workflowHistory: [
         { actor: "بعثة الرياض", action: "إعداد الخطة", at: "2026-03-15 09:30" },
         { actor: "إدارة التخطيط", action: "متابعة تقدم الخطة", at: "2026-03-15 10:10" }
+      ]
+    },
+    {
+      id: "plan-2",
+      ownerType: "department",
+      ownerId: "dept-gulf",
+      title: "خطة المتابعة الإقليمية لدائرة الجزيرة والخليج",
+      period: "نصف سنوية",
+      status: "متأخرة",
+      kpi: "نسبة استكمال المتابعة على ملفات البعثات ذات الأولوية",
+      progress: 48,
+      workflowHistory: [
+        { actor: "دائرة الجزيرة والخليج", action: "إعداد الخطة", at: "2026-04-01 10:00" },
+        { actor: "إدارة التخطيط", action: "تسجيل ملاحظة تأخر", at: "2026-05-05 09:10" }
       ]
     }
   ],
@@ -668,7 +935,7 @@ function loadState() {
   if (legacySessionMissionId && !parsed.missionMembers.some((member) => `user-${member.id}` === parsed.sessionUserId)) {
     parsed.sessionUserId = `user-member-chief-${legacySessionMissionId}`;
   }
-  parsed.reportRequests = Array.isArray(parsed.reportRequests) ? parsed.reportRequests : seeded.reportRequests;
+  parsed.reportRequests = mergeSeededCollection(seeded.reportRequests, Array.isArray(parsed.reportRequests) ? parsed.reportRequests : []);
   parsed.editingReportId = parsed.editingReportId || null;
   parsed.reportActionDialog = parsed.reportActionDialog && typeof parsed.reportActionDialog === "object" ? parsed.reportActionDialog : null;
   parsed.reportRegistryTab = parsed.reportRegistryTab || "all";
@@ -699,7 +966,7 @@ function loadState() {
     completedMissionIds: normalizeMissionIdList(request.completedMissionIds, parsed.missions),
     status: request.status || "نشط"
   }));
-  parsed.circulars = Array.isArray(parsed.circulars) ? parsed.circulars : seedState().circulars;
+  parsed.circulars = mergeSeededCollection(seedState().circulars, Array.isArray(parsed.circulars) ? parsed.circulars : []);
   parsed.circulars = parsed.circulars.map((circular) => ({
     ...circular,
     category: ["توجيهي", "تنفيذي", "إداري", "عاجل"].includes(circular.category) ? circular.category : "تنفيذي",
@@ -720,7 +987,7 @@ function loadState() {
     missionResponseDrafts: normalizeCircularDrafts(circular.missionResponseDrafts, parsed.missions),
     missionReadLog: normalizeMissionReadLog(circular.missionReadLog, parsed.missions)
   }));
-  parsed.meetings = (Array.isArray(parsed.meetings) ? parsed.meetings : seedState().meetings).map((meeting) => ({
+  parsed.meetings = mergeSeededCollection(seedState().meetings, Array.isArray(parsed.meetings) ? parsed.meetings : []).map((meeting) => ({
     ...meeting,
     departmentId: LEGACY_DEPARTMENT_ID_MAP[meeting.departmentId] || meeting.departmentId,
     workflowHistory: Array.isArray(meeting.workflowHistory) ? meeting.workflowHistory : [],
@@ -731,15 +998,15 @@ function loadState() {
       assignee: task.assignee === "الدائرة الجغرافية لشبه الجزيرة العربية" ? "دائرة الجزيرة والخليج" : task.assignee
     })) : []
   }));
-  parsed.plans = (Array.isArray(parsed.plans) ? parsed.plans : seedState().plans).map((plan) => ({
+  parsed.plans = mergeSeededCollection(seedState().plans, Array.isArray(parsed.plans) ? parsed.plans : []).map((plan) => ({
     ...plan,
     workflowHistory: Array.isArray(plan.workflowHistory) ? plan.workflowHistory : []
   }));
-  parsed.trainings = Array.isArray(parsed.trainings) ? parsed.trainings : seedState().trainings;
+  parsed.trainings = mergeSeededCollection(seedState().trainings, Array.isArray(parsed.trainings) ? parsed.trainings : []);
   parsed.auditLog = Array.isArray(parsed.auditLog) ? parsed.auditLog : seedState().auditLog;
   parsed.alerts = Array.isArray(parsed.alerts) ? parsed.alerts : seedState().alerts;
   parsed.sharedMeta = createSharedMeta(parsed.sharedMeta);
-  parsed.reports = parsed.reports.map((report) => ({
+  parsed.reports = mergeSeededCollection(seeded.reports, Array.isArray(parsed.reports) ? parsed.reports : []).map((report) => ({
     ...report,
     departmentId: parsed.missions.find((mission) => mission.id === report.missionId)?.departmentId || LEGACY_DEPARTMENT_ID_MAP[report.departmentId] || report.departmentId,
     reportFamily: inferReportFamily(report),
@@ -3330,6 +3597,108 @@ function renderPageHero({ eyebrow, title, description, meta = [], stats = [] }) 
   `;
 }
 
+function getCommitteeScenarios() {
+  return [
+    {
+      key: "leadership",
+      role: "leadership",
+      title: "المشهد الأول: القيادة العليا",
+      accountLabel: "القيادة العليا",
+      username: "leadership",
+      password: "Leadership@2026",
+      objective: "تقديم الصورة الكلية للنظام، مؤشرات الأداء، والتنبيهات التي تساعد على اتخاذ القرار.",
+      steps: [
+        "ابدأ بلوحة القيادة لإظهار المؤشرات العامة وحالة الوحدات الأساسية.",
+        "انتقل إلى وحدة التقارير لعرض التوزيع حسب المرحلة والنوع والبعثات المتأخرة.",
+        "اختم بطلبات التقارير لإبراز مستوى الإنجاز والبعثات التي تحتاج متابعة أو تصعيد."
+      ]
+    },
+    {
+      key: "planning",
+      role: "planning",
+      title: "المشهد الثاني: إدارة التخطيط",
+      accountLabel: "إدارة التخطيط",
+      username: "planning",
+      password: "Planning@2026",
+      objective: "إبراز الإدارة المركزية لمسارات المتابعة والاعتماد وإصدار التعاميم وطلبات التقارير.",
+      steps: [
+        "افتح التعاميم لشرح إصدار التعميم وتحديد المطلوب ومتابعة التنفيذ حسب البعثة.",
+        "انتقل إلى طلبات التقارير لإظهار إصدار الطلبات الزمنية والموضوعية ومراقبة نسب الإنجاز.",
+        "اختم بالتقارير لعرض الاعتماد المؤسسي ومؤشرات الجودة ومسار المراجعة."
+      ]
+    },
+    {
+      key: "mission-chief",
+      role: "mission",
+      title: "المشهد الثالث: رئيس بعثة الرياض",
+      accountLabel: "رئيس بعثة الرياض",
+      username: "riyadh",
+      password: "Riyadh@2026",
+      objective: "إظهار العمل الداخلي للبعثة، إدارة الأعضاء، والاعتماد الداخلي قبل خروج المحتوى للوزارة.",
+      steps: [
+        "ابدأ بملف البعثة لاستعراض الفريق الداخلي والأنشطة وآخر العمليات المنفذة.",
+        "انتقل إلى التقارير لإظهار إعداد تقرير داخلي ثم إحالته لاعتماد رئيس البعثة.",
+        "اختم بالتعاميم لإبراز الإجراء الداخلي، إفادة العضو، ثم اعتماد الرئيس قبل الإرسال الرسمي."
+      ]
+    }
+  ];
+}
+
+function getCommitteeScenarioForUser(user) {
+  if (!user) return null;
+  if (user.role === "leadership") return getCommitteeScenarios().find((item) => item.key === "leadership") || null;
+  if (user.role === "planning") return getCommitteeScenarios().find((item) => item.key === "planning") || null;
+  if (user.role === "mission" && isMissionChief(user) && user.missionId === "mission-riyadh") {
+    return getCommitteeScenarios().find((item) => item.key === "mission-chief") || null;
+  }
+  return null;
+}
+
+function renderCommitteeScenarioBoard(user = null) {
+  const scenarios = user ? [getCommitteeScenarioForUser(user)].filter(Boolean) : getCommitteeScenarios();
+  if (!scenarios.length) return "";
+  return `
+    <section class="panel scenario-board">
+      <div class="entity-section-head">
+        <div>
+          <div class="section-title">${user ? "مسار العرض المقترح لهذا الدور" : "المسار المقترح لاستعراض اللجنة"}</div>
+          <p class="mini">${user ? "يبين هذا القسم أفضل تسلسل للعرض من داخل الحساب الحالي حتى تبقى الرسالة واضحة ومترابطة." : "هذه هي الرحلة الأنسب لعرض النموذج أمام اللجنة الفنية بصورة متسلسلة ومقنعة، بدءًا من الرؤية الكلية ثم الإدارة المركزية ثم التنفيذ داخل البعثة."}</p>
+        </div>
+        <span class="tag info">${scenarios.length} ${user ? "مسار" : "مشاهد"}</span>
+      </div>
+      <div class="scenario-grid">
+        ${scenarios.map((scenario) => `
+          <article class="detail-card scenario-card">
+            <div class="record-top">
+              <div>
+                <strong>${scenario.title}</strong>
+                <span class="muted">${scenario.accountLabel}</span>
+              </div>
+              ${!user ? `<span class="tag info">${scenario.accountLabel}</span>` : `<span class="tag success">موصى به</span>`}
+            </div>
+            <p class="detail-note">${scenario.objective}</p>
+            ${!user ? `
+              <div class="detail-list">
+                <div class="detail-row"><span>اسم المستخدم</span><span>${scenario.username}</span></div>
+                <div class="detail-row"><span>كلمة المرور</span><span>${scenario.password}</span></div>
+              </div>
+            ` : ""}
+            <div class="scenario-step-list">
+              ${scenario.steps.map((step, index) => `
+                <div class="scenario-step">
+                  <span class="scenario-step-index">${index + 1}</span>
+                  <p>${step}</p>
+                </div>
+              `).join("")}
+            </div>
+            ${!user ? `<button class="btn secondary demo-login-btn" type="button" data-demo-username="${scenario.username}" data-demo-password="${scenario.password}">تجهيز هذا المشهد</button>` : ""}
+          </article>
+        `).join("")}
+      </div>
+    </section>
+  `;
+}
+
 function renderLogin() {
   const demoAccounts = getDemoAccounts();
   const demoGroups = [
@@ -3400,6 +3769,7 @@ function renderLogin() {
             </details>
           `).join("")}
         </div>
+        ${renderCommitteeScenarioBoard()}
       </section>
       <section class="login-form-wrap">
         <div class="form-card">
@@ -3589,6 +3959,7 @@ function renderDashboard(user) {
         { label: "الاجتماعات المرئية", value: visibleMeetings.length, note: delayedMeetingTasks ? `${delayedMeetingTasks} مهمة متأخرة` : "مهام مستقرة" }
       ]
     })}
+    ${renderCommitteeScenarioBoard(user)}
     <section class="hero-strip">
       <div class="panel workspace-hero-card">
         <span class="tag info">موجز تنفيذي</span>
