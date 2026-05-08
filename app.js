@@ -3043,11 +3043,11 @@ function canEditPlan(plan, user = getSessionUser()) {
 }
 
 function getRuntimeModeLabel() {
-  return runtimeDataMode === "shared-api" ? "وضع تشغيلي مشترك" : "وضع تجريبي محلي";
+  return runtimeDataMode === "shared-api" ? "تشغيل تشاركي مشترك" : "عرض تفاعلي مستقل";
 }
 
 function getRuntimeModeTone() {
-  return runtimeDataMode === "shared-api" ? "success" : "warning";
+  return runtimeDataMode === "shared-api" ? "success" : "info";
 }
 
 function canManageEntities(user = getSessionUser()) {
@@ -3300,45 +3300,111 @@ function renderIntellectualFooter() {
   `;
 }
 
+function renderPageHero({ eyebrow, title, description, meta = [], stats = [] }) {
+  return `
+    <section class="panel page-hero-card">
+      <div class="page-hero-head">
+        <div class="page-hero-copy">
+          ${eyebrow ? `<span class="tag info">${eyebrow}</span>` : ""}
+          <h1 class="page-title">${title}</h1>
+          <p class="muted">${description}</p>
+        </div>
+        ${meta.length ? `
+          <div class="page-hero-meta">
+            ${meta.map((item) => `<span class="tag ${item.tone || "info"}">${item.label}</span>`).join("")}
+          </div>
+        ` : ""}
+      </div>
+      ${stats.length ? `
+        <div class="page-hero-stats">
+          ${stats.map((item) => `
+            <article class="page-hero-stat">
+              <span>${item.label}</span>
+              <strong>${item.value}</strong>
+              ${item.note ? `<p>${item.note}</p>` : ""}
+            </article>
+          `).join("")}
+        </div>
+      ` : ""}
+    </section>
+  `;
+}
+
 function renderLogin() {
   const demoAccounts = getDemoAccounts();
+  const demoGroups = [
+    {
+      key: "leadership",
+      title: "الحسابات القيادية",
+      description: "للعرض التنفيذي السريع أمام اللجنة والاطلاع على الصورة الكلية للنظام.",
+      items: demoAccounts.filter((account) => account.scope === "وزارة")
+    },
+    {
+      key: "department",
+      title: "حسابات الدوائر",
+      description: "لاستعراض دور الدائرة في المراجعة والمتابعة والتنسيق مع البعثات التابعة.",
+      items: demoAccounts.filter((account) => account.scope === "دائرة")
+    },
+    {
+      key: "mission",
+      title: "حسابات البعثات",
+      description: "لاستعراض العمل الداخلي للبعثة، إعداد التقارير، والتعامل مع التعاميم قبل الاعتماد.",
+      items: demoAccounts.filter((account) => account.scope === "بعثة")
+    }
+  ];
   return `
     <div class="page-shell">
       <div class="login-shell">
       <section class="login-brand">
         <div class="badge">YD</div>
         <h1 class="title">النظام الدبلوماسي المتكامل</h1>
-        <p class="muted">ابدأ من شاشة دخول مؤسسية مبسطة، ثم ستظهر لكل مستخدم الشاشات والصلاحيات المناسبة لدوره فقط مع مؤشرات واضحة وسهلة الوصول.</p>
+        <p class="muted">منصة عرض تشغيلية مصممة لإبراز دورة العمل الدبلوماسي بصورة منظمة وواضحة، مع فصل الصلاحيات وسلاسة الانتقال بين الوحدات التنفيذية والرقابية.</p>
         <div class="workspace-note-grid login-highlight-grid">
           <div class="detail-card">
-            <strong>رحلة دخول أسرع</strong>
-            <p class="detail-note">اختر أحد الحسابات التجريبية بضغطة واحدة لملء بيانات الدخول تلقائيًا.</p>
+            <strong>تهيئة عرض أسرع</strong>
+            <p class="detail-note">يمكن تجهيز أي حساب استعراضي بضغطة واحدة لبدء التنقل داخل المسار المناسب بحسب الجهة والدور.</p>
           </div>
           <div class="detail-card">
-            <strong>صلاحيات حسب الدور</strong>
-            <p class="detail-note">الواجهة لا تعرض إلا الوحدات المناسبة للحساب النشط، مع نطاق رؤية منضبط.</p>
+            <strong>صلاحيات ومسارات منضبطة</strong>
+            <p class="detail-note">لا تظهر الواجهة إلا المحتوى المناسب للحساب النشط، مع ضبط دقيق للرؤية، الاعتماد، والمتابعة.</p>
           </div>
         </div>
-        <div class="credentials-list">
-          ${demoAccounts.map((account) => `
-            <div class="cred-card">
-              <div class="record-top">
+        <div class="demo-account-board">
+          ${demoGroups.map((group, index) => `
+            <details class="demo-group-card" ${index === 0 ? "open" : ""}>
+              <summary class="demo-group-head">
                 <div>
-                  <strong>${account.roleLabel}</strong>
-                  <span class="muted">${account.scope}</span>
+                  <strong>${group.title}</strong>
+                  <p class="detail-note">${group.description}</p>
                 </div>
-                <span class="tag info">${account.scope}</span>
+                <span class="tag info">${group.items.length}</span>
+              </summary>
+              <div class="demo-account-grid">
+                ${group.items.map((account) => `
+                  <div class="cred-card demo-account-card">
+                    <div class="record-top">
+                      <div>
+                        <strong>${account.roleLabel}</strong>
+                        <span class="muted">${account.scope}</span>
+                      </div>
+                      <span class="tag info">${account.scope}</span>
+                    </div>
+                    <div class="detail-list">
+                      <div class="detail-row"><span>اسم المستخدم</span><span>${account.username}</span></div>
+                      <div class="detail-row"><span>كلمة المرور</span><span>${account.password}</span></div>
+                    </div>
+                    <button class="btn secondary demo-login-btn" type="button" data-demo-username="${account.username}" data-demo-password="${account.password}">تجهيز هذا الحساب</button>
+                  </div>
+                `).join("")}
               </div>
-              <span class="muted">اسم المستخدم: ${account.username} | كلمة المرور: ${account.password}</span>
-              <button class="btn secondary demo-login-btn" type="button" data-demo-username="${account.username}" data-demo-password="${account.password}">تجهيز هذا الحساب</button>
-            </div>
+            </details>
           `).join("")}
         </div>
       </section>
       <section class="login-form-wrap">
         <div class="form-card">
           <h2 class="section-title">تسجيل الدخول</h2>
-          <p class="muted">سجّل الدخول بأحد الحسابات الافتراضية أو بالحسابات التي ينشئها مدير النظام. يمكنك استخدام أزرار التجهيز السريع من اللوحة المقابلة.</p>
+          <p class="muted">سجّل الدخول بأحد الحسابات الاستعراضية أو بالحسابات التي ينشئها مدير النظام. ستُفتح بعد ذلك الواجهة المؤسسية المناسبة مباشرة بحسب الدور.</p>
           <form id="login-form" class="form-grid">
             <label class="field full">
               <span>اسم المستخدم</span>
@@ -3402,7 +3468,7 @@ function renderSystem(user) {
           <div class="sidebar-section-card">
             <span class="mini">المسار الحالي</span>
             <strong>${labels[state.activeView] || "لوحة القيادة"}</strong>
-            <p class="detail-note">اختر الوحدة المناسبة من القائمة، وستظل الصلاحيات ونطاق البيانات منضبطين بحسب الدور الحالي.</p>
+            <p class="detail-note">يعرض هذا الشريط الوحدات المتاحة فقط للحساب الحالي، مع الحفاظ على اتساق الرؤية والمسارات المؤسسية أثناء الاستعراض.</p>
           </div>
           <div class="mobile-nav-card">
             <details class="mobile-nav-panel">
@@ -3438,7 +3504,7 @@ function renderSystem(user) {
         </div>
         <div class="sidebar-footer">
           <button class="btn secondary" id="logout-btn">تسجيل الخروج</button>
-          <button class="btn secondary" id="reset-btn">إعادة ضبط التجربة</button>
+          <button class="btn secondary" id="reset-btn">إعادة تهيئة العرض</button>
         </div>
       </aside>
         <main class="main">
@@ -3474,6 +3540,7 @@ function renderDashboard(user) {
   const visibleCirculars = getVisibleCirculars(user);
   const visiblePlans = getVisiblePlans(user);
   const visibleMeetings = getVisibleMeetings(user);
+  const pendingReviewCount = reports.filter((report) => [REPORT_STAGE_PENDING_CHIEF_APPROVAL, REPORT_STAGE_SUBMITTED, REPORT_STAGE_UNDER_DEPARTMENT_REVIEW].includes(report.workflowStage)).length;
   const delayedCirculars = visibleCirculars.filter((circular) => getCircularUrgency(circular).label === "متأخر");
   const delayedPlans = visiblePlans.filter((plan) => plan.status === "متأخرة");
   const delayedMeetingTasks = visibleMeetings.reduce((sum, meeting) => sum + getMeetingSummary(meeting).delayed, 0);
@@ -3507,16 +3574,21 @@ function renderDashboard(user) {
     { title: "الخطط", value: `${averagePlanProgress}%`, note: visiblePlans.length ? `${visiblePlans.length} خطة في النطاق` : "لا توجد خطط بعد" }
   ];
   return `
-    <section class="panel">
-      <div class="topbar">
-        <div>
-          <span class="tag info">لوحة حسب الدور</span>
-          <h1 class="page-title">لوحة القيادة</h1>
-          <p class="muted">تظهر هنا المؤشرات الأساسية المناسبة لحساب ${user.name}.</p>
-        </div>
-        <span class="tag ${getRuntimeModeTone()}">${getRuntimeModeLabel()}</span>
-      </div>
-    </section>
+    ${renderPageHero({
+      eyebrow: "لوحة حسب الدور",
+      title: "لوحة القيادة",
+      description: `موجز تنفيذي لحساب ${user.name} يبرز الأولويات الجارية، مسارات العمل المفتوحة، ونقاط التدخل الأقرب لاتخاذ القرار.`,
+      meta: [
+        { label: roleLabel(user), tone: "info" },
+        { label: getRuntimeModeLabel(), tone: getRuntimeModeTone() }
+      ],
+      stats: [
+        { label: "التقارير في النطاق", value: reports.length, note: pendingReviewCount ? `${pendingReviewCount} قيد المتابعة` : "المسار مستقر" },
+        { label: "التعاميم في النطاق", value: visibleCirculars.length, note: delayedCirculars.length ? `${delayedCirculars.length} بحاجة متابعة` : "سير مستقر" },
+        { label: "الخطط النشطة", value: visiblePlans.length, note: `${averagePlanProgress}% متوسط الإنجاز` },
+        { label: "الاجتماعات المرئية", value: visibleMeetings.length, note: delayedMeetingTasks ? `${delayedMeetingTasks} مهمة متأخرة` : "مهام مستقرة" }
+      ]
+    })}
     <section class="hero-strip">
       <div class="panel workspace-hero-card">
         <span class="tag info">موجز تنفيذي</span>
@@ -4286,22 +4358,21 @@ function renderCircularsPage(user) {
   const circularCategory = editingCircular?.category || "تنفيذي";
   const categoryConfig = getCircularCategoryConfig(circularCategory);
   return `
-    <section class="panel">
-      <div class="topbar">
-        <div>
-          <span class="tag info">التعاميم</span>
-          <h1 class="page-title">إدارة التعاميم</h1>
-          <p class="muted">إصدار التعاميم، توضيح المطلوب التنفيذي، ومتابعة القراءة والتنفيذ بحسب البعثة والدائرة والجهات القيادية.</p>
-        </div>
-      </div>
-    </section>
-    <section class="stats-grid circular-stat-strip">
-      <article class="metric-card"><span>إجمالي التعاميم في النطاق</span><strong>${metrics.total}</strong></article>
-      <article class="metric-card"><span>التعاميم النشطة</span><strong>${metrics.active}</strong></article>
-      <article class="metric-card"><span>المتأخرة</span><strong>${metrics.overdue}</strong></article>
-      <article class="metric-card"><span>قريبة الاستحقاق</span><strong>${metrics.dueSoon}</strong></article>
-      <article class="metric-card"><span>عالية الأولوية</span><strong>${metrics.highPriority}</strong></article>
-    </section>
+    ${renderPageHero({
+      eyebrow: "التعاميم",
+      title: "إدارة التعاميم",
+      description: "مساحة تشغيلية موحدة لإصدار التعاميم، توضيح المطلوب التنفيذي، ومتابعة القراءة والاستجابة والتنفيذ على مستوى البعثة والدائرة والجهات القيادية.",
+      meta: [
+        { label: canIssueCircular ? "صلاحية إصدار وتعديل" : "متابعة وتنفيذ بحسب الدور", tone: canIssueCircular ? "success" : "info" },
+        { label: roleLabel(user), tone: "info" }
+      ],
+      stats: [
+        { label: "إجمالي التعاميم", value: metrics.total, note: "ضمن نطاق الحساب الحالي" },
+        { label: "التعاميم النشطة", value: metrics.active, note: metrics.highPriority ? `${metrics.highPriority} عالية الأولوية` : "لا توجد أولوية حرجة" },
+        { label: "المتأخرة", value: metrics.overdue, note: metrics.overdue ? "تحتاج تدخلاً" : "لا توجد حالات تأخر" },
+        { label: "قريبة الاستحقاق", value: metrics.dueSoon, note: "متابعة استباقية" }
+      ]
+    })}
     <section class="panel">
       <div class="report-filter-bar circular-filter-bar">
         <label class="field">
@@ -5134,12 +5205,20 @@ function renderMissionMemberManagement(profile, user) {
         </div>
         <div class="detail-card">
           <div class="section-title">أعضاء البعثة</div>
-          <div class="detail-list">
+          <div class="mission-member-grid">
             ${members.length ? members.map((member) => `
-              <div class="timeline-entry mission-member-entry">
-                <strong>${member.name}</strong>
-                <span>${member.title}</span>
-                <span>اسم المستخدم: ${member.username}</span>
+              <div class="mission-member-card">
+                <div class="record-top">
+                  <div>
+                    <strong>${member.name}</strong>
+                    <span class="muted">${member.title}</span>
+                  </div>
+                  <span class="tag info">عضو بعثة</span>
+                </div>
+                <div class="detail-list">
+                  <div class="detail-row"><span>اسم المستخدم</span><span>${member.username}</span></div>
+                  <div class="detail-row"><span>تاريخ الإضافة</span><span>${member.createdAt || "-"}</span></div>
+                </div>
                 <div class="inline-actions">
                   <button class="btn secondary mission-member-edit" type="button" data-member-id="${member.id}">تعديل</button>
                   <button class="btn secondary mission-member-delete" type="button" data-member-id="${member.id}">حذف</button>
@@ -5287,37 +5366,21 @@ function renderMissionFilePage(user) {
     `;
   }
   return `
-    <section class="panel workspace-hero-card mission-file-hero">
-      <div class="topbar">
-        <div>
-          <span class="tag info">ملف البعثة</span>
-          <h1 class="page-title">${mission.name}</h1>
-          <p class="muted">ملف تشغيلي موحد للبعثة يربط الفريق الداخلي بالتقارير والتعاميم والأنشطة، ويضمن أن كل إرسال خارجي يمر عبر اعتماد رئيس البعثة.</p>
-        </div>
-        <div class="entity-tag-stack">
-          <span class="tag info">${getDepartmentName(mission.departmentId)}</span>
-          <span class="tag success">${profile.chief?.name || "رئيس البعثة غير معرف"}</span>
-        </div>
-      </div>
-      <div class="entity-overview-strip workspace-overview-strip">
-        <div class="report-mini-kpi">
-          <span>الفريق النشط</span>
-          <strong>${profile.members.length}</strong>
-        </div>
-        <div class="report-mini-kpi">
-          <span>بانتظار اعتماد رئيس البعثة</span>
-          <strong>${profile.reportProfile.pendingChiefApprovalCount + profile.circularProfile.pendingChiefApprovalCount}</strong>
-        </div>
-        <div class="report-mini-kpi">
-          <span>التقارير المعتمدة</span>
-          <strong>${profile.reportProfile.approvedCount}</strong>
-        </div>
-        <div class="report-mini-kpi">
-          <span>التعاميم الواردة</span>
-          <strong>${profile.circularProfile.total}</strong>
-        </div>
-      </div>
-    </section>
+    ${renderPageHero({
+      eyebrow: "ملف البعثة",
+      title: mission.name,
+      description: "ملف تشغيلي موحد يربط الفريق الداخلي بالتقارير والتعاميم والأنشطة، ويضمن أن كل إرسال خارجي يمر عبر اعتماد رئيس البعثة قبل خروجه إلى المسار المؤسسي.",
+      meta: [
+        { label: getDepartmentName(mission.departmentId), tone: "info" },
+        { label: profile.chief?.name || "رئيس البعثة غير معرف", tone: "success" }
+      ],
+      stats: [
+        { label: "الفريق النشط", value: profile.members.length, note: "أعضاء البعثة الفاعلون" },
+        { label: "بانتظار اعتماد الرئيس", value: profile.reportProfile.pendingChiefApprovalCount + profile.circularProfile.pendingChiefApprovalCount, note: "تقارير أو إفادات داخلية" },
+        { label: "التقارير المعتمدة", value: profile.reportProfile.approvedCount, note: `${profile.reportProfile.averageQuality}/5 متوسط الجودة` },
+        { label: "التعاميم الواردة", value: profile.circularProfile.total, note: profile.circularProfile.overdueCount ? `${profile.circularProfile.overdueCount} متأخر` : "لا تأخير" }
+      ]
+    })}
     <section class="two-col mission-file-layout">
       <div class="panel">
         ${canManageMissionMembers(user, mission.id) ? renderMissionMemberManagement(profile, user) : `
@@ -5877,38 +5940,23 @@ function renderRequestsPage(user) {
     `;
   };
   return `
-    <section class="panel">
-      <div class="topbar">
-        <div>
-          <span class="tag info">متابعة الإنجاز</span>
-          <h1 class="page-title">طلبات التقارير</h1>
-          <p class="muted">${canRequest ? "يمكنك إصدار الطلبات ومتابعة الأداء ضمن لوحة مختصرة تبرز ما يحتاج قرارًا أو متابعة قبل أن تتضخم الصفحة." : "يمكنك متابعة الطلبات الواردة ضمن نطاقك مع إبراز ما يحتاج تدخلك أولًا."}</p>
-        </div>
-        <span class="tag info">${requests.length} طلب ضمن العرض الحالي</span>
-      </div>
-      <div class="reports-stat-strip">
-        <div class="reports-stat-card">
-          <span>إجمالي الطلبات</span>
-          <strong>${metrics.total}</strong>
-        </div>
-        <div class="reports-stat-card">
-          <span>عالية الأولوية</span>
-          <strong>${metrics.highPriority}</strong>
-        </div>
-        <div class="reports-stat-card">
-          <span>قريبة الاستحقاق</span>
-          <strong>${metrics.dueSoon}</strong>
-        </div>
-        <div class="reports-stat-card">
-          <span>متأخرة</span>
-          <strong>${metrics.overdue}</strong>
-        </div>
-        <div class="reports-stat-card">
-          <span>ضمن الفلترة الحالية</span>
-          <strong>${requests.length}</strong>
-        </div>
-      </div>
-    </section>
+    ${renderPageHero({
+      eyebrow: "متابعة الإنجاز",
+      title: "طلبات التقارير",
+      description: canRequest
+        ? "لوحة متابعة مختصرة لإصدار الطلبات وتتبع التقدم والجهات المتأخرة قبل أن تتحول المتابعة إلى قوائم طويلة مشتتة."
+        : "يعرض هذا السجل الطلبات الواردة ضمن نطاقك مع إبراز حالة الإنجاز الحالية وما يحتاج تدخلك أولًا.",
+      meta: [
+        { label: canRequest ? "إصدار ومتابعة" : "متابعة ضمن النطاق", tone: canRequest ? "success" : "info" },
+        { label: `${requests.length} طلب في العرض الحالي`, tone: "info" }
+      ],
+      stats: [
+        { label: "إجمالي الطلبات", value: metrics.total, note: "في نطاق الحساب" },
+        { label: "عالية الأولوية", value: metrics.highPriority, note: "تستحق متابعة أسرع" },
+        { label: "قريبة الاستحقاق", value: metrics.dueSoon, note: "تحتاج استعدادًا" },
+        { label: "المتأخرة", value: metrics.overdue, note: metrics.overdue ? "تحتاج تصعيدًا" : "لا توجد حالات تأخر" }
+      ]
+    })}
     <section class="two-col">
       ${canRequest ? renderRequestForm(user) : ""}
       <div class="panel">

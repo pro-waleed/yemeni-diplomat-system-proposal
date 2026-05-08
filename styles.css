@@ -119,6 +119,46 @@ textarea {
   gap: 12px;
 }
 
+.demo-account-board {
+  display: grid;
+  gap: 12px;
+}
+
+.demo-group-card {
+  border-radius: 24px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.7);
+  overflow: hidden;
+}
+
+.demo-group-head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 18px 20px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.demo-group-head::-webkit-details-marker {
+  display: none;
+}
+
+.demo-group-head::marker {
+  content: "";
+}
+
+.demo-account-grid {
+  display: grid;
+  gap: 12px;
+  padding: 0 20px 20px;
+}
+
+.demo-account-card {
+  gap: 10px;
+}
+
 .tab-strip {
   display: flex;
   flex-wrap: wrap;
@@ -267,6 +307,12 @@ textarea {
   border-radius: 16px;
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.8);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 28px rgba(20, 37, 43, 0.08);
 }
 
 .btn.primary {
@@ -556,7 +602,7 @@ textarea {
 
 .nav-item.active,
 .nav-item:hover {
-  transform: translateX(-4px);
+  transform: translateX(-2px);
   background: linear-gradient(135deg, rgba(15, 118, 110, 0.14), rgba(255, 255, 255, 0.82));
 }
 
@@ -590,6 +636,62 @@ textarea {
   justify-content: space-between;
   align-items: start;
   gap: 16px;
+}
+
+.page-hero-card {
+  display: grid;
+  gap: 18px;
+  background:
+    linear-gradient(135deg, rgba(15, 118, 110, 0.08), rgba(255, 255, 255, 0.9)),
+    var(--surface);
+}
+
+.page-hero-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 16px;
+}
+
+.page-hero-copy {
+  display: grid;
+  gap: 10px;
+}
+
+.page-hero-copy .page-title {
+  margin-top: 0;
+}
+
+.page-hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: end;
+  gap: 8px;
+}
+
+.page-hero-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.page-hero-stat {
+  padding: 16px 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(22, 40, 46, 0.08);
+  background: rgba(255, 255, 255, 0.76);
+  display: grid;
+  gap: 8px;
+}
+
+.page-hero-stat span,
+.page-hero-stat p {
+  color: var(--muted);
+}
+
+.page-hero-stat strong {
+  font-family: "Cairo", sans-serif;
+  font-size: 1.8rem;
 }
 
 .page-title {
@@ -1089,6 +1191,20 @@ textarea {
   gap: 8px;
 }
 
+.mission-member-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.mission-member-card {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 20px;
+  border: 1px solid rgba(22, 40, 46, 0.08);
+  background: rgba(255, 255, 255, 0.82);
+}
+
 .mission-file-team-card,
 .mission-file-circular-card {
   display: grid;
@@ -1509,6 +1625,7 @@ textarea {
 
   .reports-stat-strip,
   .circular-stat-strip,
+  .page-hero-stats,
   .reports-executive-grid,
   .report-summary-grid,
   .report-story-grid,
@@ -1585,6 +1702,7 @@ textarea {
   }
 
   .topbar,
+  .page-hero-head,
   .record-top,
   .record-bottom,
   .detail-row,
@@ -1671,7 +1789,8 @@ textarea {
   }
 
   .reports-stat-strip,
-  .report-registry-strip {
+  .report-registry-strip,
+  .page-hero-stats {
     grid-template-columns: 1fr;
   }
 
