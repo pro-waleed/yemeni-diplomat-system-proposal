@@ -48,8 +48,8 @@ textarea {
 }
 
 .page-shell {
-  width: min(1480px, calc(100% - 28px));
-  margin: 16px auto;
+  width: min(1400px, calc(100% - 24px));
+  margin: 12px auto;
   display: grid;
   gap: 14px;
 }
@@ -63,13 +63,13 @@ textarea {
   margin: 0;
   border-radius: 32px;
   display: grid;
-  grid-template-columns: 1.05fr 0.95fr;
+  grid-template-columns: minmax(0, 1.08fr) minmax(360px, 0.92fr);
   overflow: hidden;
 }
 
 .login-brand,
 .login-form-wrap {
-  padding: 36px;
+  padding: 30px;
 }
 
 .login-brand {
@@ -124,10 +124,55 @@ textarea {
   gap: 12px;
 }
 
-.demo-group-card {
+.demo-feature-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-bottom: 14px;
+}
+
+.demo-feature-card {
+  gap: 12px;
+  background:
+    linear-gradient(135deg, rgba(15, 118, 110, 0.08), rgba(255, 255, 255, 0.86)),
+    rgba(255, 255, 255, 0.78);
+}
+
+.demo-directory-card {
   border-radius: 24px;
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.7);
+  overflow: hidden;
+}
+
+.demo-directory-summary {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 18px 20px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.demo-directory-summary::-webkit-details-marker {
+  display: none;
+}
+
+.demo-directory-summary::marker {
+  content: "";
+}
+
+.demo-directory-grid {
+  display: grid;
+  gap: 12px;
+  padding: 0 20px 20px;
+}
+
+.demo-group-card {
+  border-radius: 24px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.56);
   overflow: hidden;
 }
 
@@ -152,6 +197,7 @@ textarea {
 .demo-account-grid {
   display: grid;
   gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   padding: 0 20px 20px;
 }
 
@@ -161,35 +207,43 @@ textarea {
 
 .scenario-board {
   background:
-    linear-gradient(135deg, rgba(28, 90, 146, 0.05), rgba(255, 255, 255, 0.9)),
+    linear-gradient(135deg, rgba(28, 90, 146, 0.04), rgba(255, 255, 255, 0.92)),
     var(--surface);
 }
 
 .scenario-grid {
   display: grid;
-  gap: 14px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
 }
 
 .scenario-card {
   display: grid;
-  gap: 14px;
+  gap: 12px;
+  align-content: start;
+}
+
+.scenario-credentials {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px dashed rgba(22, 40, 46, 0.12);
+  background: rgba(255, 255, 255, 0.68);
+  color: var(--muted);
 }
 
 .scenario-step-list {
+  margin: 0;
+  padding-inline-start: 18px;
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .scenario-step {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 10px;
-  align-items: start;
-  padding: 12px 14px;
-  border-radius: 18px;
-  border: 1px solid rgba(22, 40, 46, 0.08);
-  background: rgba(255, 255, 255, 0.82);
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 
 .scenario-step p {
@@ -198,9 +252,36 @@ textarea {
   line-height: 1.75;
 }
 
-.scenario-step-index {
-  width: 28px;
-  height: 28px;
+.role-walkthrough-card {
+  display: grid;
+  gap: 14px;
+  background:
+    linear-gradient(135deg, rgba(15, 118, 110, 0.05), rgba(255, 255, 255, 0.9)),
+    var(--surface);
+}
+
+.role-walkthrough-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.walkthrough-step-card {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  min-height: 100%;
+}
+
+.walkthrough-step-card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.75;
+}
+
+.walkthrough-step-index {
+  width: 34px;
+  height: 34px;
   display: grid;
   place-items: center;
   border-radius: 999px;
@@ -398,8 +479,8 @@ textarea {
   margin: 0;
   border-radius: 30px;
   display: grid;
-  grid-template-columns: 300px 1fr;
-  gap: 20px;
+  grid-template-columns: minmax(250px, 282px) minmax(0, 1fr);
+  gap: 18px;
   background: transparent;
   border: 0;
   box-shadow: none;
@@ -518,7 +599,7 @@ textarea {
 
 .sidebar {
   border-radius: 30px;
-  padding: 22px 18px;
+  padding: 20px 16px;
   background: var(--surface);
   border: 1px solid var(--line);
   box-shadow: var(--shadow);
@@ -691,7 +772,7 @@ textarea {
 
 .page-hero-card {
   display: grid;
-  gap: 18px;
+  gap: 14px;
   background:
     linear-gradient(135deg, rgba(15, 118, 110, 0.08), rgba(255, 255, 255, 0.9)),
     var(--surface);
@@ -722,17 +803,17 @@ textarea {
 
 .page-hero-stats {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: 12px;
 }
 
 .page-hero-stat {
-  padding: 16px 18px;
+  padding: 14px 16px;
   border-radius: 20px;
   border: 1px solid rgba(22, 40, 46, 0.08);
   background: rgba(255, 255, 255, 0.76);
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .page-hero-stat span,
@@ -742,7 +823,7 @@ textarea {
 
 .page-hero-stat strong {
   font-family: "Cairo", sans-serif;
-  font-size: 1.8rem;
+  font-size: 1.55rem;
 }
 
 .page-title {
@@ -1661,7 +1742,7 @@ textarea {
   border-radius: 18px;
 }
 
-@media (max-width: 1180px) {
+@media (max-width: 1280px) {
   .login-shell,
   .app-shell,
   .hero-strip,
@@ -1678,6 +1759,9 @@ textarea {
   .circular-stat-strip,
   .page-hero-stats,
   .scenario-grid,
+  .demo-feature-grid,
+  .demo-directory-grid,
+  .role-walkthrough-grid,
   .reports-executive-grid,
   .report-summary-grid,
   .report-story-grid,
@@ -1749,7 +1833,8 @@ textarea {
   .form-grid,
   .two-col,
   .checkbox-grid,
-  .mission-chip-grid {
+  .mission-chip-grid,
+  .demo-feature-grid {
     grid-template-columns: 1fr;
   }
 

@@ -3662,9 +3662,9 @@ function renderCommitteeScenarioBoard(user = null) {
       <div class="entity-section-head">
         <div>
           <div class="section-title">${user ? "مسار العرض المقترح لهذا الدور" : "المسار المقترح لاستعراض اللجنة"}</div>
-          <p class="mini">${user ? "يبين هذا القسم أفضل تسلسل للعرض من داخل الحساب الحالي حتى تبقى الرسالة واضحة ومترابطة." : "هذه هي الرحلة الأنسب لعرض النموذج أمام اللجنة الفنية بصورة متسلسلة ومقنعة، بدءًا من الرؤية الكلية ثم الإدارة المركزية ثم التنفيذ داخل البعثة."}</p>
+          <p class="mini">${user ? "يبين هذا الدليل التسلسل الأنسب لعرض الوظائف داخل الحساب الحالي بصورة مريحة ومباشرة." : "هذا دليل عرض مختصر يربط بين الشاشة القيادية والإدارة المركزية والتنفيذ داخل البعثة دون إغراق بصري."}</p>
         </div>
-        <span class="tag info">${scenarios.length} ${user ? "مسار" : "مشاهد"}</span>
+        <span class="tag info">${scenarios.length} ${user ? "مسار" : "أدوار"}</span>
       </div>
       <div class="scenario-grid">
         ${scenarios.map((scenario) => `
@@ -3678,20 +3678,44 @@ function renderCommitteeScenarioBoard(user = null) {
             </div>
             <p class="detail-note">${scenario.objective}</p>
             ${!user ? `
-              <div class="detail-list">
-                <div class="detail-row"><span>اسم المستخدم</span><span>${scenario.username}</span></div>
-                <div class="detail-row"><span>كلمة المرور</span><span>${scenario.password}</span></div>
+              <div class="scenario-credentials">
+                <span><strong>اسم المستخدم:</strong> ${scenario.username}</span>
+                <span><strong>كلمة المرور:</strong> ${scenario.password}</span>
               </div>
             ` : ""}
-            <div class="scenario-step-list">
-              ${scenario.steps.map((step, index) => `
-                <div class="scenario-step">
-                  <span class="scenario-step-index">${index + 1}</span>
+            <ol class="scenario-step-list">
+              ${scenario.steps.map((step) => `
+                <li class="scenario-step">
                   <p>${step}</p>
-                </div>
+                </li>
               `).join("")}
-            </div>
+            </ol>
             ${!user ? `<button class="btn secondary demo-login-btn" type="button" data-demo-username="${scenario.username}" data-demo-password="${scenario.password}">تجهيز هذا المشهد</button>` : ""}
+          </article>
+        `).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function renderRoleWalkthroughCard(user) {
+  const scenario = getCommitteeScenarioForUser(user);
+  if (!scenario) return "";
+  return `
+    <section class="panel role-walkthrough-card">
+      <div class="record-top">
+        <div>
+          <span class="tag info">مسار العرض المقترح</span>
+          <div class="section-title">${scenario.title}</div>
+          <p class="detail-note">${scenario.objective}</p>
+        </div>
+        <span class="tag success">موصى به</span>
+      </div>
+      <div class="role-walkthrough-grid">
+        ${scenario.steps.map((step, index) => `
+          <article class="detail-card walkthrough-step-card">
+            <span class="walkthrough-step-index">${index + 1}</span>
+            <p>${step}</p>
           </article>
         `).join("")}
       </div>
@@ -3701,6 +3725,9 @@ function renderCommitteeScenarioBoard(user = null) {
 
 function renderLogin() {
   const demoAccounts = getDemoAccounts();
+  const featuredAccounts = ["leadership", "planning", "riyadh", "riyadh_rep"]
+    .map((username) => demoAccounts.find((account) => account.username === username))
+    .filter(Boolean);
   const demoGroups = [
     {
       key: "leadership",
@@ -3727,20 +3754,47 @@ function renderLogin() {
       <section class="login-brand">
         <div class="badge">YD</div>
         <h1 class="title">النظام الدبلوماسي المتكامل</h1>
-        <p class="muted">منصة عرض تشغيلية مصممة لإبراز دورة العمل الدبلوماسي بصورة منظمة وواضحة، مع فصل الصلاحيات وسلاسة الانتقال بين الوحدات التنفيذية والرقابية.</p>
+        <p class="muted">منصة تشغيلية لعرض دورة العمل الدبلوماسي بصورة منظمة وواضحة، مع فصل الصلاحيات، وضبط مسارات الاعتماد، وتجربة استخدام مناسبة للعرض الرسمي والعمل اليومي.</p>
         <div class="workspace-note-grid login-highlight-grid">
           <div class="detail-card">
-            <strong>تهيئة عرض أسرع</strong>
-            <p class="detail-note">يمكن تجهيز أي حساب استعراضي بضغطة واحدة لبدء التنقل داخل المسار المناسب بحسب الجهة والدور.</p>
+            <strong>دخول سريع وواضح</strong>
+            <p class="detail-note">الحسابات الأكثر استخدامًا في العرض موضوعة في المقدمة حتى نصل بسرعة إلى المشهد المطلوب دون بحث أو تشتت.</p>
           </div>
           <div class="detail-card">
-            <strong>صلاحيات ومسارات منضبطة</strong>
-            <p class="detail-note">لا تظهر الواجهة إلا المحتوى المناسب للحساب النشط، مع ضبط دقيق للرؤية، الاعتماد، والمتابعة.</p>
+            <strong>مسارات عمل منضبطة</strong>
+            <p class="detail-note">كل حساب يرى فقط ما يخصه، مع إبراز واضح للصلاحيات والاعتماد والمتابعة على امتداد الوحدات.</p>
           </div>
         </div>
+        <div class="demo-feature-grid">
+          ${featuredAccounts.map((account) => `
+            <div class="cred-card demo-feature-card">
+              <div class="record-top">
+                <div>
+                  <strong>${account.roleLabel}</strong>
+                  <span class="muted">${account.scope}</span>
+                </div>
+                <span class="tag info">${account.scope}</span>
+              </div>
+              <div class="detail-list">
+                <div class="detail-row"><span>اسم المستخدم</span><span>${account.username}</span></div>
+                <div class="detail-row"><span>كلمة المرور</span><span>${account.password}</span></div>
+              </div>
+              <button class="btn secondary demo-login-btn" type="button" data-demo-username="${account.username}" data-demo-password="${account.password}">الدخول بهذا الحساب</button>
+            </div>
+          `).join("")}
+        </div>
         <div class="demo-account-board">
-          ${demoGroups.map((group, index) => `
-            <details class="demo-group-card" ${index === 0 ? "open" : ""}>
+          <details class="demo-directory-card">
+            <summary class="demo-directory-summary">
+              <div>
+                <strong>دليل جميع الحسابات الاستعراضية</strong>
+                <p class="detail-note">يشمل بقية الحسابات للقيادة والتخطيط والدوائر والبعثات، مع بقاء الحسابات الأهم ظاهرة في الأعلى.</p>
+              </div>
+              <span class="tag info">${demoAccounts.length}</span>
+            </summary>
+            <div class="demo-directory-grid">
+          ${demoGroups.map((group) => `
+            <details class="demo-group-card">
               <summary class="demo-group-head">
                 <div>
                   <strong>${group.title}</strong>
@@ -3768,6 +3822,8 @@ function renderLogin() {
               </div>
             </details>
           `).join("")}
+            </div>
+          </details>
         </div>
         ${renderCommitteeScenarioBoard()}
       </section>
@@ -3838,7 +3894,7 @@ function renderSystem(user) {
           <div class="sidebar-section-card">
             <span class="mini">المسار الحالي</span>
             <strong>${labels[state.activeView] || "لوحة القيادة"}</strong>
-            <p class="detail-note">يعرض هذا الشريط الوحدات المتاحة فقط للحساب الحالي، مع الحفاظ على اتساق الرؤية والمسارات المؤسسية أثناء الاستعراض.</p>
+            <p class="detail-note">تظهر هنا الوحدات المتاحة للحساب الحالي فقط، مع تنقل مختصر وواضح بين المسارات الرئيسية.</p>
           </div>
           <div class="mobile-nav-card">
             <details class="mobile-nav-panel">
@@ -3849,7 +3905,7 @@ function renderSystem(user) {
                     <strong>${activeNavItem.label}</strong>
                     ${activeNavItem.badge ? `<span class="nav-badge">${activeNavItem.badge}</span>` : ""}
                   </div>
-                  <p class="detail-note">افتح هذه البطاقة للوصول السريع إلى الوحدات من دون تمرير جانبي.</p>
+                  <p class="detail-note">افتح هذه البطاقة للوصول السريع إلى باقي الوحدات.</p>
                 </div>
                 <span class="mobile-nav-summary-action">عرض الوحدات</span>
               </summary>
@@ -3959,7 +4015,7 @@ function renderDashboard(user) {
         { label: "الاجتماعات المرئية", value: visibleMeetings.length, note: delayedMeetingTasks ? `${delayedMeetingTasks} مهمة متأخرة` : "مهام مستقرة" }
       ]
     })}
-    ${renderCommitteeScenarioBoard(user)}
+    ${renderRoleWalkthroughCard(user)}
     <section class="hero-strip">
       <div class="panel workspace-hero-card">
         <span class="tag info">موجز تنفيذي</span>

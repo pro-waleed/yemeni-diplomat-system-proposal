@@ -134,6 +134,7 @@ function loadAppHarness() {
       getSessionUser,
       getMissionName,
       getDepartmentName,
+      renderLogin,
       stages: {
         pendingChief: REPORT_STAGE_PENDING_CHIEF_APPROVAL,
         submitted: REPORT_STAGE_SUBMITTED,
@@ -230,6 +231,9 @@ function run() {
   assert.ok(riyadhMember, "Mission member user should exist");
   assert.equal(riyadhChief.missionRole, "chief", "Riyadh account should be the mission chief");
   assert.equal(riyadhMember.missionRole, "member", "Riyadh member account should be a regular mission member");
+  const loginHtml = api.renderLogin();
+  assert.match(loginHtml, /riyadh_rep/, "Mission member quick-access login should remain visible on the login screen");
+  assert.match(loginHtml, /عضو بعثة الرياض/, "Mission member role label should remain visible on the login screen");
 
   const visibilityState = clone(baseState);
   visibilityState.reports = [
